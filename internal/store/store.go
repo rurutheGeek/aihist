@@ -162,6 +162,7 @@ type ConvRow struct {
 type Filter struct {
 	Query string
 	Tool  string
+	Host  string
 	Limit int
 }
 
@@ -193,6 +194,10 @@ func (s *Store) List(f Filter) ([]ConvRow, error) {
 		q += ` AND c.tool = ?`
 		args = append(args, f.Tool)
 	}
+	if f.Host != "" {
+		q += ` AND c.host = ?`
+		args = append(args, f.Host)
+	}
 	q += ` ORDER BY c.updated_at DESC LIMIT ?`
 	args = append(args, f.Limit)
 	rows, err := s.db.Query(q, args...)
@@ -215,7 +220,7 @@ func (s *Store) List(f Filter) ([]ConvRow, error) {
 
 // search は全文検索。snippet() は集計の中で使えないので、会話ごとの最初の一致を Go 側で拾う。
 func (s *Store) search(query string, f Filter) ([]ConvRow, error) {
-	rows, err := s.db.Query(`SELECT p.conversation_id, snippet(parts_fts, 0, '[', ']', '…', 16)
+	rows, err := s.db.Query(`SELECT p.conversation_id, snippet(parts_fts, 0, char(2), char(3), '…', 24)
 	  FROM parts_fts JOIN parts p ON p.id = parts_fts.rowid
 	  WHERE parts_fts MATCH ? ORDER BY p.conversation_id DESC`, ftsPhrase(query))
 	if err != nil {
@@ -237,7 +242,7 @@ func (s *Store) search(query string, f Filter) ([]ConvRow, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	all, err := s.List(Filter{Tool: f.Tool, Limit: 1 << 30})
+	all, err := s.List(Filter{Tool: f.Tool, Host: f.Host, Limit: 1 << 30})
 	if err != nil {
 		return nil, err
 	}
@@ -267,6 +272,33 @@ func fromUnix(v int64) time.Time {
 		return time.Time{}
 	}
 	return time.Unix(v, 0)
+}
+
+// Facet は絞り込みの候補と件数。
+type Facet struct {
+	Name  string
+	Count int
+}
+
+// Facets は列 col（tool か host）ごとの会話数。
+func (s *Store) Facets(col string) ([]Facet, error) {
+	if col != "tool" && col != "host" {
+		return nil, fmt.Errorf("facet: %s", col)
+	}
+	rows, err := s.db.Query(`SELECT ` + col + `, count(*) FROM conversations GROUP BY 1 ORDER BY 2 DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Facet
+	for rows.Next() {
+		var f Facet
+		if err := rows.Scan(&f.Name, &f.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) Tools() ([]string, error) {

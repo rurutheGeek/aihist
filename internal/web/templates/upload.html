@@ -1,18 +1,33 @@
 {{define "upload.html"}}{{template "head" "アップロード"}}
-<header>
-<form class="search" method="get" action="/">
-  <a href="/">←</a>
-  <input type="search" name="q" placeholder="検索">
-  <button>検索</button>
-</form>
-</header>
-<main>
-<form class="bar" method="post" action="/upload" enctype="multipart/form-data">
-  <input type="file" name="files" multiple required>
-  <input name="host" value="{{.Host}}" placeholder="ホスト名">
-  <button>送る</button>
-</form>
-{{if .Lines}}<pre>{{range .Lines}}{{.}}
-{{end}}</pre>{{end}}
+<div class="app">
+{{template "side" .}}
+<main class="main">
+  <div class="bar">
+    <button class="icon-btn menu" onclick="document.querySelector('.app').classList.add('open')" aria-label="一覧"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="title">アップロード</div>
+  </div>
+  <div class="scroll"><div class="col">
+    <form method="post" action="/upload" enctype="multipart/form-data" id="up">
+      <label class="drop" id="drop">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+        <div id="dropt">.jsonl / .db をここへ</div>
+        <input type="file" name="files" multiple hidden id="files">
+      </label>
+      <div class="field"><input name="host" value="{{.Host}}" placeholder="ホスト名"><button class="btn pri"><span>送る</span></button></div>
+    </form>
+    {{if .Lines}}<div class="log">{{range .Lines}}{{.}}
+{{end}}</div>{{end}}
+  </div></div>
 </main>
+</div>
+<script>
+(function(){
+  var d=document.getElementById('drop'), f=document.getElementById('files'), t=document.getElementById('dropt');
+  function show(){ if(f.files.length) t.textContent = Array.from(f.files).map(function(x){return x.name}).join('、'); }
+  f.onchange = show;
+  ['dragenter','dragover'].forEach(function(e){ d.addEventListener(e,function(ev){ev.preventDefault();d.classList.add('over')}) });
+  ['dragleave','drop'].forEach(function(e){ d.addEventListener(e,function(ev){ev.preventDefault();d.classList.remove('over')}) });
+  d.addEventListener('drop',function(ev){ f.files = ev.dataTransfer.files; show(); });
+})();
+</script>
 {{template "foot"}}{{end}}

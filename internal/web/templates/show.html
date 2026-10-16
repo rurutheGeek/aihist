@@ -1,52 +1,92 @@
-{{define "show.html"}}{{template "head" .C.Title}}
-<header>
-<form class="search" method="get" action="/">
-  <a href="/">←</a>
-  <input type="search" name="q" value="{{.Q}}" placeholder="検索">
-  <button>検索</button>
-</form>
-</header>
-<main>
-<h1>{{if .C.Title}}{{oneline .C.Title}}{{else}}{{.C.ExternalID}}{{end}}</h1>
-<div class="meta">
-  <span class="tag">{{.C.Tool}}</span>
-  <span>{{when .C.StartedAt}} – {{when .C.UpdatedAt}}</span>
-  {{if .C.Cwd}}<span>{{.C.Cwd}}</span>{{end}}
-  {{if .C.GitBranch}}<span>{{.C.GitBranch}}</span>{{end}}
-  {{if .C.Model}}<span>{{.C.Model}}</span>{{end}}
-  <span>{{.C.ExternalID}}</span>
-</div>
-<form class="bar" id="exp" action="/c/{{.C.ID}}/export.md" target="_blank">
-  <label><input type="checkbox" name="thinking" value="1">思考</label>
-  <label><input type="checkbox" name="tools" value="0">ツール除外</label>
-  <label>結果<input type="number" name="max" value="2000" min="0" step="500" style="width:6em"></label>
-  <button type="button" id="copy">コピー</button>
-  <button name="dl" value="1">保存</button>
-  <button>表示</button>
-</form>
-{{range .Msgs}}
-<div class="msg {{.Role}}{{if .Sidechain}} side{{end}}">
-  <div class="role">{{.Role}} · {{when .CreatedAt}}{{if .Model}} · {{.Model}}{{end}}</div>
-  {{range .Parts}}
-    {{if isKind . "text"}}<div class="text">{{.Text}}</div>
-    {{else if isKind . "thinking"}}<details><summary>thinking</summary><pre>{{.Text}}</pre></details>
-    {{else if isKind . "tool_call"}}
-      {{$r := index $.Results .ToolCallID}}
-      <details{{if $r.IsError}} class="err"{{end}}><summary>{{.ToolName}} {{short (oneline .Text) 140}}</summary><pre>{{.Text}}</pre>{{if $r.Kind}}<pre>{{$r.Text}}</pre>{{end}}</details>
-    {{else if isKind . "tool_result"}}
-      {{if not (index $.Results .ToolCallID).Kind}}<details><summary>result</summary><pre>{{.Text}}</pre></details>{{end}}
-    {{else}}<div class="text">{{.Text}}</div>{{end}}
-  {{end}}
-</div>
-{{end}}
+{{define "step"}}{{if eq .Kind "thinking"}}<details class="think"><summary><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>思考</summary><div class="think-body raw">{{.Text}}</div></details>{{else}}<details class="tool{{if .IsError}} err{{end}}"><summary><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg><span class="nm">{{.Name}}</span><span class="arg">{{summary .Input}}</span></summary><div class="io">{{if .Input}}<div class="lbl">入力</div><pre>{{.Input}}</pre>{{end}}{{if .Done}}<div class="lbl">{{if .IsError}}エラー{{else}}結果{{end}}</div><pre>{{short .Output 20000}}</pre>{{end}}</div></details>{{end}}{{end}}
+
+{{define "show.html"}}{{template "head" (or .C.Title .C.ExternalID)}}
+<div class="app">
+{{template "side" .}}
+<main class="main">
+  <div class="bar">
+    <button class="icon-btn menu" onclick="document.querySelector('.app').classList.add('open')" aria-label="一覧"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="title">{{if .C.Title}}{{oneline .C.Title}}{{else}}{{.C.ExternalID}}{{end}}</div>
+    <a class="icon-btn" href="/c/{{.C.ID}}/export.md?dl=1" title="Markdown を保存"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></a>
+  </div>
+  <div class="scroll" id="scroll">
+    <div class="col">
+      <div class="meta">
+        <span class="tool"><i style="background:{{toolColor .C.Tool}}"></i>{{toolLabel .C.Tool}}</span>
+        <span>{{.C.Host}}</span>
+        {{if .C.Cwd}}<span title="{{.C.Cwd}}">{{base .C.Cwd}}</span>{{end}}
+        {{if .C.GitBranch}}<span>{{.C.GitBranch}}</span>{{end}}
+        {{if .C.Model}}<span>{{.C.Model}}</span>{{end}}
+        <span>{{when .C.StartedAt}} – {{when .C.UpdatedAt}}</span>
+      </div>
+      {{range .Turns}}
+      {{if eq .Role "user"}}
+        <div class="turn user{{if .Sidechain}} side{{end}}" id="{{.Anchor}}">
+          <div class="bub">{{range .Blocks}}{{if eq .Kind "text"}}<div class="md" data-md>{{.Text}}</div>{{else}}<div class="file">{{.Text}}</div>{{end}}{{end}}</div>
+          <div class="when">{{clock .At}}</div>
+        </div>
+      {{else if eq .Role "system"}}
+        <div class="turn system"><div class="bub">{{range .Blocks}}<div class="md" data-md>{{.Text}}</div>{{end}}</div></div>
+      {{else}}
+        <div class="turn assistant{{if .Sidechain}} side{{end}}">
+          <div class="ava" style="background:{{toolColor $.C.Tool}}">{{toolMark $.C.Tool}}</div>
+          <div class="body">
+          {{range .Blocks}}
+            {{if eq .Kind "text"}}<div class="md" data-md>{{.Text}}</div>
+            {{else if eq .Kind "steps"}}<details class="steps"><summary><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>{{if .Tools}}{{.Tools}} 回の操作{{else}}思考{{end}}<span class="arg">{{range .Steps}}{{if eq .Kind "tool"}}{{.Name}} {{end}}{{end}}</span></summary><div class="steps-body">{{range .Steps}}{{template "step" .}}{{end}}</div></details>
+            {{else if or (eq .Kind "thinking") (eq .Kind "tool")}}{{template "step" .}}
+            {{else}}<div class="file">{{.Text}}</div>{{end}}
+          {{end}}
+          <div class="when" style="margin-left:0">{{clock .At}}{{if .Model}} · {{.Model}}{{end}}</div>
+          </div>
+        </div>
+      {{end}}
+      {{end}}
+    </div>
+  </div>
+  <nav class="toc"></nav>
+  <div class="dock">
+    <form class="box" id="exp" action="/c/{{.C.ID}}/export.md">
+      <div class="cmd" id="cmd" title="元の AI で続ける">aihist restore -server {{.Server}} {{.C.ExternalID}}</div>
+      <button type="button" class="btn pri" data-copy="cmd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg><span>{{toolLabel .C.Tool}}で続ける</span></button>
+      <button type="button" class="btn" id="copymd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>別のAIへ渡す</span></button>
+      <div class="opts">
+        <label><input type="checkbox" name="thinking" value="1">思考</label>
+        <label><input type="checkbox" name="tools" value="0">ツール除外</label>
+      </div>
+    </form>
+  </div>
 </main>
+</div>
+<script src="/static/marked.min.js"></script>
+<script src="/static/purify.min.js"></script>
 <script>
-document.getElementById('copy').onclick = async function () {
-  const f = document.getElementById('exp');
-  const q = new URLSearchParams(new FormData(f)); q.delete('dl');
-  const res = await fetch(f.action + '?' + q);
-  await navigator.clipboard.writeText(await res.text());
-  this.textContent = '✓'; setTimeout(() => this.textContent = 'コピー', 1500);
-};
+(function(){
+  // 本文は Markdown として描く。生の HTML は DOMPurify で消毒する。
+  if (window.marked && window.DOMPurify) {
+    marked.setOptions({gfm:true, breaks:true});
+    document.querySelectorAll('[data-md]').forEach(function(el){
+      el.innerHTML = DOMPurify.sanitize(marked.parse(el.textContent));
+      el.querySelectorAll('a').forEach(function(a){ a.target='_blank'; a.rel='noopener'; });
+    });
+  }
+  // 目次（利用者の発言）
+  var toc = document.querySelector('.toc'); toc.innerHTML = '';
+  document.querySelectorAll('.turn.user[id]').forEach(function(t){
+    var a = document.createElement('a'); a.href = '#'+t.id;
+    a.textContent = t.querySelector('.bub').textContent.trim().slice(0,60); toc.appendChild(a);
+  });
+  function flash(btn){ var s=btn.querySelector('span'), o=s.textContent; s.textContent='コピーした'; setTimeout(function(){s.textContent=o},1500); }
+  async function copy(text){
+    try { await navigator.clipboard.writeText(text); }
+    catch(e){ var t=document.createElement('textarea'); t.value=text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+  }
+  document.querySelector('[data-copy]').onclick = async function(){ await copy(document.getElementById('cmd').textContent.trim()); flash(this); };
+  document.getElementById('copymd').onclick = async function(){
+    var f = document.getElementById('exp'); var q = new URLSearchParams(new FormData(f));
+    var res = await fetch(f.action + '?' + q); await copy(await res.text()); flash(this);
+  };
+  var cur = document.querySelector('.conv.on'); if (cur) cur.scrollIntoView({block:'center'});
+})();
 </script>
 {{template "foot"}}{{end}}

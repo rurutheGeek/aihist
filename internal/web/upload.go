@@ -9,6 +9,7 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -108,7 +109,17 @@ func (s *Server) ingest(host, tool string) (ingest.Result, error) {
 }
 
 func (s *Server) uploadForm(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "upload.html", map[string]any{"Host": r.FormValue("host")})
+	s.renderUpload(w, r, r.FormValue("host"), nil)
+}
+
+func (s *Server) renderUpload(w http.ResponseWriter, r *http.Request, host string, lines []string) {
+	d, err := s.side(&http.Request{URL: &url.URL{}})
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	d["Host"], d["Lines"] = host, lines
+	s.render(w, "upload.html", d)
 }
 
 // upload は画面から上げられたファイルを、中身からツールを見分けて原本に置き、取り込む。
@@ -140,7 +151,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		}
 		lines = append(lines, tool+": "+res.String())
 	}
-	s.render(w, "upload.html", map[string]any{"Host": host, "Lines": lines})
+	s.renderUpload(w, r, host, lines)
 }
 
 func (s *Server) store(host string, fh *multipart.FileHeader) (tool, rel string, err error) {

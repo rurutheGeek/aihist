@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,9 @@ import (
 
 //go:embed templates/*.html
 var files embed.FS
+
+//go:embed static
+var static embed.FS
 
 type Server struct {
 	st    *store.Store
@@ -39,6 +43,12 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 			}
 			return t.Local().Format("2006-01-02 15:04")
 		},
+		"clock": func(t time.Time) string {
+			if t.IsZero() {
+				return ""
+			}
+			return t.Local().Format("1/2 15:04")
+		},
 		"short": func(s string, n int) string {
 			r := []rune(s)
 			if len(r) <= n {
@@ -46,8 +56,14 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 			}
 			return string(r[:n]) + "…"
 		},
-		"oneline": func(s string) string { return strings.Join(strings.Fields(s), " ") },
-		"isKind":  func(p model.Part, k string) bool { return string(p.Kind) == k },
+		"oneline":   func(s string) string { return strings.Join(strings.Fields(s), " ") },
+		"toolLabel": toolLabel,
+		"toolColor": toolColor,
+		"toolMark":  toolMark,
+		"hl":        hl,
+		"day":       func(t time.Time) string { return day(t.Local()) },
+		"summary":   summary,
+		"base":      base,
 	}
 	return &Server{st: st, raw: rs, token: token, tmpl: template.Must(template.New("").Funcs(funcs).ParseFS(files, "templates/*.html"))}
 }
@@ -55,6 +71,7 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.list)
+	mux.Handle("GET /static/", http.FileServerFS(static))
 	mux.HandleFunc("GET /c/{id}", s.show)
 	mux.HandleFunc("GET /c/{id}/export.md", s.exportMD)
 	mux.HandleFunc("GET /upload", s.uploadForm)
@@ -68,15 +85,41 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
-func (s *Server) list(w http.ResponseWriter, r *http.Request) {
-	f := store.Filter{Query: r.URL.Query().Get("q"), Tool: r.URL.Query().Get("tool"), Limit: 200}
+// side は左の会話一覧（どの画面にも出す）。
+func (s *Server) side(r *http.Request) (map[string]any, error) {
+	q := r.URL.Query()
+	f := store.Filter{Query: q.Get("q"), Tool: q.Get("tool"), Host: q.Get("host"), Limit: 300}
 	rows, err := s.st.List(f)
+	if err != nil {
+		return nil, err
+	}
+	tools, _ := s.st.Facets("tool")
+	hosts, _ := s.st.Facets("host")
+	return map[string]any{"Filter": f, "Rows": rows, "Tools": tools, "Hosts": hosts, "Keep": keep(f)}, nil
+}
+
+// keep は会話を開いても絞り込みを保つためのクエリ。
+func keep(f store.Filter) string {
+	v := url.Values{}
+	for k, x := range map[string]string{"q": f.Query, "tool": f.Tool, "host": f.Host} {
+		if x != "" {
+			v.Set(k, x)
+		}
+	}
+	if len(v) == 0 {
+		return ""
+	}
+	return "?" + v.Encode()
+}
+
+func (s *Server) list(w http.ResponseWriter, r *http.Request) {
+	d, err := s.side(r)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	tools, _ := s.st.Tools()
-	s.render(w, "list.html", map[string]any{"Filter": f, "Rows": rows, "Tools": tools})
+	d["Home"] = true
+	s.render(w, "list.html", d)
 }
 
 func (s *Server) load(w http.ResponseWriter, r *http.Request) (*store.ConvRow, []model.Message, bool) {
@@ -98,16 +141,17 @@ func (s *Server) show(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// 結果を呼び出しの直後に並べるため、tool_call_id で引けるようにする
-	results := map[string]model.Part{}
-	for _, m := range msgs {
-		for _, p := range m.Parts {
-			if p.Kind == model.ToolResult && p.ToolCallID != "" {
-				results[p.ToolCallID] = p
-			}
-		}
+	d, err := s.side(r)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
 	}
-	s.render(w, "show.html", map[string]any{"C": c, "Msgs": msgs, "Results": results, "Q": r.URL.Query().Get("q")})
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") == "" {
+		scheme = "http"
+	}
+	d["C"], d["Turns"], d["Server"] = c, turns(msgs), scheme+"://"+r.Host
+	s.render(w, "show.html", d)
 }
 
 func (s *Server) exportMD(w http.ResponseWriter, r *http.Request) {

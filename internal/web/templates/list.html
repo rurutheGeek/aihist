@@ -1,28 +1,13 @@
 {{define "list.html"}}{{template "head" "aihist"}}
-<header>
-<form class="search" method="get" action="/">
-  <input type="search" name="q" value="{{.Filter.Query}}" placeholder="検索" autofocus>
-  <select name="tool" onchange="this.form.submit()">
-    <option value="">すべて</option>
-    {{range .Tools}}<option value="{{.}}" {{if eq . $.Filter.Tool}}selected{{end}}>{{.}}</option>{{end}}
-  </select>
-  <button>検索</button>
-  <a href="/upload" title="アップロード">↑</a>
-</form>
-</header>
-<main>
-{{range .Rows}}
-<a class="row" href="/c/{{.ID}}{{if $.Filter.Query}}?q={{$.Filter.Query}}{{end}}">
-  <div class="t">{{if .Title}}{{short (oneline .Title) 120}}{{else}}{{.ExternalID}}{{end}}</div>
-  <div class="meta">
-    <span class="tag">{{.Tool}}</span>
-    <span>{{when .UpdatedAt}}</span>
-    <span>{{.MessageCount}}</span>
-    {{if .Cwd}}<span>{{.Cwd}}</span>{{end}}
-    {{if .ParentID}}<span>↳ {{short .ParentID 12}}</span>{{end}}
+<div class="app home">
+{{template "side" .}}
+<main class="main">
+  <div class="welcome">
+    <h1>aihist</h1>
+    <div class="stats">
+      {{range .Tools}}<a class="stat" href="/?tool={{.Name}}"><b>{{.Count}}</b><span><i style="background:{{toolColor .Name}}"></i>{{toolLabel .Name}}</span></a>{{end}}
+    </div>
   </div>
-  {{if .Snippet}}<div class="snip">{{.Snippet}}</div>{{end}}
-</a>
-{{end}}
 </main>
+</div>
 {{template "foot"}}{{end}}
