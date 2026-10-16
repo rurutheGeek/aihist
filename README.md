@@ -24,11 +24,19 @@ bin/aihist export -thinking <会話IDの先頭>
 
 | 入れ方 | やること |
 |---|---|
+| `curl … \| sh` | 各マシンで1行。サーバーが配る `/api/install.sh`（Windows は `/api/install.ps1`）が aihist を入れて `push` する（下記） |
 | `push` | 各マシンで実行する。Claude Code・Codex・Antigravity の既定の置き場所から、サーバーに無いか変わったファイルだけを送る。`-every 10m` で送り続ける |
 | 画面の `↑` | ファイルを選んで上げる。中身から Claude Code・Codex・Antigravity を見分ける |
 | `import <ツール> [場所]` | サーバーと同じマシンの記録を直接読む |
 
 `push` は OpenCode の DB そのものは送らない（操作ログで数 GB あり、ログイン情報も入っている）。会話ごとに `session`・`message`・`part` と `project` の行を加工せずに書き出した `<session id>.json` を原本として送る。
+
+```bash
+curl -fsSL https://<サーバー>/api/install.sh | AIHIST_TOKEN=<トークン> sh          # Linux・WSL・Mac
+$env:AIHIST_TOKEN="<トークン>"; irm https://<サーバー>/api/install.ps1 | iex      # Windows
+```
+
+実行ファイルは `serve -bin <dir>` に置いた `aihist-<os>-<arch>` をトークン付きで配る。WSL ではホスト名に `-wsl` を付ける。
 
 送られたファイルは原本として `-raw`（既定 `~/.local/share/aihist/raw/<ホスト>/<ツール>/`）に残る。アダプタを直したら原本から取り込み直せる。
 

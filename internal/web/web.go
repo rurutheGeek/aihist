@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,7 +27,11 @@ var files embed.FS
 //go:embed static
 var static embed.FS
 
+//go:embed install
+var install embed.FS
+
 type Server struct {
+	bin   string // 配る実行ファイルの置き場所（aihist-<os>-<arch>）
 	st    *store.Store
 	raw   raw.Store
 	token string
@@ -89,6 +95,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/files", s.auth(s.apiPut))
 	mux.HandleFunc("POST /api/import", s.auth(s.apiImport))
 	mux.HandleFunc("GET /api/file", s.auth(s.apiFile))
+	mux.HandleFunc("GET /api/install.sh", s.installScript("install.sh"))
+	mux.HandleFunc("GET /api/install.ps1", s.installScript("install.ps1"))
+	mux.HandleFunc("GET /api/bin/{name}", s.auth(s.apiBin))
 	mux.HandleFunc("GET /api/find", s.auth(s.apiFind))
 	return mux
 }
@@ -154,16 +163,12 @@ func (s *Server) show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	scheme := "https"
-	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") == "" {
-		scheme = "http"
-	}
 	branches, children, err := s.st.Related(c)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	d["C"], d["Turns"], d["Server"] = c, turns(msgs), scheme+"://"+r.Host
+	d["C"], d["Turns"], d["Server"] = c, turns(msgs), s.origin(r)
 	in := map[int64]bool{}
 	hosts := map[string]bool{}
 	for _, b := range append(branches, children...) {
@@ -202,4 +207,40 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	buf.WriteTo(w)
+}
+
+// SetBin は配る実行ファイルの置き場所を決める（空なら配らない）。
+func (s *Server) SetBin(dir string) { s.bin = dir }
+
+func (s *Server) origin(r *http.Request) string {
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") == "" {
+		scheme = "http"
+	}
+	return scheme + "://" + r.Host
+}
+
+// installScript は、このサーバーの名前を入れた導入スクリプトを返す。秘密は含まない。
+func (s *Server) installScript(name string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		b, err := install.ReadFile("install/" + name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write(bytes.ReplaceAll(b, []byte("{{SERVER}}"), []byte(s.origin(r))))
+	}
+}
+
+var binName = regexp.MustCompile(`^aihist-(linux|darwin|windows)-(amd64|arm64)(\.exe)?$`)
+
+func (s *Server) apiBin(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if s.bin == "" || !binName.MatchString(name) {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	http.ServeFile(w, r, filepath.Join(s.bin, name))
 }

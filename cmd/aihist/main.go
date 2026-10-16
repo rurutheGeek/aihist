@@ -28,7 +28,7 @@ func usage() {
   aihist [-db path] import codex [dir]        既定 ~/.codex
   aihist [-db path] import antigravity [dir]  既定 ~/.gemini/antigravity-ide/conversations
   aihist [-db path] import opencode [db]      既定 ~/.local/share/opencode/opencode.db
-  aihist [-db path] serve [-addr :8080] [-raw dir] [-token T]
+  aihist [-db path] serve [-addr :8080] [-raw dir] [-token T] [-bin dir]
   aihist push -server URL [-token T] [-host 名前] [-every 10m]
   aihist restore -server URL [-token T] [-force] <会話IDの先頭>   元の AI へ戻す
   aihist [-db path] search <語>
@@ -142,9 +142,12 @@ func main() {
 		addr := fs.String("addr", ":8080", "待ち受けアドレス")
 		rawDir := fs.String("raw", filepath.Join(data, "raw"), "送られてきた原本の置き場所")
 		token := fs.String("token", os.Getenv("AIHIST_TOKEN"), "書き込みに要るトークン（空なら不要）")
+		bin := fs.String("bin", "", "配る実行ファイル（aihist-<os>-<arch>）の置き場所")
 		fs.Parse(args[1:])
 		log.Printf("listening on %s", *addr)
-		err = http.ListenAndServe(*addr, web.New(st, raw.Store{Dir: *rawDir}, *token).Handler())
+		srv := web.New(st, raw.Store{Dir: *rawDir}, *token)
+		srv.SetBin(*bin)
+		err = http.ListenAndServe(*addr, srv.Handler())
 	case "search":
 		if len(args) < 2 {
 			usage()
