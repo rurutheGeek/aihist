@@ -1,0 +1,41 @@
+{{define "head"}}<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.}}</title>
+<style>
+:root{--bg:#fafaf9;--fg:#1c1917;--mute:#78716c;--line:#e7e5e4;--card:#fff;--acc:#2563eb;--user:#eff6ff;--tool:#f5f5f4;--err:#b91c1c;--mark:#fde68a}
+@media (prefers-color-scheme:dark){:root{--bg:#0c0a09;--fg:#e7e5e4;--mute:#a8a29e;--line:#292524;--card:#1c1917;--acc:#60a5fa;--user:#172554;--tool:#1c1917;--err:#f87171;--mark:#713f12}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+a{color:var(--acc);text-decoration:none}
+header{position:sticky;top:0;z-index:1;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 16px}
+form.search{display:flex;gap:8px;max-width:960px;margin:0 auto}
+form.search input[type=search]{flex:1;min-width:0}
+input,select,button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+button{cursor:pointer}
+main{max-width:960px;margin:0 auto;padding:12px 16px 48px}
+.row{display:block;padding:10px 0;border-bottom:1px solid var(--line);color:inherit}
+.row .t{font-weight:600;overflow-wrap:anywhere}
+.meta{color:var(--mute);font-size:13px;display:flex;flex-wrap:wrap;gap:4px 12px}
+.snip{font-size:13px;color:var(--mute);overflow-wrap:anywhere}
+mark,.snip b{background:var(--mark);color:inherit;font-weight:normal}
+.tag{border:1px solid var(--line);border-radius:999px;padding:0 8px}
+.msg{margin:14px 0;padding:10px 12px;border-radius:10px;background:var(--card);border:1px solid var(--line)}
+.msg.user{background:var(--user)}
+.msg.side{opacity:.7}
+.role{font-size:12px;color:var(--mute);margin-bottom:4px}
+.text{white-space:pre-wrap;overflow-wrap:anywhere}
+details{margin:6px 0;background:var(--tool);border-radius:8px;padding:4px 8px}
+summary{cursor:pointer;font-size:13px;color:var(--mute);overflow-wrap:anywhere}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12.5px/1.5 ui-monospace,Menlo,monospace;margin:6px 0;max-height:480px;overflow:auto}
+.err summary{color:var(--err)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 4px}
+.bar label{font-size:13px;color:var(--mute);display:flex;gap:4px;align-items:center}
+h1{font-size:20px;margin:8px 0;overflow-wrap:anywhere}
+</style>
+</head>
+<body>{{end}}
+
+{{define "foot"}}</body></html>{{end}}

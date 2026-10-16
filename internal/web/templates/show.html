@@ -1,0 +1,52 @@
+{{define "show.html"}}{{template "head" .C.Title}}
+<header>
+<form class="search" method="get" action="/">
+  <a href="/">←</a>
+  <input type="search" name="q" value="{{.Q}}" placeholder="検索">
+  <button>検索</button>
+</form>
+</header>
+<main>
+<h1>{{if .C.Title}}{{oneline .C.Title}}{{else}}{{.C.ExternalID}}{{end}}</h1>
+<div class="meta">
+  <span class="tag">{{.C.Tool}}</span>
+  <span>{{when .C.StartedAt}} – {{when .C.UpdatedAt}}</span>
+  {{if .C.Cwd}}<span>{{.C.Cwd}}</span>{{end}}
+  {{if .C.GitBranch}}<span>{{.C.GitBranch}}</span>{{end}}
+  {{if .C.Model}}<span>{{.C.Model}}</span>{{end}}
+  <span>{{.C.ExternalID}}</span>
+</div>
+<form class="bar" id="exp" action="/c/{{.C.ID}}/export.md" target="_blank">
+  <label><input type="checkbox" name="thinking" value="1">思考</label>
+  <label><input type="checkbox" name="tools" value="0">ツール除外</label>
+  <label>結果<input type="number" name="max" value="2000" min="0" step="500" style="width:6em"></label>
+  <button type="button" id="copy">コピー</button>
+  <button name="dl" value="1">保存</button>
+  <button>表示</button>
+</form>
+{{range .Msgs}}
+<div class="msg {{.Role}}{{if .Sidechain}} side{{end}}">
+  <div class="role">{{.Role}} · {{when .CreatedAt}}{{if .Model}} · {{.Model}}{{end}}</div>
+  {{range .Parts}}
+    {{if isKind . "text"}}<div class="text">{{.Text}}</div>
+    {{else if isKind . "thinking"}}<details><summary>thinking</summary><pre>{{.Text}}</pre></details>
+    {{else if isKind . "tool_call"}}
+      {{$r := index $.Results .ToolCallID}}
+      <details{{if $r.IsError}} class="err"{{end}}><summary>{{.ToolName}} {{short (oneline .Text) 140}}</summary><pre>{{.Text}}</pre>{{if $r.Kind}}<pre>{{$r.Text}}</pre>{{end}}</details>
+    {{else if isKind . "tool_result"}}
+      {{if not (index $.Results .ToolCallID).Kind}}<details><summary>result</summary><pre>{{.Text}}</pre></details>{{end}}
+    {{else}}<div class="text">{{.Text}}</div>{{end}}
+  {{end}}
+</div>
+{{end}}
+</main>
+<script>
+document.getElementById('copy').onclick = async function () {
+  const f = document.getElementById('exp');
+  const q = new URLSearchParams(new FormData(f)); q.delete('dl');
+  const res = await fetch(f.action + '?' + q);
+  await navigator.clipboard.writeText(await res.text());
+  this.textContent = '✓'; setTimeout(() => this.textContent = 'コピー', 1500);
+};
+</script>
+{{template "foot"}}{{end}}
