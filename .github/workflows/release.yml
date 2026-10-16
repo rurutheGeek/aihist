@@ -55,3 +55,12 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+      - name: smoke test
+        run: |
+          img=ghcr.io/$(echo "$GITHUB_REPOSITORY" | tr A-Z a-z):${GITHUB_REF_NAME#v}
+          docker run -d --name t -p 8080:8080 -e AIHIST_TOKEN=t "$img"
+          for i in $(seq 20); do curl -fs localhost:8080/healthz && break; sleep 1; done
+          curl -fs -o /dev/null localhost:8080/
+          curl -fs -H 'Authorization: Bearer t' "localhost:8080/api/bin/aihist-linux-amd64?sum=1"
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/api/bin/aihist-linux-amd64)" = 401
+          docker stats --no-stream t
