@@ -3,10 +3,15 @@ package web
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
+	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -34,6 +39,8 @@ type Server struct {
 	st    *store.Store
 	raw   raw.Store
 	token string
+	sumMu sync.Mutex
+	sums  map[string]string
 	tmpl  *template.Template
 	mu    sync.Mutex // 取り込みは1つずつ
 }
@@ -216,6 +223,47 @@ func (s *Server) apiBin(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	path := filepath.Join(s.bin, name)
+	sum, err := s.binSum(path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	// ?sum=1 は sha256 だけを返す（各マシンが自分を新しくするかを決める）
+	if r.URL.Query().Get("sum") == "1" {
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprintln(w, sum)
+		return
+	}
 	w.Header().Set("Content-Type", "application/octet-stream")
-	http.ServeFile(w, r, filepath.Join(s.bin, name))
+	w.Header().Set("X-Sha256", sum)
+	http.ServeFile(w, r, path)
+}
+
+// binSum は配る実行ファイルの sha256。ファイルが変わるまで覚えておく。
+func (s *Server) binSum(path string) (string, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	key := fmt.Sprintf("%s:%d:%d", path, st.Size(), st.ModTime().UnixNano())
+	s.sumMu.Lock()
+	defer s.sumMu.Unlock()
+	if v, ok := s.sums[key]; ok {
+		return v, nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	if s.sums == nil {
+		s.sums = map[string]string{}
+	}
+	s.sums[key] = hex.EncodeToString(h.Sum(nil))
+	return s.sums[key], nil
 }

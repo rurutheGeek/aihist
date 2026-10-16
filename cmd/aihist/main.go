@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -42,7 +43,7 @@ func clientConfig() map[string]string {
 			}
 		}
 	}
-	for _, k := range []string{"AIHIST_SERVER", "AIHIST_TOKEN", "AIHIST_HOST"} {
+	for _, k := range []string{"AIHIST_SERVER", "AIHIST_TOKEN", "AIHIST_HOST", "AIHIST_AUTO_UPDATE"} {
 		if v := os.Getenv(k); v != "" {
 			cf[k] = v
 		}
@@ -100,6 +101,23 @@ func main() {
 			usage()
 		}
 		c := push.NewClient(*server, *token, *name)
+		// サーバーが配る実行ファイルに合わせて自分を新しくし、新しい方で送り直す（AIHIST_AUTO_UPDATE=0 で止める）
+		if cf["AIHIST_AUTO_UPDATE"] != "0" && os.Getenv("AIHIST_UPDATED") == "" {
+			if exe, err := c.Update(); err != nil {
+				log.Printf("更新: %v", err)
+			} else if exe != "" {
+				log.Printf("新しい aihist に入れ替えた")
+				cmd := exec.Command(exe, os.Args[1:]...)
+				cmd.Stdout, cmd.Stderr, cmd.Env = os.Stdout, os.Stderr, append(os.Environ(), "AIHIST_UPDATED=1")
+				if err := cmd.Run(); err != nil {
+					if e, ok := err.(*exec.ExitError); ok {
+						os.Exit(e.ExitCode())
+					}
+					log.Fatal(err)
+				}
+				return
+			}
+		}
 		for {
 			for _, src := range push.Defaults(home) {
 				n, res, err := c.Push(src)

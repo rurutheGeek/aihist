@@ -41,10 +41,13 @@ $env:AIHIST_TOKEN="<トークン>"; irm https://<サーバー>/api/install.ps1 |
 
 常駐はしない。OS のタイマー（systemd のユーザータイマー、無ければ cron、macOS は launchd、Windows はタスク スケジューラ）が 10 分ごとに `aihist push` を1回動かす。2回目からは変わったファイルだけを送るので、1回は数秒・メモリ 10 MB ほどで終わる。
 
+送る前に、サーバーが配る実行ファイル（`/api/bin`）と自分の sha256 を比べ、違えば入れ替えてから送る。サーバーを新しくすれば、対応するツールが増えても各マシンでやり直すことは無い。
+
 | 変数 | 意味 |
 |---|---|
 | `AIHIST_EVERY` | 送る間隔（既定 `10m`。`0` なら今1回送るだけ） |
 | `AIHIST_HOST` | このマシンの名前（既定はホスト名。WSL では `-wsl` を付ける） |
+| `AIHIST_AUTO_UPDATE` | `0` で自動更新を止める（設定ファイルに書いてもよい） |
 | `AIHIST_BIN_DIR` | 実行ファイルの置き場所（既定 `~/.local/bin`。Windows は `%LOCALAPPDATA%\aihist`） |
 
 置くもの: 実行ファイル、設定 `~/.config/aihist/config`（macOS は `~/Library/Application Support/aihist`、Windows は `%APPDATA%\aihist`。トークンが入るので本人だけが読める）、タイマー。
