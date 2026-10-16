@@ -4,6 +4,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -90,6 +91,57 @@ func Open(path string) (*Store, error) {
 
 // migrate は前の版で作った DB に足りない列を足す。
 func migrate(db *sql.DB) error {
+	if err := migrateRoot(db); err != nil {
+		return err
+	}
+	// v0.4.0 は Antigravity にも root_id を入れていた（番号が会話ごとに 0 から始まり、全部が1つにまとまる）
+	if _, err := db.Exec(`UPDATE conversations SET root_id='' WHERE tool='antigravity' AND root_id<>''`); err != nil {
+		return err
+	}
+	return migrateContinues(db)
+}
+
+func hasColumn(db *sql.DB, col string) bool {
+	var n int
+	db.QueryRow(`SELECT count(*) FROM pragma_table_info('conversations') WHERE name=?`, col).Scan(&n)
+	return n > 0
+}
+
+// migrateContinues は continues_from を足し、最初のメッセージの本文から埋める。
+func migrateContinues(db *sql.DB) error {
+	if hasColumn(db, "continues_from") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE conversations ADD COLUMN continues_from TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	rows, err := db.Query(`SELECT c.id, ifnull((SELECT p.text FROM messages m JOIN parts p ON p.message_id=m.id
+	    WHERE m.conversation_id=c.id ORDER BY m.seq, p.seq LIMIT 1), '') FROM conversations c`)
+	if err != nil {
+		return err
+	}
+	set := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var text string
+		if err := rows.Scan(&id, &text); err != nil {
+			rows.Close()
+			return err
+		}
+		if v := model.ContinuesFrom(text); v != "" {
+			set[id] = v
+		}
+	}
+	rows.Close()
+	for id, v := range set {
+		if _, err := db.Exec(`UPDATE conversations SET continues_from=? WHERE id=?`, v, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateRoot(db *sql.DB) error {
 	var n int
 	db.QueryRow(`SELECT count(*) FROM pragma_table_info('conversations') WHERE name='root_id'`).Scan(&n)
 	if n > 0 {
@@ -124,10 +176,10 @@ func (s *Store) Put(c *model.Conversation, stamp string) error {
 		return err
 	}
 	res, err := tx.Exec(`INSERT INTO conversations
-	  (tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, source_path, source_stamp, message_count, root_id)
-	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	  (tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, source_path, source_stamp, message_count, root_id, continues_from)
+	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		c.Tool, c.Host, c.ExternalID, c.ParentID, c.Title, c.Cwd, c.GitBranch, c.Model,
-		unix(c.StartedAt), unix(c.UpdatedAt), c.SourcePath, stamp, len(c.Messages), rootID(c))
+		unix(c.StartedAt), unix(c.UpdatedAt), c.SourcePath, stamp, len(c.Messages), rootID(c), continuesFrom(c))
 	if err != nil {
 		return err
 	}
@@ -157,12 +209,23 @@ func (s *Store) Put(c *model.Conversation, stamp string) error {
 	return tx.Commit()
 }
 
+func continuesFrom(c *model.Conversation) string {
+	if len(c.Messages) == 0 || len(c.Messages[0].Parts) == 0 {
+		return ""
+	}
+	return model.ContinuesFrom(c.Messages[0].Parts[0].Text)
+}
+
+// rootID は分岐の判定に使う最初のメッセージの ID。会話をまたいで一意な ID を振るツールだけ。
+// Antigravity はステップの番号（0 から）なので使えない。
 func rootID(c *model.Conversation) string {
-	if len(c.Messages) == 0 {
+	if len(c.Messages) == 0 || !uniqueMessageIDs(c.Tool) {
 		return ""
 	}
 	return c.Messages[0].ExternalID
 }
+
+func uniqueMessageIDs(tool string) bool { return tool != "antigravity" }
 
 func unix(t time.Time) int64 {
 	if t.IsZero() {
@@ -172,20 +235,22 @@ func unix(t time.Time) int64 {
 }
 
 type ConvRow struct {
-	ID           int64
-	Tool, Host   string
-	ExternalID   string
-	ParentID     string
-	Title        string
-	Cwd          string
-	GitBranch    string
-	Model        string
-	StartedAt    time.Time
-	UpdatedAt    time.Time
-	MessageCount int
-	Snippet      string
-	RootID       string
-	Branches     int // 一覧でまとめた分岐の数（自分を含む）
+	ID            int64
+	Tool, Host    string
+	ExternalID    string
+	ParentID      string
+	Title         string
+	Cwd           string
+	GitBranch     string
+	Model         string
+	StartedAt     time.Time
+	UpdatedAt     time.Time
+	MessageCount  int
+	Snippet       string
+	RootID        string
+	ContinuesFrom string // 続きのとき、前の会話の ID
+	Branches      int    // 一覧でまとめた数（自分を含む）
+	orphan        bool   // 親の会話が取り込まれていないサブエージェント
 }
 
 type Filter struct {
@@ -193,185 +258,80 @@ type Filter struct {
 	Tool  string
 	Host  string
 	Limit int
-	All   bool // サブエージェントも出し、分岐もまとめない
+	All   bool // まとめずに全部出す
 }
 
-// List は会話一覧。Query があれば本文の全文検索で絞る。
+// List は会話一覧。同じ会話（分岐・続き・別のマシンの写し・サブエージェント）は1行にまとめ、
+// 一番新しいものを出す。Query があれば本文の全文検索で絞る。
 // trigram は3文字未満を引けないので、短い語は LIKE で探す。
 func (s *Store) List(f Filter) ([]ConvRow, error) {
 	if f.Limit <= 0 {
 		f.Limit = 100
 	}
-	var (
-		q    string
-		args []any
-	)
-	cols := `c.id, c.tool, c.host, c.external_id, c.parent_external_id, c.title, c.cwd, c.git_branch, c.model, c.started_at, c.updated_at, c.message_count, c.root_id`
-	query := strings.TrimSpace(f.Query)
-	switch {
-	case query == "":
-		q = `SELECT ` + cols + `, '' FROM conversations c WHERE 1=1`
-	case len([]rune(query)) >= 3:
-		return s.search(query, f)
-	default:
-		q = `SELECT ` + cols + `, '' FROM conversations c WHERE c.id IN (
-		       SELECT conversation_id FROM parts WHERE text LIKE ? ESCAPE '\') OR c.title LIKE ? ESCAPE '\'`
-		like := "%" + escapeLike(query) + "%"
-		args = append(args, like, like)
-		q = `SELECT * FROM (` + q + `) c WHERE 1=1`
-	}
-	if !f.All {
-		// サブエージェントは親の会話の中から開く。親が無いものだけ一覧に出す。
-		q += ` AND NOT EXISTS (SELECT 1 FROM conversations p WHERE p.tool=c.tool AND p.host=c.host AND p.external_id=c.parent_external_id AND c.parent_external_id<>'')`
-	}
-	if f.Tool != "" {
-		q += ` AND c.tool = ?`
-		args = append(args, f.Tool)
-	}
-	if f.Host != "" {
-		q += ` AND c.host = ?`
-		args = append(args, f.Host)
-	}
-	q += ` ORDER BY c.updated_at DESC LIMIT ?`
-	args = append(args, f.Limit)
-	rows, err := s.db.Query(q, args...)
+	rows, err := s.rowsWhere(f.Tool, f.Host)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []ConvRow
-	for rows.Next() {
-		var r ConvRow
-		var st, up int64
-		if err := rows.Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.Snippet); err != nil {
+	var hits map[int64]string
+	if q := strings.TrimSpace(f.Query); q != "" {
+		if hits, err = s.hits(q); err != nil {
 			return nil, err
 		}
-		r.StartedAt, r.UpdatedAt = fromUnix(st), fromUnix(up)
-		out = append(out, r)
+		for _, r := range rows {
+			if _, ok := hits[r.ID]; !ok && strings.Contains(strings.ToLower(r.Title), strings.ToLower(q)) {
+				hits[r.ID] = ""
+			}
+		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+	var out []ConvRow
 	if f.All {
-		return out, nil
-	}
-	return collapse(out), nil
-}
-
-// collapse は分岐（最初のメッセージが同じ会話）を、いちばん新しいもの1つにまとめる。
-// 並びは更新の新しい順なので、最初に出たものを残す。
-func collapse(rows []ConvRow) []ConvRow {
-	first := map[string]int{}
-	var out []ConvRow
-	for _, r := range rows {
-		key := r.Tool + "\x00" + r.Host + "\x00" + r.RootID
-		if i, ok := first[key]; ok && r.RootID != "" {
-			out[i].Branches++
-			if out[i].Snippet == "" {
-				out[i].Snippet = r.Snippet
+		for _, r := range rows {
+			if sn, ok := hits[r.ID]; hits == nil || ok {
+				r.Snippet, r.Branches = sn, 1
+				out = append(out, r)
 			}
-			continue
 		}
-		r.Branches = 1
-		first[key] = len(out)
-		out = append(out, r)
-	}
-	return out
-}
-
-// search は全文検索。snippet() は集計の中で使えないので、会話ごとの最初の一致を Go 側で拾う。
-func (s *Store) search(query string, f Filter) ([]ConvRow, error) {
-	rows, err := s.db.Query(`SELECT p.conversation_id, snippet(parts_fts, 0, char(2), char(3), '…', 24)
-	  FROM parts_fts JOIN parts p ON p.id = parts_fts.rowid
-	  WHERE parts_fts MATCH ? ORDER BY p.conversation_id DESC`, ftsPhrase(query))
-	if err != nil {
-		return nil, err
-	}
-	snip := map[int64]string{}
-	for rows.Next() {
-		var cid int64
-		var sn string
-		if err := rows.Scan(&cid, &sn); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		if _, ok := snip[cid]; !ok {
-			snip[cid] = sn
-		}
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	// サブエージェントでの一致は親の会話の一致として出す
-	if !f.All {
-		pr, err := s.db.Query(`SELECT c.id, p.id FROM conversations c JOIN conversations p
-		  ON p.tool=c.tool AND p.host=c.host AND p.external_id=c.parent_external_id WHERE c.parent_external_id<>''`)
-		if err != nil {
-			return nil, err
-		}
-		for pr.Next() {
-			var child, parent int64
-			if err := pr.Scan(&child, &parent); err != nil {
-				pr.Close()
-				return nil, err
-			}
-			if sn, ok := snip[child]; ok {
-				if _, has := snip[parent]; !has {
-					snip[parent] = sn
+	} else {
+		for _, g := range groups(rows) {
+			rep := g.rep(rows)
+			if hits != nil {
+				found := false
+				for _, i := range g.members {
+					if sn, ok := hits[rows[i].ID]; ok {
+						if !found || rep.Snippet == "" {
+							rep.Snippet = sn
+						}
+						found = true
+					}
+				}
+				if !found {
+					continue
 				}
 			}
+			out = append(out, rep)
 		}
-		pr.Close()
 	}
-	all, err := s.List(Filter{Tool: f.Tool, Host: f.Host, Limit: 1 << 30, All: true})
-	if err != nil {
-		return nil, err
-	}
-	var out []ConvRow
-	for _, r := range all {
-		sn, ok := snip[r.ID]
-		if !ok && !strings.Contains(strings.ToLower(r.Title), strings.ToLower(query)) {
-			continue
-		}
-		r.Snippet = sn
-		out = append(out, r)
-	}
-	if !f.All {
-		out = collapse(hideChildren(out, all))
-	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
 	if len(out) > f.Limit {
 		out = out[:f.Limit]
 	}
 	return out, nil
 }
 
-// hideChildren は親が取り込まれているサブエージェントを除く。
-func hideChildren(rows, all []ConvRow) []ConvRow {
-	have := map[string]bool{}
-	for _, r := range all {
-		have[r.Tool+"\x00"+r.Host+"\x00"+r.ExternalID] = true
-	}
-	var out []ConvRow
-	for _, r := range rows {
-		if r.ParentID != "" && have[r.Tool+"\x00"+r.Host+"\x00"+r.ParentID] {
-			continue
-		}
-		out = append(out, r)
-	}
-	return out
-}
+const rowCols = `id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id, continues_from`
 
-// Related は同じ会話の分岐（自分を含む、古い順）と、サブエージェント（古い順）。
-func (s *Store) Related(c *ConvRow) (branches, children []ConvRow, err error) {
-	q := `SELECT id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id, '' FROM conversations `
-	if c.RootID != "" {
-		if branches, err = s.query(q+`WHERE tool=? AND host=? AND root_id=? ORDER BY updated_at`, c.Tool, c.Host, c.RootID); err != nil {
-			return nil, nil, err
-		}
+func (s *Store) rowsWhere(tool, host string) ([]ConvRow, error) {
+	q := `SELECT ` + rowCols + ` FROM conversations WHERE 1=1`
+	var args []any
+	if tool != "" {
+		q += ` AND tool=?`
+		args = append(args, tool)
 	}
-	children, err = s.query(q+`WHERE tool=? AND host=? AND parent_external_id=? ORDER BY started_at`, c.Tool, c.Host, c.ExternalID)
-	return branches, children, err
+	if host != "" {
+		q += ` AND host=?`
+		args = append(args, host)
+	}
+	return s.query(q+` ORDER BY updated_at DESC`, args...)
 }
 
 func (s *Store) query(q string, args ...any) ([]ConvRow, error) {
@@ -384,13 +344,175 @@ func (s *Store) query(q string, args ...any) ([]ConvRow, error) {
 	for rows.Next() {
 		var r ConvRow
 		var st, up int64
-		if err := rows.Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.Snippet); err != nil {
+		if err := rows.Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom); err != nil {
 			return nil, err
 		}
 		r.StartedAt, r.UpdatedAt = fromUnix(st), fromUnix(up)
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// hits は本文に q を含む会話と、その抜粋（一致を \x02 \x03 で囲む）。
+func (s *Store) hits(q string) (map[int64]string, error) {
+	out := map[int64]string{}
+	if len([]rune(q)) < 3 {
+		rows, err := s.db.Query(`SELECT DISTINCT conversation_id FROM parts WHERE text LIKE ? ESCAPE '\'`, "%"+escapeLike(q)+"%")
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				return nil, err
+			}
+			out[id] = ""
+		}
+		return out, rows.Err()
+	}
+	// snippet() は集計の中で使えないので、会話ごとの最初の一致を Go 側で拾う。
+	rows, err := s.db.Query(`SELECT p.conversation_id, snippet(parts_fts, 0, char(2), char(3), '…', 24)
+	  FROM parts_fts JOIN parts p ON p.id = parts_fts.rowid
+	  WHERE parts_fts MATCH ?`, ftsPhrase(q))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var sn string
+		if err := rows.Scan(&id, &sn); err != nil {
+			return nil, err
+		}
+		if _, ok := out[id]; !ok {
+			out[id] = sn
+		}
+	}
+	return out, rows.Err()
+}
+
+// group は同じ会話とみなす行の集まり（rows の添字）。
+type group struct{ members []int }
+
+// rep は一覧に出す1行。サブエージェントでない中で一番新しいもの（並びが新しい順なので最初）。
+func (g group) rep(rows []ConvRow) ConvRow {
+	best, n := -1, 0
+	for _, i := range g.members {
+		if rows[i].ParentID == "" || rows[i].orphan {
+			n++
+			if best < 0 {
+				best = i
+			}
+		}
+	}
+	if best < 0 {
+		best, n = g.members[0], len(g.members)
+	}
+	r := rows[best]
+	r.Branches = n
+	return r
+}
+
+// groups は同じツールの中で、次のどれかでつながる会話を1つにまとめる。
+//   - 同じ会話 ID（別のマシンにある写し。デスクトップアプリはリモートの会話を手元にも残す）
+//   - 同じ最初のメッセージ（分岐。履歴を写して別の会話になったもの）
+//   - 続き（文脈があふれて、前の会話の要約から始めた会話）
+//   - サブエージェントと親の会話（親が無ければ、同じ親のサブエージェントどうし）
+func groups(rows []ConvRow) []group {
+	parent := make([]int, len(rows))
+	for i := range parent {
+		parent[i] = i
+	}
+	var find func(int) int
+	find = func(i int) int {
+		for parent[i] != i {
+			parent[i] = parent[parent[i]]
+			i = parent[i]
+		}
+		return i
+	}
+	union := func(a, b int) {
+		if ra, rb := find(a), find(b); ra != rb {
+			if ra < rb {
+				parent[rb] = ra
+			} else {
+				parent[ra] = rb
+			}
+		}
+	}
+	byKey := map[string]int{}
+	link := func(i int, key string) {
+		if j, ok := byKey[key]; ok {
+			union(i, j)
+		} else {
+			byKey[key] = i
+		}
+	}
+	ext := map[string]bool{}
+	for _, r := range rows {
+		ext[r.Tool+"\x00"+r.ExternalID] = true
+	}
+	for i, r := range rows {
+		t := r.Tool + "\x00"
+		link(i, "id\x00"+t+r.ExternalID)
+		if r.RootID != "" {
+			link(i, "root\x00"+t+r.RootID)
+		}
+		if r.ContinuesFrom != "" {
+			link(i, "id\x00"+t+r.ContinuesFrom)
+		}
+		if r.ParentID != "" {
+			if ext[t+r.ParentID] {
+				link(i, "id\x00"+t+r.ParentID)
+			} else {
+				rows[i].orphan = true
+				link(i, "orphan\x00"+t+r.ParentID)
+			}
+		}
+	}
+	idx := map[int]int{}
+	var out []group
+	for i := range rows {
+		root := find(i)
+		k, ok := idx[root]
+		if !ok {
+			k = len(out)
+			idx[root] = k
+			out = append(out, group{})
+		}
+		out[k].members = append(out[k].members, i)
+	}
+	return out
+}
+
+// Related は同じ会話としてまとめた行（サブエージェントを除く、古い順）と、サブエージェント（古い順）。
+func (s *Store) Related(c *ConvRow) (versions, children []ConvRow, err error) {
+	rows, err := s.rowsWhere(c.Tool, "")
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, g := range groups(rows) {
+		in := false
+		for _, i := range g.members {
+			if rows[i].ID == c.ID {
+				in = true
+			}
+		}
+		if !in {
+			continue
+		}
+		for _, i := range g.members {
+			if rows[i].ParentID != "" && !rows[i].orphan {
+				children = append(children, rows[i])
+			} else {
+				versions = append(versions, rows[i])
+			}
+		}
+	}
+	sort.SliceStable(versions, func(i, j int) bool { return versions[i].UpdatedAt.Before(versions[j].UpdatedAt) })
+	sort.SliceStable(children, func(i, j int) bool { return children[i].StartedAt.Before(children[j].StartedAt) })
+	return versions, children, nil
 }
 
 func ftsPhrase(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
@@ -412,29 +534,30 @@ type Facet struct {
 	Count int
 }
 
-// Facets は列 col（tool か host）ごとの会話数。
+// Facets は列 col（tool か host）ごとの会話数。一覧と同じくまとめた会話を1つと数える。
 func (s *Store) Facets(col string) ([]Facet, error) {
-	if col != "tool" && col != "host" {
-		return nil, fmt.Errorf("facet: %s", col)
-	}
-	// 一覧と同じ数え方（サブエージェントは除き、分岐は1つと数える）
-	rows, err := s.db.Query(`SELECT ` + col + `, count(DISTINCT CASE WHEN c.root_id<>'' THEN c.tool||char(0)||c.host||char(0)||c.root_id ELSE c.id END)
-	  FROM conversations c
-	  WHERE NOT EXISTS (SELECT 1 FROM conversations p WHERE p.tool=c.tool AND p.host=c.host AND p.external_id=c.parent_external_id AND c.parent_external_id<>'')
-	  GROUP BY 1 ORDER BY 2 DESC`)
+	rows, err := s.rowsWhere("", "")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []Facet
-	for rows.Next() {
-		var f Facet
-		if err := rows.Scan(&f.Name, &f.Count); err != nil {
-			return nil, err
+	n := map[string]int{}
+	for _, g := range groups(rows) {
+		r := g.rep(rows)
+		switch col {
+		case "tool":
+			n[r.Tool]++
+		case "host":
+			n[r.Host]++
+		default:
+			return nil, fmt.Errorf("facet: %s", col)
 		}
-		out = append(out, f)
 	}
-	return out, rows.Err()
+	var out []Facet
+	for k, v := range n {
+		out = append(out, Facet{k, v})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Count > out[j].Count })
+	return out, nil
 }
 
 func (s *Store) Tools() ([]string, error) {
@@ -456,8 +579,8 @@ func (s *Store) Tools() ([]string, error) {
 func (s *Store) Get(id int64) (*ConvRow, []model.Message, error) {
 	var r ConvRow
 	var st, up int64
-	err := s.db.QueryRow(`SELECT id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id FROM conversations WHERE id=?`, id).
-		Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID)
+	err := s.db.QueryRow(`SELECT id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id, continues_from FROM conversations WHERE id=?`, id).
+		Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom)
 	if err != nil {
 		return nil, nil, err
 	}

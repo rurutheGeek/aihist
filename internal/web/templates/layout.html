@@ -197,8 +197,8 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
     {{$cur := ""}}{{$sel := 0}}{{$root := ""}}{{with .C}}{{$sel = .ID}}{{$root = .RootID}}{{end}}
     {{range .Rows}}
       {{$d := day .UpdatedAt}}{{if ne $d $cur}}<div class="group">{{$d}}</div>{{$cur = $d}}{{end}}
-      <a class="conv{{if or (eq .ID $sel) (and .RootID (eq .RootID $root))}} on{{end}}" href="/c/{{.ID}}{{$.Keep}}">
-        <div class="t"><i style="background:{{toolColor .Tool}}"></i><span>{{if .Title}}{{oneline .Title}}{{else}}{{.ExternalID}}{{end}}</span>{{if gt .Branches 1}}<em class="br" title="分岐">{{.Branches}}</em>{{end}}</div>
+      <a class="conv{{if or (eq .ID $sel) (and $.Group (index $.Group .ID))}} on{{end}}" href="/c/{{.ID}}{{$.Keep}}">
+        <div class="t"><i style="background:{{toolColor .Tool}}"></i><span>{{if .Title}}{{oneline .Title}}{{else}}{{.ExternalID}}{{end}}</span>{{if gt .Branches 1}}<em class="br">{{.Branches}}</em>{{end}}</div>
         {{if .Snippet}}<div class="s">{{hl .Snippet}}</div>{{end}}
         {{if .ParentID}}<div class="sub">↳ サブエージェント</div>{{end}}
       </a>

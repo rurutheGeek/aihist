@@ -164,7 +164,13 @@ func (s *Server) show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d["C"], d["Turns"], d["Server"] = c, turns(msgs), scheme+"://"+r.Host
-	d["Branches"], d["Children"] = branches, children
+	in := map[int64]bool{}
+	hosts := map[string]bool{}
+	for _, b := range append(branches, children...) {
+		in[b.ID] = true
+		hosts[b.Host] = true
+	}
+	d["Branches"], d["Children"], d["Group"], d["ManyHosts"] = branches, children, in, len(hosts) > 1
 	s.render(w, "show.html", d)
 }
 

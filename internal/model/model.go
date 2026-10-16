@@ -1,7 +1,11 @@
 // Package model はツールに依存しない会話の内部モデル。
 package model
 
-import "time"
+import (
+	"regexp"
+	"strings"
+	"time"
+)
 
 type Conversation struct {
 	Tool       string // claude_code / opencode / ...
@@ -45,4 +49,18 @@ type Part struct {
 	ToolName   string
 	ToolCallID string
 	IsError    bool
+}
+
+var transcript = regexp.MustCompile(`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl`)
+
+// ContinuesFrom は、文脈があふれて前の会話の要約から始めた会話の最初の本文から、
+// 前の会話の ID を拾う（Claude Code は要約に前の会話の記録のパスを書く）。
+func ContinuesFrom(first string) string {
+	if !strings.HasPrefix(strings.TrimSpace(first), "This session is being continued from a previous conversation") {
+		return ""
+	}
+	if m := transcript.FindStringSubmatch(first); m != nil {
+		return m[1]
+	}
+	return ""
 }
