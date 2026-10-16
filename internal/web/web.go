@@ -7,7 +7,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"net/url"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -100,33 +99,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/bin/{name}", s.auth(s.apiBin))
 	mux.HandleFunc("GET /api/find", s.auth(s.apiFind))
 	return mux
-}
-
-// side は左の会話一覧（どの画面にも出す）。
-func (s *Server) side(r *http.Request) (map[string]any, error) {
-	q := r.URL.Query()
-	f := store.Filter{Query: q.Get("q"), Tool: q.Get("tool"), Host: q.Get("host"), Limit: 300}
-	rows, err := s.st.List(f)
-	if err != nil {
-		return nil, err
-	}
-	tools, _ := s.st.Facets("tool")
-	hosts, _ := s.st.Facets("host")
-	return map[string]any{"Filter": f, "Rows": rows, "Tools": tools, "Hosts": hosts, "Keep": keep(f)}, nil
-}
-
-// keep は会話を開いても絞り込みを保つためのクエリ。
-func keep(f store.Filter) string {
-	v := url.Values{}
-	for k, x := range map[string]string{"q": f.Query, "tool": f.Tool, "host": f.Host} {
-		if x != "" {
-			v.Set(k, x)
-		}
-	}
-	if len(v) == 0 {
-		return ""
-	}
-	return "?" + v.Encode()
 }
 
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {

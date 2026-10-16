@@ -4,6 +4,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -98,7 +99,23 @@ func migrate(db *sql.DB) error {
 	if _, err := db.Exec(`UPDATE conversations SET root_id='' WHERE tool='antigravity' AND root_id<>''`); err != nil {
 		return err
 	}
-	return migrateContinues(db)
+	if err := migrateContinues(db); err != nil {
+		return err
+	}
+	return migrateModels(db)
+}
+
+// migrateModels は models（会話の中で使ったモデル、改行区切り）を足し、メッセージから埋める。
+func migrateModels(db *sql.DB) error {
+	if hasColumn(db, "models") {
+		return nil
+	}
+	_, err := db.Exec(`
+	  ALTER TABLE conversations ADD COLUMN models TEXT NOT NULL DEFAULT '';
+	  UPDATE conversations SET models = ifnull((SELECT group_concat(model, char(10)) FROM
+	    (SELECT DISTINCT model FROM messages WHERE conversation_id = conversations.id AND model NOT IN ('', '<synthetic>'))), '');
+	  UPDATE conversations SET models = model WHERE models = '' AND model NOT IN ('', '<synthetic>');`)
+	return err
 }
 
 func hasColumn(db *sql.DB, col string) bool {
@@ -176,10 +193,10 @@ func (s *Store) Put(c *model.Conversation, stamp string) error {
 		return err
 	}
 	res, err := tx.Exec(`INSERT INTO conversations
-	  (tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, source_path, source_stamp, message_count, root_id, continues_from)
-	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	  (tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, source_path, source_stamp, message_count, root_id, continues_from, models)
+	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		c.Tool, c.Host, c.ExternalID, c.ParentID, c.Title, c.Cwd, c.GitBranch, c.Model,
-		unix(c.StartedAt), unix(c.UpdatedAt), c.SourcePath, stamp, len(c.Messages), rootID(c), continuesFrom(c))
+		unix(c.StartedAt), unix(c.UpdatedAt), c.SourcePath, stamp, len(c.Messages), rootID(c), continuesFrom(c), strings.Join(models(c), "\n"))
 	if err != nil {
 		return err
 	}
@@ -207,6 +224,25 @@ func (s *Store) Put(c *model.Conversation, stamp string) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// models は会話の中で使ったモデル（出てきた順）。
+func models(c *model.Conversation) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(m string) {
+		if m != "" && m != "<synthetic>" && !seen[m] {
+			seen[m] = true
+			out = append(out, m)
+		}
+	}
+	for _, m := range c.Messages {
+		add(m.Model)
+	}
+	if len(out) == 0 {
+		add(c.Model)
+	}
+	return out
 }
 
 func continuesFrom(c *model.Conversation) string {
@@ -243,6 +279,7 @@ type ConvRow struct {
 	Cwd           string
 	GitBranch     string
 	Model         string
+	Models        []string // 会話の中で使ったモデル
 	StartedAt     time.Time
 	UpdatedAt     time.Time
 	MessageCount  int
@@ -254,35 +291,158 @@ type ConvRow struct {
 }
 
 type Filter struct {
-	Query string
-	Tool  string
-	Host  string
-	Limit int
-	All   bool // まとめずに全部出す
+	Query    string
+	Tools    []string
+	Hosts    []string
+	Models   []string
+	Projects []string // 作業ディレクトリ
+	Since    time.Time
+	Limit    int
+	All      bool // まとめずに全部出す
+}
+
+// Facet は絞り込みの候補と件数。
+type Facet struct {
+	Name  string
+	Count int
+}
+
+// 絞り込みの軸。
+const (
+	DimTool    = "tool"
+	DimModel   = "model"
+	DimHost    = "host"
+	DimProject = "project"
+)
+
+var Dims = []string{DimTool, DimModel, DimHost, DimProject}
+
+func keys(r ConvRow, dim string) []string {
+	switch dim {
+	case DimTool:
+		return []string{r.Tool}
+	case DimHost:
+		return []string{r.Host}
+	case DimModel:
+		return r.Models
+	case DimProject:
+		if r.Cwd == "" {
+			return nil
+		}
+		return []string{r.Cwd}
+	}
+	return nil
+}
+
+func (f Filter) Values(dim string) []string {
+	switch dim {
+	case DimTool:
+		return f.Tools
+	case DimHost:
+		return f.Hosts
+	case DimModel:
+		return f.Models
+	case DimProject:
+		return f.Projects
+	}
+	return nil
+}
+
+// match は r が skip 以外の条件をすべて満たすか。同じ軸の中はどれか1つ、軸どうしはすべて。
+func (f Filter) match(r ConvRow, skip string) bool {
+	if !f.Since.IsZero() && r.UpdatedAt.Before(f.Since) {
+		return false
+	}
+	for _, d := range Dims {
+		want := f.Values(d)
+		if d == skip || len(want) == 0 {
+			continue
+		}
+		ok := false
+		for _, k := range keys(r, d) {
+			if slices.Contains(want, k) {
+				ok = true
+			}
+		}
+		if !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // List は会話一覧。同じ会話（分岐・続き・別のマシンの写し・サブエージェント）は1行にまとめ、
 // 一番新しいものを出す。Query があれば本文の全文検索で絞る。
 // trigram は3文字未満を引けないので、短い語は LIKE で探す。
 func (s *Store) List(f Filter) ([]ConvRow, error) {
+	out, _, err := s.Browse(f)
+	return out, err
+}
+
+// Browse は List と、軸ごとの候補と件数。件数はその軸以外の条件で絞った中で、まとめた会話を1つと数える。
+func (s *Store) Browse(f Filter) ([]ConvRow, map[string][]Facet, error) {
 	if f.Limit <= 0 {
 		f.Limit = 100
 	}
-	rows, err := s.rowsWhere(f.Tool, f.Host)
+	all, err := s.rowsWhere("", "")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var hits map[int64]string
 	if q := strings.TrimSpace(f.Query); q != "" {
 		if hits, err = s.hits(q); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		for _, r := range rows {
+		for _, r := range all {
 			if _, ok := hits[r.ID]; !ok && strings.Contains(strings.ToLower(r.Title), strings.ToLower(q)) {
 				hits[r.ID] = ""
 			}
 		}
 	}
+	view := func(skip string) ([]ConvRow, []group) {
+		var rows []ConvRow
+		for _, r := range all {
+			if f.match(r, skip) {
+				rows = append(rows, r)
+			}
+		}
+		var gs []group
+		for _, g := range groups(rows) {
+			if hits != nil && !slices.ContainsFunc(g.members, func(i int) bool { _, ok := hits[rows[i].ID]; return ok }) {
+				continue
+			}
+			gs = append(gs, g)
+		}
+		return rows, gs
+	}
+	facets := map[string][]Facet{}
+	for _, d := range Dims {
+		rows, gs := view(d)
+		n := map[string]int{}
+		for _, g := range gs {
+			seen := map[string]bool{}
+			for _, i := range g.members {
+				for _, k := range keys(rows[i], d) {
+					if !seen[k] {
+						seen[k] = true
+						n[k]++
+					}
+				}
+			}
+		}
+		var fs []Facet
+		for k, v := range n {
+			fs = append(fs, Facet{k, v})
+		}
+		sort.Slice(fs, func(i, j int) bool {
+			if fs[i].Count != fs[j].Count {
+				return fs[i].Count > fs[j].Count
+			}
+			return fs[i].Name < fs[j].Name
+		})
+		facets[d] = fs
+	}
+	rows, gs := view("")
 	var out []ConvRow
 	if f.All {
 		for _, r := range rows {
@@ -292,20 +452,11 @@ func (s *Store) List(f Filter) ([]ConvRow, error) {
 			}
 		}
 	} else {
-		for _, g := range groups(rows) {
+		for _, g := range gs {
 			rep := g.rep(rows)
-			if hits != nil {
-				found := false
-				for _, i := range g.members {
-					if sn, ok := hits[rows[i].ID]; ok {
-						if !found || rep.Snippet == "" {
-							rep.Snippet = sn
-						}
-						found = true
-					}
-				}
-				if !found {
-					continue
+			for _, i := range g.members {
+				if sn, ok := hits[rows[i].ID]; ok && rep.Snippet == "" {
+					rep.Snippet = sn
 				}
 			}
 			out = append(out, rep)
@@ -315,10 +466,17 @@ func (s *Store) List(f Filter) ([]ConvRow, error) {
 	if len(out) > f.Limit {
 		out = out[:f.Limit]
 	}
-	return out, nil
+	return out, facets, nil
 }
 
-const rowCols = `id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id, continues_from`
+func splitModels(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, "\n")
+}
+
+const rowCols = `id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id, continues_from, models`
 
 func (s *Store) rowsWhere(tool, host string) ([]ConvRow, error) {
 	q := `SELECT ` + rowCols + ` FROM conversations WHERE 1=1`
@@ -344,9 +502,11 @@ func (s *Store) query(q string, args ...any) ([]ConvRow, error) {
 	for rows.Next() {
 		var r ConvRow
 		var st, up int64
-		if err := rows.Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom); err != nil {
+		var ms string
+		if err := rows.Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom, &ms); err != nil {
 			return nil, err
 		}
+		r.Models = splitModels(ms)
 		r.StartedAt, r.UpdatedAt = fromUnix(st), fromUnix(up)
 		out = append(out, r)
 	}
@@ -528,38 +688,6 @@ func fromUnix(v int64) time.Time {
 	return time.Unix(v, 0)
 }
 
-// Facet は絞り込みの候補と件数。
-type Facet struct {
-	Name  string
-	Count int
-}
-
-// Facets は列 col（tool か host）ごとの会話数。一覧と同じくまとめた会話を1つと数える。
-func (s *Store) Facets(col string) ([]Facet, error) {
-	rows, err := s.rowsWhere("", "")
-	if err != nil {
-		return nil, err
-	}
-	n := map[string]int{}
-	for _, g := range groups(rows) {
-		r := g.rep(rows)
-		switch col {
-		case "tool":
-			n[r.Tool]++
-		case "host":
-			n[r.Host]++
-		default:
-			return nil, fmt.Errorf("facet: %s", col)
-		}
-	}
-	var out []Facet
-	for k, v := range n {
-		out = append(out, Facet{k, v})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Count > out[j].Count })
-	return out, nil
-}
-
 func (s *Store) Tools() ([]string, error) {
 	rows, err := s.db.Query(`SELECT DISTINCT tool FROM conversations ORDER BY tool`)
 	if err != nil {
@@ -579,12 +707,13 @@ func (s *Store) Tools() ([]string, error) {
 func (s *Store) Get(id int64) (*ConvRow, []model.Message, error) {
 	var r ConvRow
 	var st, up int64
-	err := s.db.QueryRow(`SELECT id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id, continues_from FROM conversations WHERE id=?`, id).
-		Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom)
+	var ms string
+	err := s.db.QueryRow(`SELECT `+rowCols+` FROM conversations WHERE id=?`, id).
+		Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom, &ms)
 	if err != nil {
 		return nil, nil, err
 	}
-	r.StartedAt, r.UpdatedAt = fromUnix(st), fromUnix(up)
+	r.StartedAt, r.UpdatedAt, r.Models = fromUnix(st), fromUnix(up), splitModels(ms)
 	rows, err := s.db.Query(`SELECT m.id, m.external_id, m.parent_external_id, m.role, m.created_at, m.model, m.sidechain,
 	    p.kind, p.text, p.tool_name, p.tool_call_id, p.is_error
 	  FROM messages m LEFT JOIN parts p ON p.message_id = m.id

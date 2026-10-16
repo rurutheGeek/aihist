@@ -53,7 +53,6 @@ type payload struct {
 	Output    json.RawMessage `json:"output"`
 	Summary   []content       `json:"summary"`
 	Author    string          `json:"author"`
-	Model     string          `json:"model"`
 	Item      *item           `json:"item"`
 }
 
@@ -74,9 +73,13 @@ type Session struct {
 	Files []string
 }
 
+// parser は読み方の版。上げると取り込み済みの会話も読み直す（v2: モデル名を turn_context から読む）。
+const parser = "v2;"
+
 // Stamp は取り込みを省くかの判定に使う印。
 func (s Session) Stamp() string {
 	var b strings.Builder
+	b.WriteString(parser)
 	for _, f := range s.Files {
 		if st, err := os.Stat(f); err == nil {
 			fmt.Fprintf(&b, "%d:%d;", st.Size(), st.ModTime().UnixNano())
@@ -212,6 +215,16 @@ func Load(s Session) (*model.Conversation, error) {
 			if !l.Timestamp.IsZero() {
 				c.UpdatedAt = l.Timestamp
 			}
+			if l.Type == "turn_context" {
+				// turn_context の summary は文字列なので payload には読めない
+				var t struct {
+					Model string `json:"model"`
+				}
+				if json.Unmarshal(l.Payload, &t) == nil && t.Model != "" {
+					c.Model = t.Model
+				}
+				continue
+			}
 			var p payload
 			if json.Unmarshal(l.Payload, &p) != nil {
 				continue
@@ -221,10 +234,6 @@ func Load(s Session) (*model.Conversation, error) {
 				id = fmt.Sprintf("%d:%d", fi, l.Ordinal)
 			}
 			switch {
-			case l.Type == "turn_context":
-				if p.Model != "" {
-					c.Model = p.Model
-				}
 			case l.Type == "event_msg" && p.Type == "item_completed" && p.Item != nil && p.Item.Type == "UserMessage":
 				cur = nil
 				add(model.Message{ExternalID: p.Item.ID, Role: "user", CreatedAt: l.Timestamp, Parts: texts(p.Item.Content)})

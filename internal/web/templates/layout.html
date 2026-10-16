@@ -37,13 +37,45 @@ mark{background:var(--mark);color:inherit;border-radius:3px;padding:0 1px}
 .search input{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 10px 8px 32px;outline:none}
 .search input:focus{border-color:var(--faint)}
 .search svg{position:absolute;left:10px;top:50%;width:15px;height:15px;transform:translateY(-50%);color:var(--faint)}
-.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 2px}
-.chips::-webkit-scrollbar{display:none}
-.chip{flex:none;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12.5px;color:var(--mute);background:var(--bg);white-space:nowrap}
-.chip:hover{color:var(--fg)}
-.chip.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
-.chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
-.chip small{opacity:.7}
+.ftog{position:absolute;right:4px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:3px;border:0;background:transparent;color:var(--faint);border-radius:7px;padding:4px 6px;cursor:pointer}
+.ftog:hover{background:var(--hover);color:var(--fg)}
+.ftog svg{position:static;transform:none;width:16px;height:16px;color:inherit}
+.ftog.on{color:var(--fg)}
+.ftog b{font-size:11px;line-height:16px;min-width:16px;border-radius:8px;background:var(--fg);color:var(--bg);text-align:center;padding:0 4px}
+.search input{padding-right:52px}
+.pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.pill{display:inline-flex;align-items:center;gap:5px;max-width:100%;background:var(--fg);color:var(--bg);border-radius:999px;padding:2px 6px 2px 9px;font-size:12px}
+.pill span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill i{width:7px;height:7px;border-radius:50%;flex:none}
+.pill svg{width:12px;height:12px;flex:none;opacity:.7}
+.pill:hover svg{opacity:1}
+.pill.clear{background:transparent;color:var(--mute);padding:2px 8px}
+.pill.clear:hover{color:var(--fg)}
+.panel{display:none;margin-top:8px;max-height:min(58vh,520px);overflow-y:auto;border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:4px 0}
+.panel.open{display:block}
+.fsec{padding:6px 10px 8px}
+.fsec+.fsec{border-top:1px solid var(--line)}
+.fh{font-size:11.5px;font-weight:600;color:var(--faint);margin:2px 2px 4px}
+.opt{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:7px;font-size:13px;cursor:pointer}
+.opt:hover{background:var(--hover)}
+.opt input{margin:0;accent-color:var(--fg);flex:none}
+.opt i{width:8px;height:8px;border-radius:50%;flex:none}
+.opt span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opt small{color:var(--faint);font-size:11.5px;flex:none}
+.opts-list.long .opt.more{display:none}
+.opts-list.all .opt.more{display:flex}
+.moreb{border:0;background:transparent;color:var(--mute);font-size:12px;padding:4px 6px;cursor:pointer}
+.moreb:hover{color:var(--fg)}
+.moreb span+span,.opts-list.all .moreb span:first-child{display:none}
+.opts-list.all .moreb span+span{display:inline}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg label{cursor:pointer}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:12.5px;color:var(--mute)}
+.seg label:hover span{color:var(--fg)}
+.seg input:checked+span{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.seg input:focus-visible+span,.opt input:focus-visible{outline:2px solid var(--faint);outline-offset:1px}
+.group small{font-weight:400;margin-left:6px}
 .convs{flex:1;overflow-y:auto;padding:4px 8px 16px}
 .group{font-size:12px;color:var(--faint);font-weight:600;padding:14px 10px 4px}
 .conv{display:block;padding:7px 10px;border-radius:9px;margin:1px 0}
@@ -182,30 +214,56 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
     <div class="brand"><a href="/"><b>aihist</b></a>
       <a class="icon-btn" href="/upload" title="アップロード"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg></a>
     </div>
-    <form class="search" method="get" action="/">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input type="search" name="q" value="{{.Filter.Query}}" placeholder="会話を検索">
-      {{if .Filter.Tool}}<input type="hidden" name="tool" value="{{.Filter.Tool}}">{{end}}
-      {{if .Filter.Host}}<input type="hidden" name="host" value="{{.Filter.Host}}">{{end}}
+    <form id="filters" method="get" action="/">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" name="q" value="{{.Filter.Query}}" placeholder="会話を検索">
+        <button type="button" class="ftog{{if .On}} on{{end}}" title="絞り込み" aria-expanded="false" onclick="aihistPanel()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7.5V19l-4 1.5v-8z"/></svg>{{if .On}}<b>{{.On}}</b>{{end}}</button>
+      </div>
+      {{if .Pills}}<div class="pills">
+        {{range .Pills}}<a class="pill" href="{{.Href}}">{{with .Color}}<i style="background:{{.}}"></i>{{end}}<span>{{.Label}}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg></a>{{end}}
+        <a class="pill clear" href="{{.Clear}}">クリア</a>
+      </div>{{end}}
+      <div class="panel" id="panel">
+        {{range .Sections}}<div class="fsec">
+          <div class="fh">{{.Label}}</div>
+          <div class="opts-list{{if gt (len .Items) 6}} long{{end}}">
+          {{$dim := .Dim}}{{range $i, $it := .Items}}<label class="opt{{if and (ge $i 6) (not .On)}} more{{end}}"{{with .Title}} title="{{.}}"{{end}}><input type="checkbox" name="{{$dim}}" value="{{.Value}}"{{if .On}} checked{{end}}>{{with .Color}}<i style="background:{{.}}"></i>{{end}}<span>{{.Label}}</span><small>{{.Count}}</small></label>{{end}}
+          {{if gt (len .Items) 6}}<button type="button" class="moreb" onclick="this.parentNode.classList.toggle('all')"><span>さらに表示</span><span>閉じる</span></button>{{end}}
+          </div>
+        </div>{{end}}
+        <div class="fsec">
+          <div class="fh">期間</div>
+          <div class="seg"><label><input type="radio" name="since" value=""{{if not .Filter.Since.IsZero}}{{else}} checked{{end}}><span>すべて</span></label>{{range .Periods}}<label><input type="radio" name="since" value="{{.Value}}"{{if .On}} checked{{end}}><span>{{.Label}}</span></label>{{end}}</div>
+        </div>
+        <div class="fsec">
+          <div class="fh">まとめ方</div>
+          <div class="seg"><label><input type="radio" name="by" value=""{{if not .ByProject}} checked{{end}}><span>日付</span></label><label><input type="radio" name="by" value="project"{{if .ByProject}} checked{{end}}><span>プロジェクト</span></label></div>
+        </div>
+      </div>
     </form>
-    <div class="chips">
-      <a class="chip{{if not .Filter.Tool}} on{{end}}" href="/?{{if .Filter.Query}}q={{.Filter.Query}}&{{end}}{{if .Filter.Host}}host={{.Filter.Host}}{{end}}">すべて</a>
-      {{range .Tools}}<a class="chip{{if eq .Name $.Filter.Tool}} on{{end}}" href="/?tool={{.Name}}{{if $.Filter.Query}}&q={{$.Filter.Query}}{{end}}{{if $.Filter.Host}}&host={{$.Filter.Host}}{{end}}"><i style="background:{{toolColor .Name}}"></i>{{toolLabel .Name}} <small>{{.Count}}</small></a>{{end}}
-    </div>
-    {{if gt (len .Hosts) 1}}<div class="chips">
-      {{range .Hosts}}<a class="chip{{if eq .Name $.Filter.Host}} on{{end}}" href="/?host={{if ne .Name $.Filter.Host}}{{.Name}}{{end}}{{if $.Filter.Tool}}&tool={{$.Filter.Tool}}{{end}}{{if $.Filter.Query}}&q={{$.Filter.Query}}{{end}}">{{.Name}} <small>{{.Count}}</small></a>{{end}}
-    </div>{{end}}
+    <script>
+    (function(){
+      var f=document.getElementById('filters'),p=document.getElementById('panel'),b=f.querySelector('.ftog');
+      function set(o){p.classList.toggle('open',o);b.setAttribute('aria-expanded',o);try{localStorage.setItem('aihist.panel',o?'1':'')}catch(e){}}
+      window.aihistPanel=function(){set(!p.classList.contains('open'))};
+      try{if(localStorage.getItem('aihist.panel'))set(true)}catch(e){}
+      f.addEventListener('change',function(e){if(e.target.name!=='q'){
+        f.querySelectorAll('input').forEach(function(i){if(!i.value&&(i.type==='radio'||i.type==='search'))i.disabled=true});f.submit()}});
+      f.addEventListener('submit',function(){f.querySelectorAll('input').forEach(function(i){if(!i.value&&(i.type==='radio'||i.type==='search'))i.disabled=true})});
+    })();
+    </script>
   </div>
   <nav class="convs">
-    {{$cur := ""}}{{$sel := 0}}{{$root := ""}}{{with .C}}{{$sel = .ID}}{{$root = .RootID}}{{end}}
+    {{$sel := 0}}{{$root := ""}}{{with .C}}{{$sel = .ID}}{{$root = .RootID}}{{end}}
+    {{range .Groups}}<div class="group"{{with .Title}} title="{{.}}"{{end}}>{{.Label}}<small>{{len .Rows}}</small></div>
     {{range .Rows}}
-      {{$d := day .UpdatedAt}}{{if ne $d $cur}}<div class="group">{{$d}}</div>{{$cur = $d}}{{end}}
       <a class="conv{{if or (eq .ID $sel) (and $.Group (index $.Group .ID))}} on{{end}}" href="/c/{{.ID}}{{$.Keep}}">
         <div class="t"><i style="background:{{toolColor .Tool}}"></i><span>{{if .Title}}{{oneline .Title}}{{else}}{{.ExternalID}}{{end}}</span>{{if gt .Branches 1}}<em class="br">{{.Branches}}</em>{{end}}</div>
         {{if .Snippet}}<div class="s">{{hl .Snippet}}</div>{{end}}
         {{if .ParentID}}<div class="sub">↳ サブエージェント</div>{{end}}
       </a>
-    {{else}}<div class="empty">見つからない</div>{{end}}
+    {{end}}{{else}}<div class="empty">見つからない</div>{{end}}
   </nav>
 </aside>
 <div class="scrim" onclick="document.querySelector('.app').classList.remove('open')"></div>
