@@ -1,6 +1,7 @@
 package web
 
 import (
+	"archive/zip"
 	"bufio"
 	"crypto/subtle"
 	"encoding/json"
@@ -16,8 +17,11 @@ import (
 	"time"
 
 	"github.com/rurutheGeek/aihist/internal/adapter/antigravity"
+	"github.com/rurutheGeek/aihist/internal/adapter/chatgpt"
+	"github.com/rurutheGeek/aihist/internal/adapter/claudeai"
 	"github.com/rurutheGeek/aihist/internal/adapter/claudecode"
 	"github.com/rurutheGeek/aihist/internal/adapter/codex"
+	"github.com/rurutheGeek/aihist/internal/adapter/webexport"
 	"github.com/rurutheGeek/aihist/internal/ingest"
 )
 
@@ -161,7 +165,12 @@ func (s *Server) store(host string, fh *multipart.FileHeader) (tool, rel string,
 	}
 	defer f.Close()
 	name := path.Base(strings.ReplaceAll(fh.Filename, `\`, "/"))
-	tool, rel = detect(name, f)
+	if strings.HasSuffix(name, ".zip") || strings.HasSuffix(name, ".json") {
+		tool = detectWeb(name, f, fh.Size)
+		rel = "upload/" + time.Now().Format("20060102-150405") + "-" + name
+	} else {
+		tool, rel = detect(name, f)
+	}
 	if tool == "" {
 		return "", "", errors.New("会話の記録ではない")
 	}
@@ -190,6 +199,32 @@ func detect(name string, r io.Reader) (tool, rel string) {
 		return claudecode.Tool, "upload/" + name
 	}
 	return "", ""
+}
+
+// detectWeb は Web のチャットの書き出し（zip か conversations.json）がどの AI のものかを見分ける。
+func detectWeb(name string, f multipart.File, size int64) string {
+	var head []byte
+	if strings.HasSuffix(name, ".zip") {
+		z, err := zip.NewReader(f, size)
+		if err != nil {
+			return ""
+		}
+		if head, err = webexport.FromZip(z); err != nil {
+			return ""
+		}
+	} else {
+		head, _ = io.ReadAll(io.LimitReader(f, 1<<20))
+	}
+	if len(head) > 1<<20 {
+		head = head[:1<<20]
+	}
+	switch {
+	case chatgpt.Is(head):
+		return chatgpt.Tool
+	case claudeai.Is(head):
+		return claudeai.Tool
+	}
+	return ""
 }
 
 // setup は各マシンへ入れるコマンド（定期的に送る・消す）の画面。トークンを埋めて出す。

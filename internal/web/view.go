@@ -149,7 +149,12 @@ var tools = map[string]struct{ Label, Color, Mark string }{
 	"codex":       {"Codex", "#10a37f", "X"},
 	"opencode":    {"OpenCode", "#6d63f2", "O"},
 	"antigravity": {"Antigravity", "#3b82f6", "A"},
+	"chatgpt":     {"ChatGPT", "#74aa9c", "G"},
+	"claude_ai":   {"Claude", "#c96442", "W"},
 }
+
+// restorable は元の AI へ戻せるツールか（Web のチャットの書き出しは戻せない）。
+func restorable(t string) bool { return t != "chatgpt" && t != "claude_ai" }
 
 func toolLabel(t string) string {
 	if v, ok := tools[t]; ok {

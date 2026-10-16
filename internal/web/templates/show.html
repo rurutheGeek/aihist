@@ -56,8 +56,10 @@
   </div>
   <div class="dock">
     <form class="box" id="exp" action="/c/{{.C.ID}}/export.md">
+      {{if restorable .C.Tool}}
       <div class="cmd" id="cmd" title="元の AI で続ける">aihist restore -server {{.Server}} {{.C.ExternalID}}</div>
       <button type="button" class="btn pri" data-copy="cmd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg><span>{{toolLabel .C.Tool}}で続ける</span></button>
+      {{end}}
       <button type="button" class="btn" id="copymd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>別のAIへ渡す</span></button>
       <div class="opts">
         <label><input type="checkbox" name="thinking" value="1">思考</label>
@@ -90,7 +92,8 @@
     try { await navigator.clipboard.writeText(text); }
     catch(e){ var t=document.createElement('textarea'); t.value=text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
   }
-  document.querySelector('[data-copy]').onclick = async function(){ await copy(document.getElementById('cmd').textContent.trim()); flash(this); };
+  var dc = document.querySelector('[data-copy]');
+  if (dc) dc.onclick = async function(){ await copy(document.getElementById('cmd').textContent.trim()); flash(this); };
   document.getElementById('copymd').onclick = async function(){
     var f = document.getElementById('exp'); var q = new URLSearchParams(new FormData(f));
     var res = await fetch(f.action + '?' + q); await copy(await res.text()); flash(this);

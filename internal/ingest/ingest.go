@@ -9,9 +9,12 @@ import (
 	"strings"
 
 	"github.com/rurutheGeek/aihist/internal/adapter/antigravity"
+	"github.com/rurutheGeek/aihist/internal/adapter/chatgpt"
+	"github.com/rurutheGeek/aihist/internal/adapter/claudeai"
 	"github.com/rurutheGeek/aihist/internal/adapter/claudecode"
 	"github.com/rurutheGeek/aihist/internal/adapter/codex"
 	"github.com/rurutheGeek/aihist/internal/adapter/opencode"
+	"github.com/rurutheGeek/aihist/internal/adapter/webexport"
 	"github.com/rurutheGeek/aihist/internal/model"
 	"github.com/rurutheGeek/aihist/internal/store"
 )
@@ -34,6 +37,10 @@ func Run(st *store.Store, tool, host, dir string) (Result, error) {
 		return Antigravity(st, host, dir)
 	case opencode.Tool:
 		return OpenCode(st, host, dir)
+	case chatgpt.Tool:
+		return WebExport(st, chatgpt.Tool, host, dir)
+	case claudeai.Tool:
+		return WebExport(st, claudeai.Tool, host, dir)
 	}
 	return Result{}, fmt.Errorf("知らないツール: %s", tool)
 }
@@ -168,6 +175,79 @@ func openCodeFiles(st *store.Store, host, dir string) (Result, error) {
 		c := opencode.Convert(rows)
 		c.SourcePath = f
 		if err := put(st, host, c, stamp, &r); err != nil {
+			return r, err
+		}
+	}
+	return r, nil
+}
+
+type webConv struct {
+	stamp, src string
+	raw        []byte
+}
+
+// WebExport は Web のチャットの書き出し（ChatGPT・claude.ai）を読む。同じ会話が
+// 複数の書き出しにあれば、後に置かれた書き出しのものを使う。
+func WebExport(st *store.Store, tool, host, dir string) (Result, error) {
+	var r Result
+	files, err := webexport.Files(dir)
+	if err != nil {
+		return r, err
+	}
+	byID := map[string]webConv{}
+	var order []string
+	for _, f := range files {
+		data, err := webexport.Conversations(f)
+		if err != nil {
+			log.Printf("%s: %v", f, err)
+			continue
+		}
+		var ids, stamps []string
+		var raws [][]byte
+		if tool == chatgpt.Tool {
+			cs, err := chatgpt.Split(data)
+			if err != nil {
+				log.Printf("%s: %v", f, err)
+				continue
+			}
+			for _, c := range cs {
+				ids, stamps, raws = append(ids, c.ID), append(stamps, c.Stamp), append(raws, c.Raw)
+			}
+		} else {
+			cs, err := claudeai.Split(data)
+			if err != nil {
+				log.Printf("%s: %v", f, err)
+				continue
+			}
+			for _, c := range cs {
+				ids, stamps, raws = append(ids, c.ID), append(stamps, c.Stamp), append(raws, c.Raw)
+			}
+		}
+		for i, id := range ids {
+			if _, ok := byID[id]; !ok {
+				order = append(order, id)
+			}
+			byID[id] = webConv{stamps[i], f, raws[i]}
+		}
+	}
+	for _, id := range order {
+		w := byID[id]
+		if st.Stamp(tool, host, id) == w.stamp {
+			r.Skipped++
+			continue
+		}
+		var c *model.Conversation
+		if tool == chatgpt.Tool {
+			c, err = chatgpt.Parse(w.raw)
+		} else {
+			c, err = claudeai.Parse(w.raw)
+		}
+		if err != nil {
+			log.Printf("%s: %v", id, err)
+			continue
+		}
+		c.SourcePath = w.src
+		if err := put(st, host, c, w.stamp, &r); err != nil {
 			return r, err
 		}
 	}

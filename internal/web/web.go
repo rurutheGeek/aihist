@@ -49,6 +49,7 @@ type Server struct {
 // 前に置く認証（SSO など）に任せる。
 func New(st *store.Store, rs raw.Store, token string) *Server {
 	funcs := template.FuncMap{
+		"restorable": restorable,
 		"when": func(t time.Time) string {
 			if t.IsZero() {
 				return ""

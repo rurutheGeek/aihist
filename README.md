@@ -10,6 +10,8 @@ AI ツールの会話履歴を1か所に集め、検索・閲覧し、別の AI 
 | OpenCode 1.18 | `~/.local/share/opencode/opencode.db` | 済 |
 | Antigravity | `%USERPROFILE%\.gemini\antigravity-ide\conversations\*.db` | 済 |
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl`、題名は `session_index.jsonl` | 済 |
+| ChatGPT（Web） | 「データをエクスポート」の zip か `conversations.json` を画面から上げる | 済 |
+| claude.ai | 書き出しの zip か `conversations.json` を画面から上げる | 済 |
 | Open WebUI | REST API `/api/v1/chats` | 未 |
 
 ## サーバーを立てる
@@ -70,7 +72,7 @@ bin/aihist export -thinking <会話IDの先頭>
 | 入れ方 | やること |
 |---|---|
 | `push` | Claude Code・Codex・Antigravity の既定の置き場所と OpenCode の DB から、サーバーに無いか変わったものだけを送る |
-| 画面の `↑` | ファイルを選んで上げる。中身から Claude Code・Codex・Antigravity を見分ける |
+| 画面の `↑` | ファイルを選んで上げる。中身から Claude Code・Codex・Antigravity・ChatGPT・claude.ai を見分ける |
 | `import <ツール> [場所]` | サーバーと同じマシンの記録を直接読む |
 
 `push` は OpenCode の DB そのものは送らない（操作ログで数 GB あり、ログイン情報も入っている）。会話ごとに `session`・`message`・`part` と `project` の行を加工せずに書き出した `<session id>.json` を原本として送る。
@@ -96,7 +98,7 @@ bin/aihist restore <会話IDの先頭>     # サーバーとトークンは設�
 | OpenCode | `opencode.db` へ行を書き戻す（同じ ID は上書き） | `opencode --session <会話>` |
 | Antigravity | `conversations\<会話>.db` | Antigravity の一覧から開く |
 
-Codex と OpenCode は、手元から消した会話を戻して続きを話せることを確かめた。Claude Code は戻したファイルが原本とバイト単位で同じことまで確かめた。Antigravity は未確認。
+Codex と OpenCode は、手元から消した会話を戻して続きを話せることを確かめた。Claude Code は戻したファイルが原本とバイト単位で同じことまで確かめた。Antigravity は未確認。ChatGPT と claude.ai は戻せない。
 
 ## 構成
 
