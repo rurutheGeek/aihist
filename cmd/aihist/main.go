@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rurutheGeek/aihist/internal/adapter/antigravity"
 	"github.com/rurutheGeek/aihist/internal/adapter/claudecode"
+	"github.com/rurutheGeek/aihist/internal/adapter/codex"
 	"github.com/rurutheGeek/aihist/internal/adapter/opencode"
 	"github.com/rurutheGeek/aihist/internal/export"
 	"github.com/rurutheGeek/aihist/internal/model"
@@ -20,6 +22,8 @@ import (
 func usage() {
 	fmt.Fprint(os.Stderr, `usage:
   aihist [-db path] import claude [dir]     既定 ~/.claude/projects
+  aihist [-db path] import antigravity [dir] 既定 ~/.gemini/antigravity-ide/conversations
+  aihist [-db path] import codex [dir]      既定 ~/.codex
   aihist [-db path] import opencode [db]    既定 ~/.local/share/opencode/opencode.db
   aihist [-db path] serve [-addr :8080]
   aihist [-db path] search <語>
@@ -59,6 +63,18 @@ func main() {
 				dir = args[2]
 			}
 			err = importClaude(st, host, dir)
+		case "antigravity":
+			dir := filepath.Join(home, ".gemini/antigravity-ide/conversations")
+			if len(args) > 2 {
+				dir = args[2]
+			}
+			err = importAntigravity(st, host, dir)
+		case "codex":
+			dir := filepath.Join(home, ".codex")
+			if len(args) > 2 {
+				dir = args[2]
+			}
+			err = importCodex(st, host, dir)
 		case "opencode":
 			db := filepath.Join(home, ".local/share/opencode/opencode.db")
 			if len(args) > 2 {
@@ -137,6 +153,68 @@ func importClaude(st *store.Store, host, dir string) error {
 		n++
 	}
 	log.Printf("claude: %d 件取り込み、%d 件は変更なし", n, skip)
+	return nil
+}
+
+func importAntigravity(st *store.Store, host, dir string) error {
+	files, err := antigravity.Files(dir)
+	if err != nil {
+		return err
+	}
+	var n, skip int
+	for _, f := range files {
+		id, stamp := antigravity.ExternalID(f), antigravity.Stamp(f)
+		if st.Stamp(antigravity.Tool, host, id) == stamp {
+			skip++
+			continue
+		}
+		c, err := antigravity.Parse(f)
+		if err != nil {
+			log.Printf("%s: %v", f, err)
+			continue
+		}
+		if len(c.Messages) == 0 {
+			continue
+		}
+		if err := put(st, host, c, stamp); err != nil {
+			return err
+		}
+		n++
+	}
+	log.Printf("antigravity: %d 件取り込み、%d 件は変更なし", n, skip)
+	return nil
+}
+
+func importCodex(st *store.Store, host, dir string) error {
+	sessions, err := codex.Sessions(filepath.Join(dir, "sessions"))
+	if err != nil {
+		return err
+	}
+	titles := codex.Titles(filepath.Join(dir, "session_index.jsonl"))
+	var n, skip int
+	for _, s := range sessions {
+		stamp := s.Stamp() + titles[s.ID]
+		if st.Stamp(codex.Tool, host, s.ID) == stamp {
+			skip++
+			continue
+		}
+		c, err := codex.Load(s)
+		if err != nil {
+			log.Printf("%s: %v", s.ID, err)
+			continue
+		}
+		if t := titles[s.ID]; t != "" {
+			c.Title = t
+		}
+		if len(c.Messages) == 0 {
+			continue
+		}
+		if err := put(st, host, c, stamp); err != nil {
+			return err
+		}
+		n++
+	}
+	log.Printf("codex: %d 件取り込み、%d 件は変更なし", n, skip)
 	return nil
 }
 
