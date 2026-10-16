@@ -1,0 +1,63 @@
+{{define "settings.html"}}{{template "head" (t "設定")}}
+<div class="app">
+{{template "side" .}}
+<main class="main">
+  <div class="bar">
+    <button class="icon-btn menu" onclick="document.querySelector('.app').classList.add('open')" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="title">{{t "設定"}}</div>
+  </div>
+  <div class="scroll"><div class="col">
+    <nav class="tabs"><a href="#machines">{{t "マシンから送る"}}</a><a href="#storage">{{t "容量"}}</a><a href="#language">{{t "言語"}}</a></nav>
+
+    <section class="setup" id="machines">
+      <h2>{{t "マシンから送る"}}</h2>
+      {{if .NewToken}}<div class="newtok">
+        <div class="nt"><b>{{.NewName}}</b><code id="tok">{{.NewToken}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div>
+        <div class="warn">{{t "このトークンは今しか表示されない"}}</div>
+        {{range .NewCmds}}<div class="cmdl"><span>{{.OS}}</span><code>{{.Install}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div>{{end}}
+      </div>{{end}}
+      <form class="addm" method="post" action="/settings/tokens"><input name="name" placeholder="{{t "マシン名"}}" required autocomplete="off"><button class="btn pri">{{t "マシンを追加"}}</button></form>
+      <table class="tbl">
+        <thead><tr><th>{{t "マシン名"}}</th><th>{{t "作成"}}</th><th>{{t "最後に使った"}}</th><th></th></tr></thead>
+        <tbody>
+        {{if .EnvToken}}<tr><td>AIHIST_TOKEN</td><td colspan="3" class="mute">{{t "環境変数"}}</td></tr>{{end}}
+        {{range .Tokens}}<tr><td>{{.Name}}</td><td>{{when .CreatedAt}}</td><td>{{if .UsedAt.IsZero}}<span class="mute">{{t "未使用"}}</span>{{else}}{{when .UsedAt}}{{end}}</td>
+          <td><form method="post" action="/settings/tokens/{{.ID}}/delete"><button class="btn sm">{{t "削除"}}</button></form></td></tr>{{end}}
+        </tbody>
+      </table>
+      <h3>{{t "消す"}}</h3>
+      {{range .Cmds}}<div class="cmdl"><span>{{.OS}}</span><code>{{.Uninstall}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div>{{end}}
+      <div class="dl">{{range .Cmds}}<a class="btn" href="{{.Script}}" download="{{.Name}}">{{.Name}}</a><a class="btn" href="{{.UScript}}" download="{{.UName}}">{{.UName}}</a>{{end}}</div>
+    </section>
+
+    <section class="setup" id="storage">
+      <h2>{{t "容量"}}</h2>
+      <div class="stats left">
+        <div class="stat"><b>{{bytes (add64 .Usage.DB .Usage.Raw)}}</b><span>{{t "合計"}}</span></div>
+        <div class="stat"><b>{{bytes .Usage.DB}}</b><span>{{t "データベース"}}</span></div>
+        <div class="stat"><b>{{bytes .Usage.Raw}}</b><span>{{t "原本"}}</span></div>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>{{t "マシン"}}</th><th>AI</th><th class="r">{{t "会話"}}</th><th class="r">{{t "原本"}}</th></tr></thead>
+        <tbody>{{range .Usage.Rows}}<tr><td>{{.Host}}</td><td><i class="dot" style="background:{{toolColor .Tool}}"></i>{{.Label}}</td><td class="r">{{.Convs}}</td><td class="r">{{bytes .Bytes}}</td></tr>{{end}}</tbody>
+      </table>
+    </section>
+
+    <section class="setup" id="language">
+      <h2>{{t "言語"}}</h2>
+      <div class="seg">
+        <label><input type="radio" name="lang" value=""{{if eq .Lang ""}} checked{{end}}><span>{{t "自動"}}</span></label>
+        <label><input type="radio" name="lang" value="ja"{{if eq .Lang "ja"}} checked{{end}}><span>日本語</span></label>
+        <label><input type="radio" name="lang" value="en"{{if eq .Lang "en"}} checked{{end}}><span>English</span></label>
+      </div>
+    </section>
+  </div></div>
+</main>
+</div>
+<script>
+function aihistCopy(b){var t=b.previousElementSibling.textContent;navigator.clipboard.writeText(t).then(function(){var o=b.textContent;b.textContent={{t "コピーした"}};setTimeout(function(){b.textContent=o},1400)})}
+document.querySelectorAll('input[name=lang]').forEach(function(i){i.onchange=function(){
+  document.cookie='lang='+i.value+';path=/;max-age='+(i.value?31536000:0)+';samesite=lax'; location.reload();
+}});
+</script>
+{{template "foot"}}{{end}}

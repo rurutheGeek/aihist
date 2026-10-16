@@ -41,8 +41,8 @@ type Server struct {
 	token string
 	sumMu sync.Mutex
 	sums  map[string]string
-	tmpl  *template.Template
-	mu    sync.Mutex // 取り込みは1つずつ
+	tmpl  map[string]*template.Template // 言語ごと
+	mu    sync.Mutex                    // 取り込みは1つずつ
 }
 
 // New は画面と API を作る。token が空でなければ /api に要る。画面（/upload を含む）は
@@ -74,11 +74,20 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 		"toolColor": toolColor,
 		"toolMark":  toolMark,
 		"hl":        hl,
-		"day":       func(t time.Time) string { return day(t.Local()) },
 		"summary":   summary,
 		"base":      base,
+		"bytes":     humanBytes,
+		"add64":     func(a, b int64) int64 { return a + b },
 	}
-	return &Server{st: st, raw: rs, token: token, tmpl: template.Must(template.New("").Funcs(funcs).ParseFS(files, "templates/*.html"))}
+	tmpl := map[string]*template.Template{}
+	for _, l := range []string{"ja", "en"} {
+		funcs["t"] = func(s string) string { return tr(l, s) }
+		funcs["tf"] = func(s string, a ...any) string { return trf(l, s, a...) }
+		funcs["day"] = func(t time.Time) string { return dayIn(l, t.Local()) }
+		funcs["lang"] = func() string { return l }
+		tmpl[l] = template.Must(template.New("").Funcs(funcs).ParseFS(files, "templates/*.html"))
+	}
+	return &Server{st: st, raw: rs, token: token, tmpl: tmpl}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -96,7 +105,10 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /c/{id}/export.md", s.exportMD)
 	mux.HandleFunc("GET /upload", s.uploadForm)
-	mux.HandleFunc("GET /setup", s.setup)
+	mux.HandleFunc("GET /settings", s.settings)
+	mux.HandleFunc("POST /settings/tokens", s.addToken)
+	mux.HandleFunc("POST /settings/tokens/{id}/delete", s.deleteToken)
+	mux.Handle("GET /setup", http.RedirectHandler("/settings", http.StatusMovedPermanently))
 	mux.HandleFunc("POST /upload", s.upload)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /api/files", s.auth(s.apiList))
@@ -113,13 +125,13 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
-	d, err := s.side(r)
+	d, err := s.side(r, r.URL.Query())
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	d["Home"] = true
-	s.render(w, "list.html", d)
+	s.render(w, r, "list.html", d)
 }
 
 func (s *Server) load(w http.ResponseWriter, r *http.Request) (*store.ConvRow, []model.Message, bool) {
@@ -141,7 +153,7 @@ func (s *Server) show(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	d, err := s.side(r)
+	d, err := s.side(r, r.URL.Query())
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -159,7 +171,7 @@ func (s *Server) show(w http.ResponseWriter, r *http.Request) {
 		hosts[b.Host] = true
 	}
 	d["Branches"], d["Children"], d["Group"], d["ManyHosts"] = branches, children, in, len(hosts) > 1
-	s.render(w, "show.html", d)
+	s.render(w, r, "show.html", d)
 }
 
 func (s *Server) exportMD(w http.ResponseWriter, r *http.Request) {
@@ -181,9 +193,9 @@ func (s *Server) exportMD(w http.ResponseWriter, r *http.Request) {
 	export.Markdown(w, c, msgs, o)
 }
 
-func (s *Server) render(w http.ResponseWriter, name string, data any) {
+func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data any) {
 	var buf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+	if err := s.tmpl[lang(r)].ExecuteTemplate(&buf, name, data); err != nil {
 		log.Printf("template %s: %v", name, err)
 		http.Error(w, "template error", 500)
 		return

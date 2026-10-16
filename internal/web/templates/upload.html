@@ -1,33 +1,66 @@
-{{define "upload.html"}}{{template "head" "アップロード"}}
+{{define "upload.html"}}{{template "head" (t "アップロード")}}
 <div class="app">
 {{template "side" .}}
 <main class="main">
   <div class="bar">
-    <button class="icon-btn menu" onclick="document.querySelector('.app').classList.add('open')" aria-label="一覧"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-    <div class="title">アップロード</div>
+    <button class="icon-btn menu" onclick="document.querySelector('.app').classList.add('open')" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="title">{{t "アップロード"}}</div>
   </div>
   <div class="scroll"><div class="col">
-    <form method="post" action="/upload" enctype="multipart/form-data" id="up">
-      <label class="drop" id="drop">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
-        <div id="dropt">.jsonl / .db をここへ</div>
-        <input type="file" name="files" multiple hidden id="files">
-      </label>
-      <div class="field"><input name="host" value="{{.Host}}" placeholder="ホスト名"><button class="btn pri"><span>送る</span></button></div>
-    </form>
-    {{if .Lines}}<div class="log">{{range .Lines}}{{.}}
-{{end}}</div>{{end}}
+    <label class="drop" id="drop">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+      <b>{{t "ファイルをドロップ、またはクリックして選ぶ"}}</b>
+      <div class="kinds">
+        <span><i style="background:{{toolColor "claude_code"}}"></i>Claude Code <code>.jsonl</code></span>
+        <span><i style="background:{{toolColor "codex"}}"></i>Codex <code>rollout-*.jsonl</code></span>
+        <span><i style="background:{{toolColor "antigravity"}}"></i>Antigravity <code>.db</code></span>
+        <span><i style="background:{{toolColor "chatgpt"}}"></i>ChatGPT <code>.zip</code></span>
+        <span><i style="background:{{toolColor "claude_ai"}}"></i>claude.ai <code>.zip</code></span>
+      </div>
+      <input type="file" multiple hidden id="files">
+    </label>
+    <div class="field"><span class="fl">{{t "マシン名"}}</span><input id="host" list="hosts" value="upload" autocomplete="off"><datalist id="hosts">{{range .Hosts}}<option value="{{.}}">{{end}}</datalist></div>
+    <ul class="queue" id="queue"></ul>
   </div></div>
 </main>
 </div>
 <script>
 (function(){
-  var d=document.getElementById('drop'), f=document.getElementById('files'), t=document.getElementById('dropt');
-  function show(){ if(f.files.length) t.textContent = Array.from(f.files).map(function(x){return x.name}).join('、'); }
-  f.onchange = show;
-  ['dragenter','dragover'].forEach(function(e){ d.addEventListener(e,function(ev){ev.preventDefault();d.classList.add('over')}) });
-  ['dragleave','drop'].forEach(function(e){ d.addEventListener(e,function(ev){ev.preventDefault();d.classList.remove('over')}) });
-  d.addEventListener('drop',function(ev){ f.files = ev.dataTransfer.files; show(); });
+  var T={wait:{{t "待機"}},up:{{t "送信中"}},imp:{{t "取り込み中"}},ok:{{t "%d 件取り込み"}},same:{{t "%d 件は変更なし"}},open:{{t "開く"}}};
+  var d=document.getElementById('drop'), f=document.getElementById('files'), q=document.getElementById('queue'), busy=false, todo=[];
+  function size(n){return n>=1<<30?(n/(1<<30)).toFixed(1)+' GB':n>=1<<20?(n/(1<<20)).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'}
+  function add(files){
+    Array.from(files).forEach(function(file){
+      var li=document.createElement('li');
+      li.innerHTML='<div class="qn"><span class="nm"></span><small></small></div><div class="qs"></div><div class="bar2"><i></i></div>';
+      li.querySelector('.nm').textContent=file.name; li.querySelector('small').textContent=size(file.size);
+      li.querySelector('.qs').textContent=T.wait; q.appendChild(li); todo.push([file,li]);
+    });
+    next();
+  }
+  function next(){
+    if(busy||!todo.length)return; busy=true;
+    var it=todo.shift(), file=it[0], li=it[1], st=li.querySelector('.qs'), bar=li.querySelector('.bar2 i');
+    var fd=new FormData(); fd.append('host',document.getElementById('host').value); fd.append('files',file);
+    var x=new XMLHttpRequest(); x.open('POST','/upload');
+    li.className='run'; st.textContent=T.up;
+    x.upload.onprogress=function(e){ if(e.lengthComputable){bar.style.width=(e.loaded/e.total*100)+'%'; if(e.loaded===e.total)st.textContent=T.imp;} };
+    x.onload=function(){
+      var r; try{r=JSON.parse(x.responseText)[0]}catch(e){r={error:x.status+' '+x.responseText}}
+      bar.style.width='100%';
+      if(r.error){li.className='err'; st.textContent=r.error;}
+      else{li.className='ok'; st.innerHTML='';
+        var s=document.createElement('span'); s.textContent=r.label+' · '+T.ok.replace('%d',r.imported)+(r.skipped?' · '+T.same.replace('%d',r.skipped):''); st.appendChild(s);
+        var a=document.createElement('a'); a.href=r.href; a.textContent=T.open; st.appendChild(a);}
+      busy=false; next();
+    };
+    x.onerror=function(){li.className='err'; st.textContent='network error'; busy=false; next();};
+    x.send(fd);
+  }
+  f.onchange=function(){add(f.files); f.value='';};
+  ['dragenter','dragover'].forEach(function(e){d.addEventListener(e,function(ev){ev.preventDefault();d.classList.add('over')})});
+  ['dragleave','drop'].forEach(function(e){d.addEventListener(e,function(ev){ev.preventDefault();d.classList.remove('over')})});
+  d.addEventListener('drop',function(ev){add(ev.dataTransfer.files)});
 })();
 </script>
 {{template "foot"}}{{end}}

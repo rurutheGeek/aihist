@@ -65,3 +65,26 @@ func TestBrowse(t *testing.T) {
 		t.Fatalf("query: %v", got)
 	}
 }
+
+func TestTokens(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "a.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	p, err := st.CreateToken("pc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.CheckToken(p) || st.CheckToken(p+"x") || st.CheckToken("") {
+		t.Fatal("check")
+	}
+	ts, _ := st.Tokens()
+	if len(ts) != 1 || ts[0].Name != "pc" || ts[0].UsedAt.IsZero() {
+		t.Fatalf("%+v", ts)
+	}
+	st.DeleteToken(ts[0].ID)
+	if st.CheckToken(p) {
+		t.Fatal("deleted")
+	}
+}

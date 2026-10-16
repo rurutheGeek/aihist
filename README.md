@@ -17,9 +17,10 @@ AI ツールの会話履歴を1か所に集め、検索・閲覧し、別の AI 
 ## サーバーを立てる
 
 ```bash
-echo "AIHIST_TOKEN=$(openssl rand -base64 32 | tr -d '/+=')" > .env
 docker compose up -d        # http://localhost:8080
 ```
+
+[English](README.en.md)
 
 イメージは `ghcr.io/ruruthegeek/aihist`（linux/amd64・arm64）。データは `/data`（`aihist.db` と送られた原本 `raw/`）。各マシンへ配る実行ファイルもイメージに入っている。
 
@@ -29,12 +30,12 @@ docker compose up -d        # http://localhost:8080
 
 ```bash
 go build -o bin/aihist ./cmd/aihist
-AIHIST_TOKEN=<トークン> bin/aihist serve -addr :8080 -bin <配る実行ファイルの置き場所>
+bin/aihist serve -addr :8080 -bin <配る実行ファイルの置き場所>
 ```
 
 ## 各マシンから送る
 
-画面の「送る設定」に、トークンを埋めたコマンドが出る。
+画面左下の「設定」で、マシン名を入れて「マシンを追加」を押すと、トークンを埋めたコマンドが出る（トークンはこのときしか表示されない。要らなくなったら同じ画面で削除する）。`serve` に `AIHIST_TOKEN` を渡すと、それも使える。
 
 ```bash
 curl -fsSL https://<サーバー>/api/install.sh | AIHIST_TOKEN=<トークン> sh      # Linux・macOS・WSL

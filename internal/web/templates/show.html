@@ -1,13 +1,13 @@
-{{define "step"}}{{if eq .Kind "thinking"}}<details class="think"><summary><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>思考</summary><div class="think-body raw">{{.Text}}</div></details>{{else}}<details class="tool{{if .IsError}} err{{end}}"><summary><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg><span class="nm">{{.Name}}</span><span class="arg">{{summary .Input}}</span></summary><div class="io">{{if .Input}}<div class="lbl">入力</div><pre>{{.Input}}</pre>{{end}}{{if .Done}}<div class="lbl">{{if .IsError}}エラー{{else}}結果{{end}}</div><pre>{{short .Output 20000}}</pre>{{end}}</div></details>{{end}}{{end}}
+{{define "step"}}{{if eq .Kind "thinking"}}<details class="think"><summary><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>{{t "思考"}}</summary><div class="think-body raw">{{.Text}}</div></details>{{else}}<details class="tool{{if .IsError}} err{{end}}"><summary><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg><span class="nm">{{.Name}}</span><span class="arg">{{summary .Input}}</span></summary><div class="io">{{if .Input}}<div class="lbl">{{t "入力"}}</div><pre>{{.Input}}</pre>{{end}}{{if .Done}}<div class="lbl">{{if .IsError}}{{t "エラー"}}{{else}}{{t "結果"}}{{end}}</div><pre>{{short .Output 20000}}</pre>{{end}}</div></details>{{end}}{{end}}
 
 {{define "show.html"}}{{template "head" (or .C.Title .C.ExternalID)}}
 <div class="app">
 {{template "side" .}}
 <main class="main">
   <div class="bar">
-    <button class="icon-btn menu" onclick="document.querySelector('.app').classList.add('open')" aria-label="一覧"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button class="icon-btn menu" onclick="document.querySelector('.app').classList.add('open')" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <div class="title">{{if .C.Title}}{{oneline .C.Title}}{{else}}{{.C.ExternalID}}{{end}}</div>
-    <a class="icon-btn" href="/c/{{.C.ID}}/export.md?dl=1" title="Markdown を保存"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></a>
+    <a class="icon-btn" href="/c/{{.C.ID}}/export.md?dl=1" title="{{t "Markdown を保存"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></a>
   </div>
   <div class="scroll" id="scroll">
     <div class="col">
@@ -19,9 +19,9 @@
         {{if .C.Model}}<span>{{.C.Model}}</span>{{end}}
         <span>{{when .C.StartedAt}} – {{when .C.UpdatedAt}}</span>
       </div>
-      {{if .C.ParentID}}<div class="rel"><b>親の会話</b><a href="/find/{{.C.Tool}}/{{.C.Host}}/{{.C.ParentID}}">{{short .C.ParentID 12}}</a></div>{{end}}
-      {{if gt (len .Branches) 1}}<div class="rel"><b>版</b>{{range $i, $b := .Branches}}<a class="{{if eq $b.ID $.C.ID}}on{{end}}" href="/c/{{$b.ID}}" title="{{$b.Host}} {{when $b.StartedAt}} – {{when $b.UpdatedAt}}">{{if $.ManyHosts}}{{$b.Host}} · {{end}}{{if $b.ContinuesFrom}}続き · {{end}}{{clock $b.UpdatedAt}} · {{$b.MessageCount}}</a>{{end}}</div>{{end}}
-      {{if .Children}}<div class="rel"><b>サブエージェント</b>{{range .Children}}<a href="/c/{{.ID}}" title="{{.Title}}">{{if .Title}}{{oneline .Title}}{{else}}{{short .ExternalID 12}}{{end}}</a>{{end}}</div>{{end}}
+      {{if .C.ParentID}}<div class="rel"><b>{{t "親の会話"}}</b><a href="/find/{{.C.Tool}}/{{.C.Host}}/{{.C.ParentID}}">{{short .C.ParentID 12}}</a></div>{{end}}
+      {{if gt (len .Branches) 1}}<div class="rel"><b>{{t "版"}}</b>{{range $i, $b := .Branches}}<a class="{{if eq $b.ID $.C.ID}}on{{end}}" href="/c/{{$b.ID}}" title="{{$b.Host}} {{when $b.StartedAt}} – {{when $b.UpdatedAt}}">{{if $.ManyHosts}}{{$b.Host}} · {{end}}{{if $b.ContinuesFrom}}{{t "続き"}} · {{end}}{{clock $b.UpdatedAt}} · {{$b.MessageCount}}</a>{{end}}</div>{{end}}
+      {{if .Children}}<div class="rel"><b>{{t "サブエージェント"}}</b>{{range .Children}}<a href="/c/{{.ID}}" title="{{.Title}}">{{if .Title}}{{oneline .Title}}{{else}}{{short .ExternalID 12}}{{end}}</a>{{end}}</div>{{end}}
       {{range .Turns}}
       {{if eq .Role "user"}}
         <div class="turn user{{if .Sidechain}} side{{end}}" id="{{.Anchor}}">
@@ -36,7 +36,7 @@
           <div class="body">
           {{range .Blocks}}
             {{if eq .Kind "text"}}<div class="md" data-md>{{.Text}}</div>
-            {{else if eq .Kind "steps"}}<details class="steps"><summary><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>{{if .Tools}}{{.Tools}} 回の操作{{else}}思考{{end}}<span class="arg">{{range .Steps}}{{if eq .Kind "tool"}}{{.Name}} {{end}}{{end}}</span></summary><div class="steps-body">{{range .Steps}}{{template "step" .}}{{end}}</div></details>
+            {{else if eq .Kind "steps"}}<details class="steps"><summary><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>{{if .Tools}}{{tf "%d 回の操作" .Tools}}{{else}}{{t "思考"}}{{end}}<span class="arg">{{range .Steps}}{{if eq .Kind "tool"}}{{.Name}} {{end}}{{end}}</span></summary><div class="steps-body">{{range .Steps}}{{template "step" .}}{{end}}</div></details>
             {{else if or (eq .Kind "thinking") (eq .Kind "tool")}}{{template "step" .}}
             {{else}}<div class="file">{{.Text}}</div>{{end}}
           {{end}}
@@ -49,21 +49,21 @@
   </div>
   <nav class="toc"></nav>
   <div class="jump">
-    <button class="icon-btn" id="prevq" title="前の発言"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg></button>
-    <button class="icon-btn" id="nextq" title="次の発言"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-    <button class="icon-btn" id="top" title="最初へ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5h12M12 19V9M7 14l5-5 5 5"/></svg></button>
-    <button class="icon-btn" id="bottom" title="最新へ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19h12M12 5v10M7 10l5 5 5-5"/></svg></button>
+    <button class="icon-btn" id="prevq" title="{{t "前の発言"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg></button>
+    <button class="icon-btn" id="nextq" title="{{t "次の発言"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button class="icon-btn" id="top" title="{{t "最初へ"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5h12M12 19V9M7 14l5-5 5 5"/></svg></button>
+    <button class="icon-btn" id="bottom" title="{{t "最新へ"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19h12M12 5v10M7 10l5 5 5-5"/></svg></button>
   </div>
   <div class="dock">
     <form class="box" id="exp" action="/c/{{.C.ID}}/export.md">
       {{if restorable .C.Tool}}
-      <div class="cmd" id="cmd" title="元の AI で続ける">aihist restore -server {{.Server}} {{.C.ExternalID}}</div>
-      <button type="button" class="btn pri" data-copy="cmd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg><span>{{toolLabel .C.Tool}}で続ける</span></button>
+      <div class="cmd" id="cmd" title="{{t "元の AI で続ける"}}">aihist restore -server {{.Server}} {{.C.ExternalID}}</div>
+      <button type="button" class="btn pri" data-copy="cmd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg><span>{{tf "%sで続ける" (toolLabel .C.Tool)}}</span></button>
       {{end}}
-      <button type="button" class="btn" id="copymd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>別のAIへ渡す</span></button>
+      <button type="button" class="btn" id="copymd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>{{t "別のAIへ渡す"}}</span></button>
       <div class="opts">
-        <label><input type="checkbox" name="thinking" value="1">思考</label>
-        <label><input type="checkbox" name="tools" value="0">ツール除外</label>
+        <label><input type="checkbox" name="thinking" value="1">{{t "思考"}}</label>
+        <label><input type="checkbox" name="tools" value="0">{{t "ツール除外"}}</label>
       </div>
     </form>
   </div>
@@ -87,7 +87,7 @@
     var a = document.createElement('a'); a.href = '#'+t.id;
     a.textContent = t.querySelector('.bub').textContent.trim().slice(0,60); toc.appendChild(a);
   });
-  function flash(btn){ var s=btn.querySelector('span'), o=s.textContent; s.textContent='コピーした'; setTimeout(function(){s.textContent=o},1500); }
+  function flash(btn){ var s=btn.querySelector('span'), o=s.textContent; s.textContent={{t "コピーした"}}; setTimeout(function(){s.textContent=o},1500); }
   async function copy(text){
     try { await navigator.clipboard.writeText(text); }
     catch(e){ var t=document.createElement('textarea'); t.value=text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }

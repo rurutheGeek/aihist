@@ -184,29 +184,6 @@ func hl(s string) template.HTML {
 	return template.HTML(s)
 }
 
-// day は一覧の見出し（今日・昨日・今週・月）。
-func day(t time.Time) string {
-	if t.IsZero() {
-		return "日付なし"
-	}
-	now := time.Now()
-	y, m, d := now.Date()
-	today := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
-	switch {
-	case !t.Before(today):
-		return "今日"
-	case !t.Before(today.AddDate(0, 0, -1)):
-		return "昨日"
-	case !t.Before(today.AddDate(0, 0, -7)):
-		return "過去7日"
-	case !t.Before(today.AddDate(0, 0, -30)):
-		return "過去30日"
-	case t.Year() == now.Year():
-		return t.Format("1月")
-	}
-	return t.Format("2006年1月")
-}
-
 // summary はツールの入力を1行に縮める（コマンド・パス・パターンなどを優先）。
 func summary(in string) string {
 	in = strings.TrimSpace(in)

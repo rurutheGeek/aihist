@@ -42,8 +42,8 @@ var dimLabels = map[string]string{
 }
 
 // side は左の会話一覧と絞り込み（どの画面にも出す）。
-func (s *Server) side(r *http.Request) (map[string]any, error) {
-	q := r.URL.Query()
+func (s *Server) side(r *http.Request, q url.Values) (map[string]any, error) {
+	l := lang(r)
 	f := store.Filter{
 		Query: q.Get("q"), Tools: q["tool"], Hosts: q["host"], Models: q["model"], Projects: q["project"], Limit: 300,
 	}
@@ -104,16 +104,16 @@ func (s *Server) side(r *http.Request) (map[string]any, error) {
 		pers = append(pers, item{Value: p.Value, Label: p.Label, On: p.Value == period})
 		if p.Value == period {
 			on++
-			pills = append(pills, pill{Label: p.Label, Href: "/" + query(q, "since", period)})
+			pills = append(pills, pill{Label: tr(l, p.Label), Href: "/" + query(q, "since", period)})
 		}
 	}
 
 	var groups []rowGroup
 	idx := map[string]int{}
-	for _, r := range rows {
-		key, label, title := day(r.UpdatedAt), day(r.UpdatedAt), ""
+	for _, c := range rows {
+		key, label, title := dayIn(l, c.UpdatedAt.Local()), dayIn(l, c.UpdatedAt.Local()), ""
 		if byProject {
-			key, label, title = r.Cwd, base(r.Cwd), r.Cwd
+			key, label, title = c.Cwd, base(c.Cwd), c.Cwd
 			if key == "" {
 				label = "—"
 			}
@@ -124,7 +124,7 @@ func (s *Server) side(r *http.Request) (map[string]any, error) {
 			idx[key] = i
 			groups = append(groups, rowGroup{Label: label, Title: title})
 		}
-		groups[i].Rows = append(groups[i].Rows, r)
+		groups[i].Rows = append(groups[i].Rows, c)
 	}
 
 	keep := query(q, "", "")

@@ -25,17 +25,27 @@ import (
 	"github.com/rurutheGeek/aihist/internal/ingest"
 )
 
+// auth は /api に、設定の画面で発行したトークンか、起動時に渡したトークン（AIHIST_TOKEN）を求める。
 func (s *Server) auth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.token != "" {
-			got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
+		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		ok := s.token != "" && subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) == 1
+		if !ok && !s.st.CheckToken(got) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
 		}
 		h(w, r)
 	}
+}
+
+// sameOrigin は画面からの POST が、別のサイトから送らされたものでないかを確かめる。
+func sameOrigin(r *http.Request) bool {
+	o := r.Header.Get("Origin")
+	if o == "" {
+		o = r.Header.Get("Referer")
+	}
+	u, err := url.Parse(o)
+	return err == nil && u.Host == r.Host
 }
 
 func (s *Server) apiList(w http.ResponseWriter, r *http.Request) {
@@ -113,21 +123,42 @@ func (s *Server) ingest(host, tool string) (ingest.Result, error) {
 }
 
 func (s *Server) uploadForm(w http.ResponseWriter, r *http.Request) {
-	s.renderUpload(w, r, r.FormValue("host"), nil)
-}
-
-func (s *Server) renderUpload(w http.ResponseWriter, r *http.Request, host string, lines []string) {
-	d, err := s.side(&http.Request{URL: &url.URL{}})
+	d, err := s.side(r, nil)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	d["Host"], d["Lines"] = host, lines
-	s.render(w, "upload.html", d)
+	hosts := map[string]bool{}
+	cs, _ := s.st.Counts()
+	var hs []string
+	for _, c := range cs {
+		if !hosts[c.Host] {
+			hosts[c.Host] = true
+			hs = append(hs, c.Host)
+		}
+	}
+	d["Hosts"], d["Page"] = hs, "upload"
+	s.render(w, r, "upload.html", d)
+}
+
+// uploaded は上げたファイル1つの結果（画面が表示する）。
+type uploaded struct {
+	Name     string `json:"name"`
+	Tool     string `json:"tool,omitempty"`
+	Label    string `json:"label,omitempty"`
+	Imported int    `json:"imported"`
+	Skipped  int    `json:"skipped"`
+	Error    string `json:"error,omitempty"`
+	Href     string `json:"href,omitempty"`
 }
 
 // upload は画面から上げられたファイルを、中身からツールを見分けて原本に置き、取り込む。
 func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	l := lang(r)
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -136,26 +167,22 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	if host == "" {
 		host = "upload"
 	}
-	tools := map[string]bool{}
-	var lines []string
+	var out []uploaded
 	for _, fh := range r.MultipartForm.File["files"] {
-		tool, rel, err := s.store(host, fh)
+		u := uploaded{Name: fh.Filename}
+		tool, _, err := s.store(host, fh)
 		if err != nil {
-			lines = append(lines, fh.Filename+": "+err.Error())
-			continue
+			u.Error = tr(l, err.Error())
+		} else if res, err := s.ingest(host, tool); err != nil {
+			u.Error = err.Error()
+		} else {
+			u.Tool, u.Label, u.Imported, u.Skipped = tool, toolLabel(tool), res.Imported, res.Skipped
+			u.Href = "/?" + url.Values{"tool": {tool}, "host": {host}}.Encode()
 		}
-		tools[tool] = true
-		lines = append(lines, fh.Filename+" → "+tool+"/"+rel)
+		out = append(out, u)
 	}
-	for tool := range tools {
-		res, err := s.ingest(host, tool)
-		if err != nil {
-			lines = append(lines, tool+": "+err.Error())
-			continue
-		}
-		lines = append(lines, tool+": "+res.String())
-	}
-	s.renderUpload(w, r, host, lines)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
 }
 
 func (s *Server) store(host string, fh *multipart.FileHeader) (tool, rel string, err error) {
@@ -225,29 +252,4 @@ func detectWeb(name string, f multipart.File, size int64) string {
 		return claudeai.Tool
 	}
 	return ""
-}
-
-// setup は各マシンへ入れるコマンド（定期的に送る・消す）の画面。トークンを埋めて出す。
-func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
-	d, err := s.side(&http.Request{URL: &url.URL{}})
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	o := s.origin(r)
-	tok := s.token
-	if tok == "" {
-		tok = "-"
-	}
-	d["Cmds"] = []map[string]string{
-		{"OS": "Linux・macOS・WSL",
-			"Install":   "curl -fsSL " + o + "/api/install.sh | AIHIST_TOKEN=" + tok + " sh",
-			"Uninstall": "curl -fsSL " + o + "/api/uninstall.sh | sh",
-			"Script":    "/api/install.sh", "Name": "install.sh", "UScript": "/api/uninstall.sh", "UName": "uninstall.sh"},
-		{"OS": "Windows",
-			"Install":   `$env:AIHIST_TOKEN="` + tok + `"; irm ` + o + "/api/install.ps1 | iex",
-			"Uninstall": "irm " + o + "/api/uninstall.ps1 | iex",
-			"Script":    "/api/install.ps1", "Name": "install.ps1", "UScript": "/api/uninstall.ps1", "UName": "uninstall.ps1"},
-	}
-	s.render(w, "setup.html", d)
 }
