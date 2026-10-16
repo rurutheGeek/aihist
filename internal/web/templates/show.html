@@ -48,6 +48,12 @@
     </div>
   </div>
   <nav class="toc"></nav>
+  <div class="jump">
+    <button class="icon-btn" id="prevq" title="前の発言"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg></button>
+    <button class="icon-btn" id="nextq" title="次の発言"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button class="icon-btn" id="top" title="最初へ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5h12M12 19V9M7 14l5-5 5 5"/></svg></button>
+    <button class="icon-btn" id="bottom" title="最新へ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19h12M12 5v10M7 10l5 5 5-5"/></svg></button>
+  </div>
   <div class="dock">
     <form class="box" id="exp" action="/c/{{.C.ID}}/export.md">
       <div class="cmd" id="cmd" title="元の AI で続ける">aihist restore -server {{.Server}} {{.C.ExternalID}}</div>
@@ -90,6 +96,23 @@
     var res = await fetch(f.action + '?' + q); await copy(await res.text()); flash(this);
   };
   var cur = document.querySelector('.conv.on'); if (cur) cur.scrollIntoView({block:'center'});
+  // チャットと同じく最新の発言から見せる。#u12 のように発言を指したときはそこへ。
+  var sc = document.getElementById('scroll');
+  sc.style.scrollBehavior = 'auto';
+  if (location.hash && document.querySelector(location.hash)) document.querySelector(location.hash).scrollIntoView();
+  else sc.scrollTop = sc.scrollHeight;
+  sc.style.scrollBehavior = '';
+  var qs = Array.from(document.querySelectorAll('.turn.user'));
+  function go(dir){
+    var y = sc.scrollTop + 8, t;
+    if (dir > 0) t = qs.find(function(q){ return q.offsetTop > y + 4; });
+    else t = qs.slice().reverse().find(function(q){ return q.offsetTop < y - 4; });
+    if (t) sc.scrollTo({top: t.offsetTop - 8, behavior: 'smooth'});
+  }
+  document.getElementById('prevq').onclick = function(){ go(-1); };
+  document.getElementById('nextq').onclick = function(){ go(1); };
+  document.getElementById('top').onclick = function(){ sc.scrollTo({top: 0, behavior: 'smooth'}); };
+  document.getElementById('bottom').onclick = function(){ sc.scrollTo({top: sc.scrollHeight, behavior: 'smooth'}); };
 })();
 </script>
 {{template "foot"}}{{end}}
