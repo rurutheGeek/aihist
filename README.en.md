@@ -24,10 +24,13 @@ $env:AIHIST_TOKEN="<token>"; irm https://<server>/api/install.ps1 | iex  # Windo
 
 Nothing stays resident. The OS timer (systemd user timer or cron, launchd, Task Scheduler) runs `aihist push` every 10 minutes and only changed files are sent; a typical run takes a few seconds and ~10 MB of memory. Before sending, the client compares itself with the binary the server distributes and updates itself, so supporting a new tool only needs a server update.
 
+**Settings → Local cleanup** deletes local conversation files (Claude Code, Codex, Antigravity) that were last modified before the chosen number of days and whose identical copy (same size and mtime) is already on the server. Indexes and the OpenCode database are never touched. Use `aihist restore` to bring one back.
+
 | Variable | Meaning |
 |---|---|
 | `AIHIST_EVERY` | Interval (default `10m`, `0` = send once) |
 | `AIHIST_HOST` | Machine name (default: host name; `-wsl` is appended in WSL) |
+| `AIHIST_CLEANUP` | Days after which conversations already on the server are deleted locally (overrides Settings → Local cleanup; `0` keeps everything) |
 | `AIHIST_AUTO_UPDATE` | `0` disables self-update |
 | `AIHIST_BIN_DIR` | Where to put the binary (default `~/.local/bin`) |
 

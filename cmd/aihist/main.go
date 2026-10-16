@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,7 +44,7 @@ func clientConfig() map[string]string {
 			}
 		}
 	}
-	for _, k := range []string{"AIHIST_SERVER", "AIHIST_TOKEN", "AIHIST_HOST", "AIHIST_AUTO_UPDATE"} {
+	for _, k := range []string{"AIHIST_SERVER", "AIHIST_TOKEN", "AIHIST_HOST", "AIHIST_AUTO_UPDATE", "AIHIST_CLEANUP"} {
 		if v := os.Getenv(k); v != "" {
 			cf[k] = v
 		}
@@ -119,13 +120,24 @@ func main() {
 			}
 		}
 		for {
+			// 送り終えた古い会話を手元から消す日数。サーバーの設定に従い、手元の AIHIST_CLEANUP（日数、0 で消さない）が優先する
+			days := c.Config().CleanupDays
+			if v, err := strconv.Atoi(cf["AIHIST_CLEANUP"]); err == nil {
+				days = v
+			}
 			for _, src := range push.Defaults(home) {
 				n, res, err := c.Push(src)
 				switch {
 				case err != nil:
 					log.Printf("%s: %v", src.Tool, err)
+					continue
 				case n > 0:
 					log.Printf("%s: %d ファイル送信、%s", src.Tool, n, res)
+				}
+				if n, size, err := c.Cleanup(src, days); err != nil {
+					log.Printf("%s: 片付け: %v", src.Tool, err)
+				} else if n > 0 {
+					log.Printf("%s: %d 日より前の %d ファイル（%.1f MB）を手元から消した", src.Tool, days, n, float64(size)/(1<<20))
 				}
 			}
 			if n, res, err := c.PushOpenCode(filepath.Join(home, ".local/share/opencode/opencode.db")); err != nil {

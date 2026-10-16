@@ -107,6 +107,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /upload", s.uploadForm)
 	mux.HandleFunc("GET /settings", s.settings)
 	mux.HandleFunc("POST /settings/tokens", s.addToken)
+	mux.HandleFunc("POST /settings/cleanup", s.setCleanup)
 	mux.HandleFunc("POST /settings/tokens/{id}/delete", s.deleteToken)
 	mux.Handle("GET /setup", http.RedirectHandler("/settings", http.StatusMovedPermanently))
 	mux.HandleFunc("POST /upload", s.upload)
@@ -121,6 +122,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/uninstall.ps1", s.installScript("uninstall.ps1"))
 	mux.HandleFunc("GET /api/bin/{name}", s.auth(s.apiBin))
 	mux.HandleFunc("GET /api/find", s.auth(s.apiFind))
+	mux.HandleFunc("GET /api/client", s.auth(s.apiClient))
 	return mux
 }
 

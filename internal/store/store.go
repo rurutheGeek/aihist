@@ -14,6 +14,10 @@ import (
 )
 
 const schema = `
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS tokens (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,

@@ -102,3 +102,17 @@ func (s *Store) Size() int64 {
 	s.db.QueryRow(`PRAGMA page_size`).Scan(&size)
 	return pages * size
 }
+
+// Setting はサーバー側の設定（各マシンへも配る）。無ければ def。
+func (s *Store) Setting(key, def string) string {
+	var v string
+	if s.db.QueryRow(`SELECT value FROM settings WHERE key=?`, key).Scan(&v) != nil {
+		return def
+	}
+	return v
+}
+
+func (s *Store) SetSetting(key, value string) error {
+	_, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value)
+	return err
+}

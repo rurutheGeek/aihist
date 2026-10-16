@@ -7,7 +7,7 @@
     <div class="title">{{t "設定"}}</div>
   </div>
   <div class="scroll"><div class="col">
-    <nav class="tabs"><a href="#machines">{{t "マシンから送る"}}</a><a href="#storage">{{t "容量"}}</a><a href="#language">{{t "言語"}}</a></nav>
+    <nav class="tabs"><a href="#machines">{{t "マシンから送る"}}</a><a href="#cleanup">{{t "手元の片付け"}}</a><a href="#storage">{{t "容量"}}</a><a href="#language">{{t "言語"}}</a></nav>
 
     <section class="setup" id="machines">
       <h2>{{t "マシンから送る"}}</h2>
@@ -28,6 +28,13 @@
       <h3>{{t "消す"}}</h3>
       {{range .Cmds}}<div class="cmdl"><span>{{.OS}}</span><code>{{.Uninstall}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div>{{end}}
       <div class="dl">{{range .Cmds}}<a class="btn" href="{{.Script}}" download="{{.Name}}">{{.Name}}</a><a class="btn" href="{{.UScript}}" download="{{.UName}}">{{.UName}}</a>{{end}}</div>
+    </section>
+
+    <section class="setup" id="cleanup">
+      <h2>{{t "手元の片付け"}}</h2>
+      <form class="seg" method="post" action="/settings/cleanup">
+        {{range .CleanupOpts}}<label><input type="radio" name="days" value="{{.}}"{{if eq . $.Cleanup}} checked{{end}} onchange="this.form.submit()"><span>{{if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</span></label>{{end}}
+      </form>
     </section>
 
     <section class="setup" id="storage">

@@ -129,6 +129,8 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	}
 	d["Cmds"] = commands(s.origin(r), "")
 	d["Usage"], d["Page"] = s.usage(), "settings"
+	days, _ := strconv.Atoi(s.st.Setting("cleanup_days", "0"))
+	d["Cleanup"], d["CleanupOpts"] = days, []int{0, 7, 14, 30, 90}
 	d["Lang"] = ""
 	if c, err := r.Cookie("lang"); err == nil {
 		d["Lang"] = c.Value
@@ -163,4 +165,22 @@ func (s *Server) deleteToken(w http.ResponseWriter, r *http.Request) {
 		s.st.DeleteToken(id)
 	}
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+// apiClient は各マシンへ配る設定（push が送るたびに読む）。
+func (s *Server) apiClient(w http.ResponseWriter, r *http.Request) {
+	days, _ := strconv.Atoi(s.st.Setting("cleanup_days", "0"))
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"cleanup_days":%d}`, days)
+}
+
+func (s *Server) setCleanup(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if d, err := strconv.Atoi(r.FormValue("days")); err == nil && d >= 0 {
+		s.st.SetSetting("cleanup_days", strconv.Itoa(d))
+	}
+	http.Redirect(w, r, "/settings#cleanup", http.StatusSeeOther)
 }

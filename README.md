@@ -46,10 +46,13 @@ $env:AIHIST_TOKEN="<トークン>"; irm https://<サーバー>/api/install.ps1 |
 
 送る前に、サーバーが配る実行ファイル（`/api/bin`）と自分の sha256 を比べ、違えば入れ替えてから送る。サーバーを新しくすれば、対応するツールが増えても各マシンでやり直すことは無い。
 
+「設定 → 手元の片付け」で日数を選ぶと、最終更新がそれより前で、サーバーに同じもの（大きさと更新時刻が一致）がある会話を、送ったあとに手元から消す（Claude Code・Codex・Antigravity。索引と OpenCode の DB は消さない）。消した会話は `aihist restore` で戻せる。
+
 | 変数 | 意味 |
 |---|---|
 | `AIHIST_EVERY` | 送る間隔（既定 `10m`。`0` なら今1回送るだけ） |
 | `AIHIST_HOST` | このマシンの名前（既定はホスト名。WSL では `-wsl` を付ける） |
+| `AIHIST_CLEANUP` | 送り終えた会話を手元から消す日数（サーバーの「設定 → 手元の片付け」より優先。`0` で消さない） |
 | `AIHIST_AUTO_UPDATE` | `0` で自動更新を止める（設定ファイルに書いてもよい） |
 | `AIHIST_BIN_DIR` | 実行ファイルの置き場所（既定 `~/.local/bin`。Windows は `%LOCALAPPDATA%\aihist`） |
 
