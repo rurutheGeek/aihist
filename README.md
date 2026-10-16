@@ -7,7 +7,7 @@ AI ツールの会話履歴を1か所に集め、検索・閲覧し、別の AI 
 | ツール | 読む場所 | 状態 |
 |---|---|---|
 | Claude Code | `~/.claude/projects/**/*.jsonl`（サブエージェント含む） | 済 |
-| OpenCode 1.18 | `~/.local/share/opencode/opencode.db`（読み取り専用） | 済 |
+| OpenCode 1.18 | `~/.local/share/opencode/opencode.db` | 済 |
 | Antigravity | `%USERPROFILE%\.gemini\antigravity-ide\conversations\*.db` | 済 |
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl`、題名は `session_index.jsonl` | 済 |
 | Open WebUI | REST API `/api/v1/chats` | 未 |
@@ -26,13 +26,32 @@ bin/aihist export -thinking <会話IDの先頭>
 |---|---|
 | `push` | 各マシンで実行する。Claude Code・Codex・Antigravity の既定の置き場所から、サーバーに無いか変わったファイルだけを送る。`-every 10m` で送り続ける |
 | 画面の `↑` | ファイルを選んで上げる。中身から Claude Code・Codex・Antigravity を見分ける |
-| `import <ツール> [場所]` | サーバーと同じマシンの記録を直接読む。OpenCode はこれだけ（DB が数 GB あるため送らない） |
+| `import <ツール> [場所]` | サーバーと同じマシンの記録を直接読む |
+
+`push` は OpenCode の DB そのものは送らない（操作ログで数 GB あり、ログイン情報も入っている）。会話ごとに `session`・`message`・`part` と `project` の行を加工せずに書き出した `<session id>.json` を原本として送る。
 
 送られたファイルは原本として `-raw`（既定 `~/.local/share/aihist/raw/<ホスト>/<ツール>/`）に残る。アダプタを直したら原本から取り込み直せる。
 
 DB は既定で `~/.local/share/aihist/aihist.db`（`-db` で変更）。取り込みは会話ごとの丸ごと置き換えで、元データが変わっていない会話は飛ばす。トークンは `AIHIST_TOKEN` でも渡せ、`push` が使う `/api` にだけ要る。画面（アップロードを含む）は前に置く認証（SSO など）で守る。
 
 検索は SQLite FTS5 の trigram。3文字未満の語は `LIKE` で探す。
+
+## 元の AI へ戻す
+
+```bash
+bin/aihist restore -server https://<サーバー> -token <トークン> <会話IDの先頭>
+```
+
+原本をサーバーから取り出し、元のツールが読む場所へ戻して、続けるコマンドを表示する。手元に中身の違う同じ会話があるときは上書きしない（`-force` で上書き）。
+
+| ツール | 戻す先 | 続け方 |
+|---|---|---|
+| Claude Code | `~/.claude/projects/<作業フォルダ>/<会話>.jsonl`（サブエージェントも） | `claude --resume <会話>` |
+| Codex | `~/.codex/sessions/年/月/日/rollout-*.jsonl`、題名は `session_index.jsonl` | `codex resume <会話>` |
+| OpenCode | `opencode.db` へ行を書き戻す（同じ ID は上書き） | `opencode --session <会話>` |
+| Antigravity | `conversations\<会話>.db` | Antigravity の一覧から開く |
+
+Codex と OpenCode は、手元から消した会話を戻して続きを話せることを確かめた。Claude Code は戻したファイルが原本とバイト単位で同じことまで確かめた。Antigravity は未確認。
 
 ## 構成
 

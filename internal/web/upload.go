@@ -56,6 +56,34 @@ func (s *Server) apiPut(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// apiFile は原本1ファイルを返す（元の AI へ戻すときに使う）。
+func (s *Server) apiFile(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	p, err := s.raw.Path(q.Get("host"), q.Get("tool"), q.Get("path"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	http.ServeFile(w, r, p)
+}
+
+// apiFind は会話 ID の先頭から会話を探す。
+func (s *Server) apiFind(w http.ResponseWriter, r *http.Request) {
+	id, err := s.st.FindByExternal(r.URL.Query().Get("id"))
+	if err != nil {
+		http.Error(w, "見つからない", http.StatusNotFound)
+		return
+	}
+	c, _, err := s.st.Get(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(c)
+}
+
 func (s *Server) apiImport(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	res, err := s.ingest(q.Get("host"), q.Get("tool"))

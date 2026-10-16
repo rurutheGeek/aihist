@@ -4,7 +4,9 @@ package ingest
 import (
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rurutheGeek/aihist/internal/adapter/antigravity"
 	"github.com/rurutheGeek/aihist/internal/adapter/claudecode"
@@ -113,8 +115,11 @@ func Antigravity(st *store.Store, host, dir string) (Result, error) {
 	return r, nil
 }
 
-// OpenCode は DB ファイル（opencode.db）を直接読む。dir は DB のパス。
+// OpenCode は path が DB ファイルならそれを直接読み、ディレクトリなら送られた原本（*.json）を読む。
 func OpenCode(st *store.Store, host, path string) (Result, error) {
+	if fi, err := os.Stat(path); err == nil && fi.IsDir() {
+		return openCodeFiles(st, host, path)
+	}
 	var r Result
 	db, err := opencode.Open(path)
 	if err != nil {
@@ -140,6 +145,41 @@ func OpenCode(st *store.Store, host, path string) (Result, error) {
 		}
 	}
 	return r, nil
+}
+
+func openCodeFiles(st *store.Store, host, dir string) (Result, error) {
+	var r Result
+	files, err := opencode.Files(dir)
+	if err != nil {
+		return r, err
+	}
+	for _, f := range files {
+		id := strings.TrimSuffix(filepath.Base(f), ".json")
+		stamp := fileStamp(f)
+		if st.Stamp(opencode.Tool, host, id) == stamp {
+			r.Skipped++
+			continue
+		}
+		rows, err := opencode.ReadFile(f)
+		if err != nil {
+			log.Printf("%s: %v", f, err)
+			continue
+		}
+		c := opencode.Convert(rows)
+		c.SourcePath = f
+		if err := put(st, host, c, stamp, &r); err != nil {
+			return r, err
+		}
+	}
+	return r, nil
+}
+
+func fileStamp(path string) string {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d:%d", fi.Size(), fi.ModTime().UnixNano())
 }
 
 func put(st *store.Store, host string, c *model.Conversation, stamp string, r *Result) error {

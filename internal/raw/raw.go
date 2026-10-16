@@ -35,7 +35,8 @@ func (s Store) Root(host, tool string) (string, error) {
 	return filepath.Join(s.Dir, host, tool), nil
 }
 
-func (s Store) path(host, tool, rel string) (string, error) {
+// Path は原本1ファイルの置き場所。相対パスは置き場所の外へ出られない。
+func (s Store) Path(host, tool, rel string) (string, error) {
 	root, err := s.Root(host, tool)
 	if err != nil {
 		return "", err
@@ -49,7 +50,7 @@ func (s Store) path(host, tool, rel string) (string, error) {
 
 // Put は1ファイルを書く。途中で切れても前の版が残るよう、別名に書いてから置き換える。
 func (s Store) Put(host, tool, rel string, r io.Reader, mtime time.Time) error {
-	p, err := s.path(host, tool, rel)
+	p, err := s.Path(host, tool, rel)
 	if err != nil {
 		return err
 	}

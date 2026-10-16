@@ -63,6 +63,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/files", s.auth(s.apiList))
 	mux.HandleFunc("PUT /api/files", s.auth(s.apiPut))
 	mux.HandleFunc("POST /api/import", s.auth(s.apiImport))
+	mux.HandleFunc("GET /api/file", s.auth(s.apiFile))
+	mux.HandleFunc("GET /api/find", s.auth(s.apiFind))
 	return mux
 }
 

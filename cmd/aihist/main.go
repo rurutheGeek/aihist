@@ -30,6 +30,7 @@ func usage() {
   aihist [-db path] import opencode [db]      既定 ~/.local/share/opencode/opencode.db
   aihist [-db path] serve [-addr :8080] [-raw dir] [-token T]
   aihist push -server URL [-token T] [-host 名前] [-every 10m]
+  aihist restore -server URL [-token T] [-force] <会話IDの先頭>   元の AI へ戻す
   aihist [-db path] search <語>
   aihist [-db path] export [-thinking] [-no-tools] [-max N] <会話IDの先頭>
 
@@ -72,11 +73,36 @@ func main() {
 					log.Printf("%s: %d ファイル送信、%s", src.Tool, n, res)
 				}
 			}
+			if n, res, err := c.PushOpenCode(filepath.Join(home, ".local/share/opencode/opencode.db")); err != nil {
+				log.Printf("opencode: %v", err)
+			} else if n > 0 {
+				log.Printf("opencode: %d 会話送信、%s", n, res)
+			}
 			if *every == 0 {
 				return
 			}
 			time.Sleep(*every)
 		}
+	}
+
+	if args[0] == "restore" {
+		fs := flag.NewFlagSet("restore", flag.ExitOnError)
+		server := fs.String("server", "", "サーバー http://host:port")
+		token := fs.String("token", os.Getenv("AIHIST_TOKEN"), "トークン")
+		force := fs.Bool("force", false, "手元の同じ会話を上書きする")
+		fs.Parse(args[1:])
+		if *server == "" || fs.NArg() != 1 {
+			usage()
+		}
+		done, next, err := push.NewClient(*server, *token, host).Restore(home, fs.Arg(0), *force)
+		for _, d := range done {
+			fmt.Println("戻した:", d)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("続ける:", next)
+		return
 	}
 
 	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o700); err != nil {
