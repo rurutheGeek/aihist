@@ -1,6 +1,7 @@
 package opencode
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"path/filepath"
@@ -58,6 +59,17 @@ func TestExportConvertRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := json.Marshal(rows)
+	var streamed bytes.Buffer // 1行ずつ書いたものも同じ原本として読める
+	if err := src.ExportTo(&streamed, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	var fromStream Rows
+	if err := json.Unmarshal(streamed.Bytes(), &fromStream); err != nil {
+		t.Fatal(err)
+	}
+	if b2, _ := json.Marshal(fromStream); string(b2) != string(b) {
+		t.Fatalf("ExportTo が Export と違う:\n%s\n%s", b, b2)
+	}
 	if string(b) == "" || containsSecret(b) {
 		t.Fatal("原本に credential が入った")
 	}

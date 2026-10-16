@@ -2,7 +2,6 @@
 package push
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -183,20 +182,9 @@ func (c *Client) PushOpenCode(path string) (int, string, error) {
 		if h, ok := have[rel]; ok && h.MTime == mt.UnixNano() {
 			continue
 		}
-		rows, err := db.Export(s.ID)
-		if err != nil {
+		if err := c.sendOpenCode(db, s.ID, rel, mt); err != nil {
 			return sent, "", fmt.Errorf("%s: %w", s.ID, err)
 		}
-		b, err := json.Marshal(rows)
-		if err != nil {
-			return sent, "", err
-		}
-		q := url.Values{"host": {c.Host}, "tool": {opencode.Tool}, "path": {rel}}
-		res, err := c.req("PUT", "/api/files", q, &upload{bytes.NewReader(b), int64(len(b)), mt})
-		if err != nil {
-			return sent, "", err
-		}
-		res.Body.Close()
 		sent++
 	}
 	if sent == 0 {
@@ -204,6 +192,32 @@ func (c *Client) PushOpenCode(path string) (int, string, error) {
 	}
 	out, err := c.importNow(opencode.Tool)
 	return sent, out, err
+}
+
+// sendOpenCode は1会話の原本を一時ファイルへ書き出してから送る（大きい会話をメモリに載せない）。
+func (c *Client) sendOpenCode(db *opencode.DB, id, rel string, mt time.Time) error {
+	f, err := os.CreateTemp("", "aihist-opencode-*.json")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+	if err := db.ExportTo(f, id); err != nil {
+		return err
+	}
+	size, err := f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	q := url.Values{"host": {c.Host}, "tool": {opencode.Tool}, "path": {rel}}
+	res, err := c.req("PUT", "/api/files", q, &upload{f, size, mt})
+	if err != nil {
+		return err
+	}
+	return res.Body.Close()
 }
 
 // NewClient は既定の HTTP クライアントで作る。

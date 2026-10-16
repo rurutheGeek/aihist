@@ -12,6 +12,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,17 +110,73 @@ func (d *DB) Export(id string) (*Rows, error) {
 	return r, nil
 }
 
+// ExportTo は1会話の原本を w へ1行ずつ書く。大きい会話（数百 MB）でも全体をメモリに載せない。
+// 書く形は Export を JSON にしたものと同じ。
+func (d *DB) ExportTo(w io.Writer, id string) error {
+	ss, err := d.rows(`SELECT * FROM session WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	if len(ss) == 0 {
+		return fmt.Errorf("session %s が無い", id)
+	}
+	enc := json.NewEncoder(w)
+	fmt.Fprintf(w, `{"format":%q,`, Format)
+	if pid, _ := ss[0]["project_id"].(string); pid != "" {
+		ps, err := d.rows(`SELECT * FROM project WHERE id=?`, pid)
+		if err != nil {
+			return err
+		}
+		if len(ps) > 0 {
+			io.WriteString(w, `"project":`)
+			if err := enc.Encode(ps[0]); err != nil {
+				return err
+			}
+			io.WriteString(w, ",")
+		}
+	}
+	io.WriteString(w, `"session":`)
+	if err := enc.Encode(ss[0]); err != nil {
+		return err
+	}
+	for _, t := range []struct{ key, q string }{
+		{"messages", `SELECT * FROM message WHERE session_id=? ORDER BY time_created, id`},
+		{"parts", `SELECT * FROM part WHERE session_id=? ORDER BY message_id, id`},
+	} {
+		fmt.Fprintf(w, `,%q:[`, t.key)
+		n := 0
+		err := d.each(t.q, func(r Row) error {
+			if n > 0 {
+				io.WriteString(w, ",")
+			}
+			n++
+			return enc.Encode(r)
+		}, id)
+		if err != nil {
+			return err
+		}
+		io.WriteString(w, "]")
+	}
+	_, err = io.WriteString(w, "}\n")
+	return err
+}
+
 func (d *DB) rows(q string, args ...any) ([]Row, error) {
+	var out []Row
+	err := d.each(q, func(r Row) error { out = append(out, r); return nil }, args...)
+	return out, err
+}
+
+func (d *DB) each(q string, fn func(Row) error, args ...any) error {
 	rs, err := d.db.Query(q, args...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rs.Close()
 	cols, err := rs.Columns()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var out []Row
 	for rs.Next() {
 		vals := make([]any, len(cols))
 		ptrs := make([]any, len(cols))
@@ -127,7 +184,7 @@ func (d *DB) rows(q string, args ...any) ([]Row, error) {
 			ptrs[i] = &vals[i]
 		}
 		if err := rs.Scan(ptrs...); err != nil {
-			return nil, err
+			return err
 		}
 		row := Row{}
 		for i, c := range cols {
@@ -136,9 +193,11 @@ func (d *DB) rows(q string, args ...any) ([]Row, error) {
 			}
 			row[c] = vals[i]
 		}
-		out = append(out, row)
+		if err := fn(row); err != nil {
+			return err
+		}
 	}
-	return out, rs.Err()
+	return rs.Err()
 }
 
 // Load は DB から1会話を読む（同じマシンでの取り込み用）。
@@ -157,12 +216,13 @@ func Files(dir string) ([]string, error) {
 
 // ReadFile は原本を読む。
 func ReadFile(path string) (*Rows, error) {
-	b, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 	var r Rows
-	if err := json.Unmarshal(b, &r); err != nil {
+	if err := json.NewDecoder(f).Decode(&r); err != nil {
 		return nil, err
 	}
 	if r.Format != Format {
