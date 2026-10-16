@@ -78,3 +78,14 @@ func TestParse(t *testing.T) {
 		t.Fatalf("run_command: %q", got)
 	}
 }
+
+func TestURIPath(t *testing.T) {
+	for in, want := range map[string]string{
+		"file:///home/a/b":                  "/home/a/b",
+		"file:///c%3A/Users/a/My%20Project": `C:\Users\a\My Project`,
+	} {
+		if got := uriPath(in); got != want {
+			t.Errorf("%s: %s", in, got)
+		}
+	}
+}

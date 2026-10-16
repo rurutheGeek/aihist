@@ -239,6 +239,9 @@ func models(c *model.Conversation) []string {
 	for _, m := range c.Messages {
 		add(m.Model)
 	}
+	for _, m := range c.Models {
+		add(m)
+	}
 	if len(out) == 0 {
 		add(c.Model)
 	}

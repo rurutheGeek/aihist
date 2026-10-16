@@ -191,3 +191,28 @@ func detect(name string, r io.Reader) (tool, rel string) {
 	}
 	return "", ""
 }
+
+// setup は各マシンへ入れるコマンド（定期的に送る・消す）の画面。トークンを埋めて出す。
+func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
+	d, err := s.side(&http.Request{URL: &url.URL{}})
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	o := s.origin(r)
+	tok := s.token
+	if tok == "" {
+		tok = "-"
+	}
+	d["Cmds"] = []map[string]string{
+		{"OS": "Linux・macOS・WSL",
+			"Install":   "curl -fsSL " + o + "/api/install.sh | AIHIST_TOKEN=" + tok + " sh",
+			"Uninstall": "curl -fsSL " + o + "/api/uninstall.sh | sh",
+			"Script":    "/api/install.sh", "Name": "install.sh", "UScript": "/api/uninstall.sh", "UName": "uninstall.sh"},
+		{"OS": "Windows",
+			"Install":   `$env:AIHIST_TOKEN="` + tok + `"; irm ` + o + "/api/install.ps1 | iex",
+			"Uninstall": "irm " + o + "/api/uninstall.ps1 | iex",
+			"Script":    "/api/install.ps1", "Name": "install.ps1", "UScript": "/api/uninstall.ps1", "UName": "uninstall.ps1"},
+	}
+	s.render(w, "setup.html", d)
+}

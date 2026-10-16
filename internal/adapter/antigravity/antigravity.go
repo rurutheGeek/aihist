@@ -7,6 +7,7 @@ package antigravity
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,9 +31,13 @@ func ExternalID(path string) string {
 	return strings.TrimSuffix(filepath.Base(path), ".db")
 }
 
+// parser は読み方の版。上げると取り込み済みの会話も読み直す（v2: 作業フォルダ・ブランチ・モデルを読む）。
+const parser = "v2;"
+
 // Stamp は取り込みを省くかの判定に使う印。WAL も見る。
 func Stamp(path string) string {
 	var b strings.Builder
+	b.WriteString(parser)
 	for _, p := range []string{path, path + "-wal"} {
 		if st, err := os.Stat(p); err == nil {
 			fmt.Fprintf(&b, "%d:%d;", st.Size(), st.ModTime().UnixNano())
@@ -156,7 +161,59 @@ func Parse(path string) (*model.Conversation, error) {
 			break
 		}
 	}
+	meta(db, c)
 	return c, nil
+}
+
+// meta は作業フォルダ・ブランチ（trajectory_metadata_blob）と使ったモデル（gen_metadata）を読む。
+// 古い版の DB には無いことがあるので、読めなくても会話は返す。
+func meta(db *sql.DB, c *model.Conversation) {
+	var blob []byte
+	if db.QueryRow(`SELECT data FROM trajectory_metadata_blob WHERE id='main'`).Scan(&blob) == nil {
+		if p, err := parse(blob); err == nil {
+			ws := p.msg(1)
+			c.Cwd = uriPath(ws.str(1))
+			c.GitBranch = ws.str(4)
+		}
+	}
+	rows, err := db.Query(`SELECT data FROM gen_metadata ORDER BY idx`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	seen := map[string]bool{}
+	for rows.Next() {
+		var b []byte
+		if rows.Scan(&b) != nil {
+			continue
+		}
+		p, err := parse(b)
+		if err != nil {
+			continue
+		}
+		if m := p.str(1, 19); m != "" && !strings.HasPrefix(m, "MODEL_") {
+			c.Model = m
+			if !seen[m] {
+				seen[m] = true
+				c.Models = append(c.Models, m)
+			}
+		}
+	}
+}
+
+// uriPath は file:///home/a や file:///c%3A/Users/a をパスにする。
+func uriPath(u string) string {
+	p, ok := strings.CutPrefix(u, "file://")
+	if !ok {
+		return u
+	}
+	if s, err := url.PathUnescape(p); err == nil {
+		p = s
+	}
+	if len(p) > 2 && p[0] == '/' && p[2] == ':' {
+		p = strings.ToUpper(p[1:2]) + strings.ReplaceAll(p[2:], "/", `\`)
+	}
+	return p
 }
 
 // longest は構造の分からない本体から、いちばん長い文字列を拾う。

@@ -1,0 +1,16 @@
+# docker compose up -d で http://localhost:8080 に立つ。
+# AIHIST_TOKEN は各マシンから送るときに要る合言葉。.env に AIHIST_TOKEN=... と書く。
+# 画面には認証が無いので、外へ出すときは前に SSO などの認証を置く（/api/* はトークンが守る）。
+services:
+  aihist:
+    image: ghcr.io/ruruthegeek/aihist:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      AIHIST_TOKEN: ${AIHIST_TOKEN:?AIHIST_TOKEN を .env に書く}
+    volumes:
+      - aihist:/data
+
+volumes:
+  aihist:

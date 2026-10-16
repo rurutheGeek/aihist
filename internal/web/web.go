@@ -88,6 +88,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /c/{id}/export.md", s.exportMD)
 	mux.HandleFunc("GET /upload", s.uploadForm)
+	mux.HandleFunc("GET /setup", s.setup)
 	mux.HandleFunc("POST /upload", s.upload)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /api/files", s.auth(s.apiList))
@@ -96,6 +97,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/file", s.auth(s.apiFile))
 	mux.HandleFunc("GET /api/install.sh", s.installScript("install.sh"))
 	mux.HandleFunc("GET /api/install.ps1", s.installScript("install.ps1"))
+	mux.HandleFunc("GET /api/uninstall.sh", s.installScript("uninstall.sh"))
+	mux.HandleFunc("GET /api/uninstall.ps1", s.installScript("uninstall.ps1"))
 	mux.HandleFunc("GET /api/bin/{name}", s.auth(s.apiBin))
 	mux.HandleFunc("GET /api/find", s.auth(s.apiFind))
 	return mux

@@ -16,6 +16,7 @@ type Conversation struct {
 	Cwd        string
 	GitBranch  string
 	Model      string
+	Models     []string // メッセージに無いとき、会話で使ったモデル
 	StartedAt  time.Time
 	UpdatedAt  time.Time
 	SourcePath string

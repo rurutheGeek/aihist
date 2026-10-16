@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/rurutheGeek/aihist/internal/adapter/antigravity"
@@ -22,6 +23,40 @@ import (
 	"github.com/rurutheGeek/aihist/internal/web"
 )
 
+// configPath は push・restore の設定ファイル（KEY=VALUE の行）。
+func configPath() string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "aihist", "config")
+}
+
+// clientConfig は設定ファイルを読み、環境変数で上書きする。
+func clientConfig() map[string]string {
+	cf := map[string]string{}
+	if b, err := os.ReadFile(configPath()); err == nil {
+		for _, l := range strings.Split(strings.ReplaceAll(string(b), "\r", ""), "\n") {
+			if k, v, ok := strings.Cut(strings.TrimSpace(l), "="); ok && !strings.HasPrefix(k, "#") {
+				cf[strings.TrimSpace(k)] = strings.Trim(strings.TrimSpace(v), `"'`)
+			}
+		}
+	}
+	for _, k := range []string{"AIHIST_SERVER", "AIHIST_TOKEN", "AIHIST_HOST"} {
+		if v := os.Getenv(k); v != "" {
+			cf[k] = v
+		}
+	}
+	return cf
+}
+
+func or(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
 func usage() {
 	fmt.Fprint(os.Stderr, `usage:
   aihist [-db path] import claude [dir]       既定 ~/.claude/projects
@@ -34,7 +69,8 @@ func usage() {
   aihist [-db path] search <語>
   aihist [-db path] export [-thinking] [-no-tools] [-max N] <会話IDの先頭>
 
-トークンは環境変数 AIHIST_TOKEN でも渡せる。
+push と restore の既定値は環境変数 AIHIST_SERVER・AIHIST_TOKEN・AIHIST_HOST、
+無ければ設定ファイル（導入スクリプトが書く。Linux は ~/.config/aihist/config）から読む。
 `)
 	os.Exit(2)
 }
@@ -54,9 +90,10 @@ func main() {
 	// push は DB を使わない
 	if args[0] == "push" {
 		fs := flag.NewFlagSet("push", flag.ExitOnError)
-		server := fs.String("server", "", "送り先 http://host:port")
-		token := fs.String("token", os.Getenv("AIHIST_TOKEN"), "トークン")
-		name := fs.String("host", host, "このマシンの名前")
+		cf := clientConfig()
+		server := fs.String("server", cf["AIHIST_SERVER"], "送り先 http://host:port")
+		token := fs.String("token", cf["AIHIST_TOKEN"], "トークン")
+		name := fs.String("host", or(cf["AIHIST_HOST"], host), "このマシンの名前")
 		every := fs.Duration("every", 0, "この間隔で送り続ける（0 は1回だけ）")
 		fs.Parse(args[1:])
 		if *server == "" {
@@ -87,8 +124,9 @@ func main() {
 
 	if args[0] == "restore" {
 		fs := flag.NewFlagSet("restore", flag.ExitOnError)
-		server := fs.String("server", "", "サーバー http://host:port")
-		token := fs.String("token", os.Getenv("AIHIST_TOKEN"), "トークン")
+		cf := clientConfig()
+		server := fs.String("server", cf["AIHIST_SERVER"], "サーバー http://host:port")
+		token := fs.String("token", cf["AIHIST_TOKEN"], "トークン")
 		force := fs.Bool("force", false, "手元の同じ会話を上書きする")
 		fs.Parse(args[1:])
 		if *server == "" || fs.NArg() != 1 {

@@ -12,42 +12,76 @@ AI ツールの会話履歴を1か所に集め、検索・閲覧し、別の AI 
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl`、題名は `session_index.jsonl` | 済 |
 | Open WebUI | REST API `/api/v1/chats` | 未 |
 
-## 使い方
+## サーバーを立てる
+
+```bash
+echo "AIHIST_TOKEN=$(openssl rand -base64 32 | tr -d '/+=')" > .env
+docker compose up -d        # http://localhost:8080
+```
+
+イメージは `ghcr.io/ruruthegeek/aihist`（linux/amd64・arm64）。データは `/data`（`aihist.db` と送られた原本 `raw/`）。各マシンへ配る実行ファイルもイメージに入っている。
+
+画面には認証が無い。外へ出すときは前に SSO などを置き、`/api/*` だけを通す（`/api/*` はトークンが守る）。
+
+コンテナを使わないとき:
 
 ```bash
 go build -o bin/aihist ./cmd/aihist
-bin/aihist serve -addr :8080 -token <トークン>
-bin/aihist push -server http://<サーバー>:8080 -token <トークン>
+AIHIST_TOKEN=<トークン> bin/aihist serve -addr :8080 -bin <配る実行ファイルの置き場所>
+```
+
+## 各マシンから送る
+
+画面の「送る設定」に、トークンを埋めたコマンドが出る。
+
+```bash
+curl -fsSL https://<サーバー>/api/install.sh | AIHIST_TOKEN=<トークン> sh      # Linux・macOS・WSL
+$env:AIHIST_TOKEN="<トークン>"; irm https://<サーバー>/api/install.ps1 | iex  # Windows
+```
+
+常駐はしない。OS のタイマー（systemd のユーザータイマー、無ければ cron、macOS は launchd、Windows はタスク スケジューラ）が 10 分ごとに `aihist push` を1回動かす。2回目からは変わったファイルだけを送るので、1回は数秒・メモリ 10 MB ほどで終わる。
+
+| 変数 | 意味 |
+|---|---|
+| `AIHIST_EVERY` | 送る間隔（既定 `10m`。`0` なら今1回送るだけ） |
+| `AIHIST_HOST` | このマシンの名前（既定はホスト名。WSL では `-wsl` を付ける） |
+| `AIHIST_BIN_DIR` | 実行ファイルの置き場所（既定 `~/.local/bin`。Windows は `%LOCALAPPDATA%\aihist`） |
+
+置くもの: 実行ファイル、設定 `~/.config/aihist/config`（macOS は `~/Library/Application Support/aihist`、Windows は `%APPDATA%\aihist`。トークンが入るので本人だけが読める）、タイマー。
+
+消すときは次のどちらか。置いたものをすべて消す（送った会話はサーバーに残る）。
+
+```bash
+curl -fsSL https://<サーバー>/api/uninstall.sh | sh     # ~/.config/aihist/uninstall.sh でもよい
+irm https://<サーバー>/api/uninstall.ps1 | iex          # Windows
+```
+
+## そのほかの使い方
+
+```bash
+bin/aihist push                 # 設定ファイルのサーバーへ1回送る（-server・-token・-host で上書き）
 bin/aihist search 引き継ぎ
 bin/aihist export -thinking <会話IDの先頭>
 ```
 
 | 入れ方 | やること |
 |---|---|
-| `curl … \| sh` | 各マシンで1行。サーバーが配る `/api/install.sh`（Windows は `/api/install.ps1`）が aihist を入れて `push` する（下記） |
-| `push` | 各マシンで実行する。Claude Code・Codex・Antigravity の既定の置き場所から、サーバーに無いか変わったファイルだけを送る。`-every 10m` で送り続ける |
+| `push` | Claude Code・Codex・Antigravity の既定の置き場所と OpenCode の DB から、サーバーに無いか変わったものだけを送る |
 | 画面の `↑` | ファイルを選んで上げる。中身から Claude Code・Codex・Antigravity を見分ける |
 | `import <ツール> [場所]` | サーバーと同じマシンの記録を直接読む |
 
 `push` は OpenCode の DB そのものは送らない（操作ログで数 GB あり、ログイン情報も入っている）。会話ごとに `session`・`message`・`part` と `project` の行を加工せずに書き出した `<session id>.json` を原本として送る。
 
-```bash
-curl -fsSL https://<サーバー>/api/install.sh | AIHIST_TOKEN=<トークン> sh          # Linux・WSL・Mac
-$env:AIHIST_TOKEN="<トークン>"; irm https://<サーバー>/api/install.ps1 | iex      # Windows
-```
-
-実行ファイルは `serve -bin <dir>` に置いた `aihist-<os>-<arch>` をトークン付きで配る。WSL ではホスト名に `-wsl` を付ける。
-
 送られたファイルは原本として `-raw`（既定 `~/.local/share/aihist/raw/<ホスト>/<ツール>/`）に残る。アダプタを直したら原本から取り込み直せる。
 
-DB は既定で `~/.local/share/aihist/aihist.db`（`-db` で変更）。取り込みは会話ごとの丸ごと置き換えで、元データが変わっていない会話は飛ばす。トークンは `AIHIST_TOKEN` でも渡せ、`push` が使う `/api` にだけ要る。画面（アップロードを含む）は前に置く認証（SSO など）で守る。
+DB は既定で `~/.local/share/aihist/aihist.db`（`-db` で変更）。取り込みは会話ごとの丸ごと置き換えで、元データが変わっていない会話は飛ばす。
 
-検索は SQLite FTS5 の trigram。3文字未満の語は `LIKE` で探す。
+検索は SQLite FTS5 の trigram。3文字未満の語は `LIKE` で探す。一覧は AI・モデル・マシン・プロジェクト（作業フォルダ）・期間で絞れる。
 
 ## 元の AI へ戻す
 
 ```bash
-bin/aihist restore -server https://<サーバー> -token <トークン> <会話IDの先頭>
+bin/aihist restore <会話IDの先頭>     # サーバーとトークンは設定ファイルから
 ```
 
 原本をサーバーから取り出し、元のツールが読む場所へ戻して、続けるコマンドを表示する。手元に中身の違う同じ会話があるときは上書きしない（`-force` で上書き）。
