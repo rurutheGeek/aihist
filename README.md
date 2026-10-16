@@ -16,16 +16,21 @@ AI ツールの会話履歴を1か所に集め、検索・閲覧し、別の AI 
 
 ```bash
 go build -o bin/aihist ./cmd/aihist
-bin/aihist import claude
-bin/aihist import opencode
-bin/aihist import codex
-bin/aihist import antigravity
-bin/aihist serve -addr 127.0.0.1:8080
+bin/aihist serve -addr :8080 -token <トークン>
+bin/aihist push -server http://<サーバー>:8080 -token <トークン>
 bin/aihist search 引き継ぎ
 bin/aihist export -thinking <会話IDの先頭>
 ```
 
-DB は既定で `~/.local/share/aihist/aihist.db`（`-db` で変更）。取り込みは会話ごとの丸ごと置き換えで、元データが変わっていない会話は飛ばす。
+| 入れ方 | やること |
+|---|---|
+| `push` | 各マシンで実行する。Claude Code・Codex・Antigravity の既定の置き場所から、サーバーに無いか変わったファイルだけを送る。`-every 10m` で送り続ける |
+| 画面の `↑` | ファイルを選んで上げる。中身から Claude Code・Codex・Antigravity を見分ける |
+| `import <ツール> [場所]` | サーバーと同じマシンの記録を直接読む。OpenCode はこれだけ（DB が数 GB あるため送らない） |
+
+送られたファイルは原本として `-raw`（既定 `~/.local/share/aihist/raw/<ホスト>/<ツール>/`）に残る。アダプタを直したら原本から取り込み直せる。
+
+DB は既定で `~/.local/share/aihist/aihist.db`（`-db` で変更）。取り込みは会話ごとの丸ごと置き換えで、元データが変わっていない会話は飛ばす。トークンは `AIHIST_TOKEN` でも渡せ、送る操作（`/api`・`/upload`）にだけ要る。
 
 検索は SQLite FTS5 の trigram。3文字未満の語は `LIKE` で探す。
 
@@ -36,6 +41,9 @@ cmd/aihist/                 CLI（import / serve / search / export）
 internal/model/             ツールに依存しない内部モデル（会話・メッセージ・パート）
 internal/store/             SQLite・全文検索
 internal/adapter/<tool>/    ツールごとの読み取り
+internal/ingest/            変わった会話だけを取り込む
+internal/raw/               送られた原本の置き場所
+internal/push/              手元の元データを差分だけ送る
 internal/export/            Markdown 書き出し
 internal/web/               画面
 ```
@@ -62,7 +70,7 @@ internal/web/               画面
 
 ## まだ無いもの
 
-- 各マシンから送る collector（今は取り込みを同じマシンで実行する）
-- 原本の保存と再パース
+- 原本からの一括の取り込み直し（今は原本が変わったときだけ）
+- 常駐の仕組み（Windows のタスク・systemd）
 - 秘密値の伏せ字
 - MCP サーバー、Claude Code へのネイティブ復元

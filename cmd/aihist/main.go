@@ -8,39 +8,77 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rurutheGeek/aihist/internal/adapter/antigravity"
 	"github.com/rurutheGeek/aihist/internal/adapter/claudecode"
 	"github.com/rurutheGeek/aihist/internal/adapter/codex"
 	"github.com/rurutheGeek/aihist/internal/adapter/opencode"
 	"github.com/rurutheGeek/aihist/internal/export"
-	"github.com/rurutheGeek/aihist/internal/model"
+	"github.com/rurutheGeek/aihist/internal/ingest"
+	"github.com/rurutheGeek/aihist/internal/push"
+	"github.com/rurutheGeek/aihist/internal/raw"
 	"github.com/rurutheGeek/aihist/internal/store"
 	"github.com/rurutheGeek/aihist/internal/web"
 )
 
 func usage() {
 	fmt.Fprint(os.Stderr, `usage:
-  aihist [-db path] import claude [dir]     既定 ~/.claude/projects
-  aihist [-db path] import antigravity [dir] 既定 ~/.gemini/antigravity-ide/conversations
-  aihist [-db path] import codex [dir]      既定 ~/.codex
-  aihist [-db path] import opencode [db]    既定 ~/.local/share/opencode/opencode.db
-  aihist [-db path] serve [-addr :8080]
+  aihist [-db path] import claude [dir]       既定 ~/.claude/projects
+  aihist [-db path] import codex [dir]        既定 ~/.codex
+  aihist [-db path] import antigravity [dir]  既定 ~/.gemini/antigravity-ide/conversations
+  aihist [-db path] import opencode [db]      既定 ~/.local/share/opencode/opencode.db
+  aihist [-db path] serve [-addr :8080] [-raw dir] [-token T]
+  aihist push -server URL [-token T] [-host 名前] [-every 10m]
   aihist [-db path] search <語>
   aihist [-db path] export [-thinking] [-no-tools] [-max N] <会話IDの先頭>
+
+トークンは環境変数 AIHIST_TOKEN でも渡せる。
 `)
 	os.Exit(2)
 }
 
 func main() {
 	home, _ := os.UserHomeDir()
-	dbPath := flag.String("db", filepath.Join(home, ".local/share/aihist/aihist.db"), "SQLite のパス")
+	data := filepath.Join(home, ".local/share/aihist")
+	dbPath := flag.String("db", filepath.Join(data, "aihist.db"), "SQLite のパス")
 	flag.Usage = usage
 	flag.Parse()
 	args := flag.Args()
 	if len(args) == 0 {
 		usage()
 	}
+	host, _ := os.Hostname()
+
+	// push は DB を使わない
+	if args[0] == "push" {
+		fs := flag.NewFlagSet("push", flag.ExitOnError)
+		server := fs.String("server", "", "送り先 http://host:port")
+		token := fs.String("token", os.Getenv("AIHIST_TOKEN"), "トークン")
+		name := fs.String("host", host, "このマシンの名前")
+		every := fs.Duration("every", 0, "この間隔で送り続ける（0 は1回だけ）")
+		fs.Parse(args[1:])
+		if *server == "" {
+			usage()
+		}
+		c := push.NewClient(*server, *token, *name)
+		for {
+			for _, src := range push.Defaults(home) {
+				n, res, err := c.Push(src)
+				switch {
+				case err != nil:
+					log.Printf("%s: %v", src.Tool, err)
+				case n > 0:
+					log.Printf("%s: %d ファイル送信、%s", src.Tool, n, res)
+				}
+			}
+			if *every == 0 {
+				return
+			}
+			time.Sleep(*every)
+		}
+	}
+
 	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o700); err != nil {
 		log.Fatal(err)
 	}
@@ -49,47 +87,38 @@ func main() {
 		log.Fatal(err)
 	}
 	defer st.Close()
-	host, _ := os.Hostname()
 
 	switch args[0] {
 	case "import":
 		if len(args) < 2 {
 			usage()
 		}
-		switch args[1] {
-		case "claude":
-			dir := filepath.Join(home, ".claude/projects")
-			if len(args) > 2 {
-				dir = args[2]
-			}
-			err = importClaude(st, host, dir)
-		case "antigravity":
-			dir := filepath.Join(home, ".gemini/antigravity-ide/conversations")
-			if len(args) > 2 {
-				dir = args[2]
-			}
-			err = importAntigravity(st, host, dir)
-		case "codex":
-			dir := filepath.Join(home, ".codex")
-			if len(args) > 2 {
-				dir = args[2]
-			}
-			err = importCodex(st, host, dir)
-		case "opencode":
-			db := filepath.Join(home, ".local/share/opencode/opencode.db")
-			if len(args) > 2 {
-				db = args[2]
-			}
-			err = importOpenCode(st, host, db)
-		default:
+		tools := map[string]struct{ tool, def string }{
+			"claude":      {claudecode.Tool, filepath.Join(home, ".claude/projects")},
+			"codex":       {codex.Tool, filepath.Join(home, ".codex")},
+			"antigravity": {antigravity.Tool, filepath.Join(home, ".gemini/antigravity-ide/conversations")},
+			"opencode":    {opencode.Tool, filepath.Join(home, ".local/share/opencode/opencode.db")},
+		}
+		t, ok := tools[args[1]]
+		if !ok {
 			usage()
+		}
+		dir := t.def
+		if len(args) > 2 {
+			dir = args[2]
+		}
+		var res ingest.Result
+		if res, err = ingest.Run(st, t.tool, host, dir); err == nil {
+			log.Printf("%s: %s", args[1], res)
 		}
 	case "serve":
 		fs := flag.NewFlagSet("serve", flag.ExitOnError)
 		addr := fs.String("addr", ":8080", "待ち受けアドレス")
+		rawDir := fs.String("raw", filepath.Join(data, "raw"), "送られてきた原本の置き場所")
+		token := fs.String("token", os.Getenv("AIHIST_TOKEN"), "書き込みに要るトークン（空なら不要）")
 		fs.Parse(args[1:])
 		log.Printf("listening on %s", *addr)
-		err = http.ListenAndServe(*addr, web.New(st).Handler())
+		err = http.ListenAndServe(*addr, web.New(st, raw.Store{Dir: *rawDir}, *token).Handler())
 	case "search":
 		if len(args) < 2 {
 			usage()
@@ -124,131 +153,4 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-func importClaude(st *store.Store, host, dir string) error {
-	files, err := claudecode.Files(dir)
-	if err != nil {
-		return err
-	}
-	var n, skip int
-	for _, f := range files {
-		id, _ := claudecode.ExternalID(f)
-		stamp := claudecode.Stamp(f)
-		if st.Stamp(claudecode.Tool, host, id) == stamp {
-			skip++
-			continue
-		}
-		c, err := claudecode.Parse(f)
-		if err != nil {
-			log.Printf("%s: %v", f, err)
-			continue
-		}
-		if len(c.Messages) == 0 {
-			continue
-		}
-		if err := put(st, host, c, stamp); err != nil {
-			return err
-		}
-		n++
-	}
-	log.Printf("claude: %d 件取り込み、%d 件は変更なし", n, skip)
-	return nil
-}
-
-func importAntigravity(st *store.Store, host, dir string) error {
-	files, err := antigravity.Files(dir)
-	if err != nil {
-		return err
-	}
-	var n, skip int
-	for _, f := range files {
-		id, stamp := antigravity.ExternalID(f), antigravity.Stamp(f)
-		if st.Stamp(antigravity.Tool, host, id) == stamp {
-			skip++
-			continue
-		}
-		c, err := antigravity.Parse(f)
-		if err != nil {
-			log.Printf("%s: %v", f, err)
-			continue
-		}
-		if len(c.Messages) == 0 {
-			continue
-		}
-		if err := put(st, host, c, stamp); err != nil {
-			return err
-		}
-		n++
-	}
-	log.Printf("antigravity: %d 件取り込み、%d 件は変更なし", n, skip)
-	return nil
-}
-
-func importCodex(st *store.Store, host, dir string) error {
-	sessions, err := codex.Sessions(filepath.Join(dir, "sessions"))
-	if err != nil {
-		return err
-	}
-	titles := codex.Titles(filepath.Join(dir, "session_index.jsonl"))
-	var n, skip int
-	for _, s := range sessions {
-		stamp := s.Stamp() + titles[s.ID]
-		if st.Stamp(codex.Tool, host, s.ID) == stamp {
-			skip++
-			continue
-		}
-		c, err := codex.Load(s)
-		if err != nil {
-			log.Printf("%s: %v", s.ID, err)
-			continue
-		}
-		if t := titles[s.ID]; t != "" {
-			c.Title = t
-		}
-		if len(c.Messages) == 0 {
-			continue
-		}
-		if err := put(st, host, c, stamp); err != nil {
-			return err
-		}
-		n++
-	}
-	log.Printf("codex: %d 件取り込み、%d 件は変更なし", n, skip)
-	return nil
-}
-
-func importOpenCode(st *store.Store, host, path string) error {
-	db, err := opencode.Open(path)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-	sessions, err := db.Sessions()
-	if err != nil {
-		return err
-	}
-	var n, skip int
-	for _, s := range sessions {
-		if st.Stamp(opencode.Tool, host, s.ID) == s.Stamp() {
-			skip++
-			continue
-		}
-		c, err := db.Load(s)
-		if err != nil {
-			return fmt.Errorf("%s: %w", s.ID, err)
-		}
-		c.SourcePath = path
-		if err := put(st, host, c, s.Stamp()); err != nil {
-			return err
-		}
-		n++
-	}
-	log.Printf("opencode: %d 件取り込み、%d 件は変更なし", n, skip)
-	return nil
-}
-
-func put(st *store.Store, host string, c *model.Conversation, stamp string) error {
-	c.Host = host
-	return st.Put(c, stamp)
 }

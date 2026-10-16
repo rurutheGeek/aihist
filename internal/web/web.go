@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rurutheGeek/aihist/internal/export"
 	"github.com/rurutheGeek/aihist/internal/model"
+	"github.com/rurutheGeek/aihist/internal/raw"
 	"github.com/rurutheGeek/aihist/internal/store"
 )
 
@@ -20,11 +22,15 @@ import (
 var files embed.FS
 
 type Server struct {
-	st   *store.Store
-	tmpl *template.Template
+	st    *store.Store
+	raw   raw.Store
+	token string
+	tmpl  *template.Template
+	mu    sync.Mutex // 取り込みは1つずつ
 }
 
-func New(st *store.Store) *Server {
+// New は画面と API を作る。token が空でなければ、書き込み（/api と /upload）に要る。
+func New(st *store.Store, rs raw.Store, token string) *Server {
 	funcs := template.FuncMap{
 		"when": func(t time.Time) string {
 			if t.IsZero() {
@@ -42,7 +48,7 @@ func New(st *store.Store) *Server {
 		"oneline": func(s string) string { return strings.Join(strings.Fields(s), " ") },
 		"isKind":  func(p model.Part, k string) bool { return string(p.Kind) == k },
 	}
-	return &Server{st: st, tmpl: template.Must(template.New("").Funcs(funcs).ParseFS(files, "templates/*.html"))}
+	return &Server{st: st, raw: rs, token: token, tmpl: template.Must(template.New("").Funcs(funcs).ParseFS(files, "templates/*.html"))}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -50,6 +56,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.list)
 	mux.HandleFunc("GET /c/{id}", s.show)
 	mux.HandleFunc("GET /c/{id}/export.md", s.exportMD)
+	mux.HandleFunc("GET /upload", s.uploadForm)
+	mux.HandleFunc("POST /upload", s.auth(s.upload))
+	mux.HandleFunc("GET /api/files", s.auth(s.apiList))
+	mux.HandleFunc("PUT /api/files", s.auth(s.apiPut))
+	mux.HandleFunc("POST /api/import", s.auth(s.apiImport))
 	return mux
 }
 
