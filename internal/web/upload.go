@@ -24,9 +24,6 @@ func (s *Server) auth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.token != "" {
 			got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if got == "" {
-				got = r.FormValue("token")
-			}
 			if subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
@@ -83,7 +80,7 @@ func (s *Server) ingest(host, tool string) (ingest.Result, error) {
 }
 
 func (s *Server) uploadForm(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "upload.html", map[string]any{"Token": s.token != "", "Host": r.FormValue("host")})
+	s.render(w, "upload.html", map[string]any{"Host": r.FormValue("host")})
 }
 
 // upload は画面から上げられたファイルを、中身からツールを見分けて原本に置き、取り込む。
@@ -115,7 +112,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		}
 		lines = append(lines, tool+": "+res.String())
 	}
-	s.render(w, "upload.html", map[string]any{"Token": s.token != "", "Host": host, "Lines": lines})
+	s.render(w, "upload.html", map[string]any{"Host": host, "Lines": lines})
 }
 
 func (s *Server) store(host string, fh *multipart.FileHeader) (tool, rel string, err error) {

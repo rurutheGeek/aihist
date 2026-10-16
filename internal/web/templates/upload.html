@@ -10,7 +10,6 @@
 <form class="bar" method="post" action="/upload" enctype="multipart/form-data">
   <input type="file" name="files" multiple required>
   <input name="host" value="{{.Host}}" placeholder="ホスト名">
-  {{if .Token}}<input type="password" name="token" placeholder="トークン" required>{{end}}
   <button>送る</button>
 </form>
 {{if .Lines}}<pre>{{range .Lines}}{{.}}

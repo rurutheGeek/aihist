@@ -29,7 +29,8 @@ type Server struct {
 	mu    sync.Mutex // 取り込みは1つずつ
 }
 
-// New は画面と API を作る。token が空でなければ、書き込み（/api と /upload）に要る。
+// New は画面と API を作る。token が空でなければ /api に要る。画面（/upload を含む）は
+// 前に置く認証（SSO など）に任せる。
 func New(st *store.Store, rs raw.Store, token string) *Server {
 	funcs := template.FuncMap{
 		"when": func(t time.Time) string {
@@ -57,7 +58,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /c/{id}", s.show)
 	mux.HandleFunc("GET /c/{id}/export.md", s.exportMD)
 	mux.HandleFunc("GET /upload", s.uploadForm)
-	mux.HandleFunc("POST /upload", s.auth(s.upload))
+	mux.HandleFunc("POST /upload", s.upload)
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /api/files", s.auth(s.apiList))
 	mux.HandleFunc("PUT /api/files", s.auth(s.apiPut))
 	mux.HandleFunc("POST /api/import", s.auth(s.apiImport))

@@ -30,7 +30,7 @@ bin/aihist export -thinking <会話IDの先頭>
 
 送られたファイルは原本として `-raw`（既定 `~/.local/share/aihist/raw/<ホスト>/<ツール>/`）に残る。アダプタを直したら原本から取り込み直せる。
 
-DB は既定で `~/.local/share/aihist/aihist.db`（`-db` で変更）。取り込みは会話ごとの丸ごと置き換えで、元データが変わっていない会話は飛ばす。トークンは `AIHIST_TOKEN` でも渡せ、送る操作（`/api`・`/upload`）にだけ要る。
+DB は既定で `~/.local/share/aihist/aihist.db`（`-db` で変更）。取り込みは会話ごとの丸ごと置き換えで、元データが変わっていない会話は飛ばす。トークンは `AIHIST_TOKEN` でも渡せ、`push` が使う `/api` にだけ要る。画面（アップロードを含む）は前に置く認証（SSO など）で守る。
 
 検索は SQLite FTS5 の trigram。3文字未満の語は `LIKE` で探す。
 
