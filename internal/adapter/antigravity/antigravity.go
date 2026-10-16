@@ -196,7 +196,7 @@ func printable(b []byte) bool {
 
 func firstLine(s string) string {
 	s = strings.TrimSpace(s)
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
+	if i := strings.IndexAny(s, "\r\n"); i >= 0 {
 		s = s[:i]
 	}
 	if r := []rune(s); len(r) > 80 {

@@ -8,7 +8,7 @@ AI ツールの会話履歴を1か所に集め、検索・閲覧し、別の AI 
 |---|---|---|
 | Claude Code | `~/.claude/projects/**/*.jsonl`（サブエージェント含む） | 済 |
 | OpenCode 1.18 | `~/.local/share/opencode/opencode.db`（読み取り専用） | 済 |
-| Antigravity | `%USERPROFILE%\.gemini\antigravity-ide\conversations\*.db` | 済（合成データでのみ確認） |
+| Antigravity | `%USERPROFILE%\.gemini\antigravity-ide\conversations\*.db` | 済 |
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl`、題名は `session_index.jsonl` | 済 |
 | Open WebUI | REST API `/api/v1/chats` | 未 |
 
