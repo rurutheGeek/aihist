@@ -19,6 +19,9 @@
         {{if .C.Model}}<span>{{.C.Model}}</span>{{end}}
         <span>{{when .C.StartedAt}} – {{when .C.UpdatedAt}}</span>
       </div>
+      {{if .C.ParentID}}<div class="rel"><b>親の会話</b><a href="/find/{{.C.Tool}}/{{.C.Host}}/{{.C.ParentID}}">{{short .C.ParentID 12}}</a></div>{{end}}
+      {{if gt (len .Branches) 1}}<div class="rel"><b>分岐</b>{{range $i, $b := .Branches}}<a class="{{if eq $b.ID $.C.ID}}on{{end}}" href="/c/{{$b.ID}}" title="{{when $b.StartedAt}} – {{when $b.UpdatedAt}}">{{clock $b.UpdatedAt}} · {{$b.MessageCount}}</a>{{end}}</div>{{end}}
+      {{if .Children}}<div class="rel"><b>サブエージェント</b>{{range .Children}}<a href="/c/{{.ID}}" title="{{.Title}}">{{if .Title}}{{oneline .Title}}{{else}}{{short .ExternalID 12}}{{end}}</a>{{end}}</div>{{end}}
       {{range .Turns}}
       {{if eq .Role "user"}}
         <div class="turn user{{if .Sidechain}} side{{end}}" id="{{.Anchor}}">

@@ -73,6 +73,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.list)
 	mux.Handle("GET /static/", http.FileServerFS(static))
 	mux.HandleFunc("GET /c/{id}", s.show)
+	mux.HandleFunc("GET /find/{tool}/{host}/{ext}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := s.st.Lookup(r.PathValue("tool"), r.PathValue("host"), r.PathValue("ext"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		http.Redirect(w, r, "/c/"+strconv.FormatInt(id, 10), http.StatusFound)
+	})
 	mux.HandleFunc("GET /c/{id}/export.md", s.exportMD)
 	mux.HandleFunc("GET /upload", s.uploadForm)
 	mux.HandleFunc("POST /upload", s.upload)
@@ -150,7 +158,13 @@ func (s *Server) show(w http.ResponseWriter, r *http.Request) {
 	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") == "" {
 		scheme = "http"
 	}
+	branches, children, err := s.st.Related(c)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 	d["C"], d["Turns"], d["Server"] = c, turns(msgs), scheme+"://"+r.Host
+	d["Branches"], d["Children"] = branches, children
 	s.render(w, "show.html", d)
 }
 
