@@ -104,7 +104,7 @@ END;
 type Store struct{ db *sql.DB }
 
 func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}
@@ -214,11 +214,25 @@ func (s *Store) Stamp(tool, host, externalID string) string {
 
 // Put は会話を丸ごと置き換える。同じ元データを何度流しても結果は同じ。
 func (s *Store) Put(c *model.Conversation, stamp string) error {
+	return s.PutMany([]*model.Conversation{c}, []string{stamp})
+}
+
+// PutMany は会話をまとめて1回で書き込む。HDD の上では確定のたびに待つので、まとめるほど速い。
+func (s *Store) PutMany(cs []*model.Conversation, stamps []string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+	for i, c := range cs {
+		if err := putTx(tx, c, stamps[i]); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func putTx(tx *sql.Tx, c *model.Conversation, stamp string) error {
 	if _, err := tx.Exec(`DELETE FROM conversations WHERE tool=? AND host=? AND external_id=?`, c.Tool, c.Host, c.ExternalID); err != nil {
 		return err
 	}
@@ -253,7 +267,7 @@ func (s *Store) Put(c *model.Conversation, stamp string) error {
 			}
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 // models は会話の中で使ったモデル（出てきた順）。

@@ -12,6 +12,8 @@ import (
 	_ "time/tzdata"
 
 	"github.com/rurutheGeek/aihist/internal/adapter/antigravity"
+	"github.com/rurutheGeek/aihist/internal/adapter/chatgpt"
+	"github.com/rurutheGeek/aihist/internal/adapter/claudeai"
 	"github.com/rurutheGeek/aihist/internal/adapter/claudecode"
 	"github.com/rurutheGeek/aihist/internal/adapter/codex"
 	"github.com/rurutheGeek/aihist/internal/adapter/opencode"
@@ -63,6 +65,7 @@ func usage() {
   aihist [-db path] import codex [dir]        既定 ~/.codex
   aihist [-db path] import antigravity [dir]  既定 ~/.gemini/antigravity-ide/conversations
   aihist [-db path] import opencode [db]      既定 ~/.local/share/opencode/opencode.db
+  aihist [-db path] import chatgpt|claude.ai <書き出しの zip を置いたフォルダ>
   aihist [-db path] serve [-addr :8080] [-raw dir] [-token T] [-bin dir]
   aihist push -server URL [-token T] [-host 名前] [-every 10m]
   aihist detect                                このマシンにある AI の記録
@@ -142,6 +145,8 @@ func main() {
 			"codex":       {codex.Tool, filepath.Join(home, ".codex")},
 			"antigravity": {antigravity.Tool, filepath.Join(home, ".gemini/antigravity-ide/conversations")},
 			"opencode":    {opencode.Tool, filepath.Join(home, ".local/share/opencode/opencode.db")},
+			"chatgpt":     {chatgpt.Tool, "."},
+			"claude.ai":   {claudeai.Tool, "."},
 		}
 		t, ok := tools[args[1]]
 		if !ok {

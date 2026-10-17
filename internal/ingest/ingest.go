@@ -20,7 +20,29 @@ import (
 )
 
 // Result は取り込んだ件数と、変わっていなかった件数。
-type Result struct{ Imported, Skipped int }
+type Result struct {
+	Imported, Skipped int
+
+	// まだ書き込んでいない会話。HDD の上では確定のたびに待つので、まとめて書く
+	pending []*model.Conversation
+	stamps  []string
+	size    int
+}
+
+// まとめて書く上限（件数と、本文のおおよその大きさ）。
+const (
+	batchItems = 100
+	batchBytes = 32 << 20
+)
+
+func (r *Result) flush(st *store.Store) error {
+	if len(r.pending) == 0 {
+		return nil
+	}
+	err := st.PutMany(r.pending, r.stamps)
+	r.pending, r.stamps, r.size = nil, nil, 0
+	return err
+}
 
 func (r Result) String() string {
 	return fmt.Sprintf("%d 件取り込み、%d 件は変更なし", r.Imported, r.Skipped)
@@ -28,6 +50,14 @@ func (r Result) String() string {
 
 // Run は tool の元データ（dir）を取り込む。dir の形は各ツールの既定の置き場所と同じ。
 func Run(st *store.Store, tool, host, dir string) (Result, error) {
+	r, err := run(st, tool, host, dir)
+	if ferr := r.flush(st); err == nil {
+		err = ferr
+	}
+	return r, err
+}
+
+func run(st *store.Store, tool, host, dir string) (Result, error) {
 	switch tool {
 	case claudecode.Tool:
 		return Claude(st, host, dir)
@@ -267,9 +297,15 @@ func put(st *store.Store, host string, c *model.Conversation, stamp string, r *R
 		return nil
 	}
 	c.Host = host
-	if err := st.Put(c, stamp); err != nil {
-		return err
+	r.pending, r.stamps = append(r.pending, c), append(r.stamps, stamp)
+	for _, m := range c.Messages {
+		for _, p := range m.Parts {
+			r.size += len(p.Text)
+		}
 	}
 	r.Imported++
+	if len(r.pending) >= batchItems || r.size >= batchBytes {
+		return r.flush(st)
+	}
 	return nil
 }
