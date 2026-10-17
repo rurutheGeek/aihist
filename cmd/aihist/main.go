@@ -44,7 +44,7 @@ func clientConfig() map[string]string {
 			}
 		}
 	}
-	for _, k := range []string{"AIHIST_SERVER", "AIHIST_TOKEN", "AIHIST_HOST", "AIHIST_AUTO_UPDATE", "AIHIST_CLEANUP"} {
+	for _, k := range []string{"AIHIST_SERVER", "AIHIST_TOKEN", "AIHIST_HOST", "AIHIST_AUTO_UPDATE", "AIHIST_CLEANUP", "AIHIST_TOOLS"} {
 		if v := os.Getenv(k); v != "" {
 			cf[k] = v
 		}
@@ -67,6 +67,7 @@ func usage() {
   aihist [-db path] import opencode [db]      既定 ~/.local/share/opencode/opencode.db
   aihist [-db path] serve [-addr :8080] [-raw dir] [-token T] [-bin dir]
   aihist push -server URL [-token T] [-host 名前] [-every 10m]
+  aihist detect                                このマシンにある AI の記録
   aihist restore -server URL [-token T] [-force] <会話IDの先頭>   元の AI へ戻す
   aihist [-db path] search <語>
   aihist [-db path] export [-thinking] [-no-tools] [-max N] <会話IDの先頭>
@@ -126,6 +127,9 @@ func main() {
 				days = v
 			}
 			for _, src := range push.Defaults(home) {
+				if !push.Selected(cf["AIHIST_TOOLS"], src.Tool) {
+					continue
+				}
 				n, res, err := c.Push(src)
 				switch {
 				case err != nil:
@@ -140,16 +144,26 @@ func main() {
 					log.Printf("%s: %d 日より前の %d ファイル（%.1f MB）を手元から消した", src.Tool, days, n, float64(size)/(1<<20))
 				}
 			}
-			if n, res, err := c.PushOpenCode(filepath.Join(home, ".local/share/opencode/opencode.db")); err != nil {
-				log.Printf("opencode: %v", err)
-			} else if n > 0 {
-				log.Printf("opencode: %d 会話送信、%s", n, res)
+			if push.Selected(cf["AIHIST_TOOLS"], "opencode") {
+				if n, res, err := c.PushOpenCode(push.OpenCodeDB(home)); err != nil {
+					log.Printf("opencode: %v", err)
+				} else if n > 0 {
+					log.Printf("opencode: %d 会話送信、%s", n, res)
+				}
 			}
 			if *every == 0 {
 				return
 			}
 			time.Sleep(*every)
 		}
+	}
+
+	// detect は、このマシンにある AI の記録を「ツール<TAB>ファイル数<TAB>バイト数」で出す（導入スクリプトが選ばせるのに使う）
+	if args[0] == "detect" {
+		for _, f := range push.Detect(home) {
+			fmt.Printf("%s\t%d\t%d\n", f.Tool, f.Files, f.Bytes)
+		}
+		return
 	}
 
 	if args[0] == "restore" {

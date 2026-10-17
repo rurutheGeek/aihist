@@ -30,6 +30,7 @@ Nothing stays resident. The OS timer (systemd user timer or cron, launchd, Task 
 |---|---|
 | `AIHIST_EVERY` | Interval (default `10m`, `0` = send once) |
 | `AIHIST_HOST` | Machine name (default: host name; `-wsl` is appended in WSL) |
+| `AIHIST_TOOLS` | Which AIs to send (comma-separated `claude_code,codex,antigravity,opencode`). If unset, the installer lists the ones found on the machine and asks |
 | `AIHIST_CLEANUP` | Days after which conversations already on the server are deleted locally (overrides Settings → Local cleanup; `0` keeps everything) |
 | `AIHIST_AUTO_UPDATE` | `0` disables self-update |
 | `AIHIST_BIN_DIR` | Where to put the binary (default `~/.local/bin`) |

@@ -4,6 +4,7 @@
 # AIHIST_EVERY  送る間隔（既定 10m。s・m・h。0 なら今1回送るだけでタイマーを置かない）
 # AIHIST_HOST   このマシンの名前（既定はホスト名。WSL では -wsl を付ける）
 # AIHIST_BIN_DIR 実行ファイルの置き場所（既定 ~/.local/bin）
+# AIHIST_TOOLS  送る AI（claude_code,codex,antigravity,opencode をカンマ区切り。無ければ見つかったものから選ばせる）
 # 消すとき: curl -fsSL {{SERVER}}/api/uninstall.sh | sh （手元の ~/.config/aihist/uninstall.sh でもよい）
 set -eu
 server='{{SERVER}}'
@@ -38,10 +39,27 @@ tmp="$bindir/.aihist.$$"
 curl -fsSL -H "Authorization: Bearer $AIHIST_TOKEN" -o "$tmp" "$server/api/bin/aihist-$os-$arch"
 chmod +x "$tmp"
 mv "$tmp" "$bin"
+# 送る AI を選ぶ（端末があるときだけ聞く。Enter は見つかったもの全部）
+tools="${AIHIST_TOOLS-}"
+if [ -z "${AIHIST_TOOLS+x}" ] && [ -r /dev/tty ] && found=$("$bin" detect) && [ -n "$found" ]; then
+  echo "このマシンにある AI の記録:"
+  echo "$found" | awk -F'\t' '{
+    l = $1
+    if (l == "claude_code") l = "Claude Code"; else if (l == "codex") l = "Codex"; else if (l == "antigravity") l = "Antigravity"; else if (l == "opencode") l = "OpenCode"
+    b = $3; split("B KB MB GB TB", u, " "); i = 1; while (b >= 1024 && i < 5) { b /= 1024; i++ }
+    printf "  %d) %-12s %6d ファイル %8.1f %s\n", NR, l, $2, b, u[i]
+  }'
+  printf '送る番号（例 1,3。Enter で全部）: '
+  read -r ans < /dev/tty || ans=""
+  if [ -n "$ans" ]; then
+    tools=$(echo "$found" | awk -F'\t' -v pick=",$(echo "$ans" | tr -d ' ')," 'index(pick, "," NR ",") { printf "%s%s", sep, $1; sep = "," }')
+  fi
+fi
 (
   umask 077
-  printf 'AIHIST_SERVER=%s\nAIHIST_TOKEN=%s\nAIHIST_HOST=%s\n' "$server" "$AIHIST_TOKEN" "$host" > "$conf/config"
+  printf 'AIHIST_SERVER=%s\nAIHIST_TOKEN=%s\nAIHIST_HOST=%s\nAIHIST_TOOLS=%s\n' "$server" "$AIHIST_TOKEN" "$host" "$tools" > "$conf/config"
 )
+[ -n "$tools" ] && echo "送る AI: $tools"
 curl -fsSL -o "$conf/uninstall.sh" "$server/api/uninstall.sh"
 chmod +x "$conf/uninstall.sh"
 # 消すときに残さないよう、置いたものを書き留める
