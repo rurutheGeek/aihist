@@ -84,6 +84,7 @@ var english = map[string]string{
 	"%d 件は変更なし": "%d unchanged",
 	"会話の記録ではない": "Not a conversation log",
 	"開く":        "Open",
+	"順番待ち":      "Queued",
 	"送れなかった":    "Could not upload",
 	"落とした zip をここへドロップ":         "Drop the downloaded zips here",
 	"zip を待っている":                "Waiting for the zip",

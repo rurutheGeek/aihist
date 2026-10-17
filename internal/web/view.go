@@ -151,7 +151,7 @@ var tools = map[string]struct{ Label, Color, Mark string }{
 	"antigravity": {"Antigravity", "#3b82f6", "A"},
 	"chatgpt":     {"ChatGPT", "#74aa9c", "G"},
 	"claude_ai":   {"Claude", "#c96442", "W"},
-	"gemini":      {"Gemini", "#4285f4", "G"},
+	"gemini":      {"Gemini", "#a142f4", "M"},
 }
 
 // restorable は元の AI へ戻せるツールか（Web のチャットの書き出しは戻せない）。

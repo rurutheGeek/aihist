@@ -29,6 +29,20 @@ type Result struct {
 	pending []*model.Conversation
 	stamps  []string
 	size    int
+
+	progress Progress
+	done     int
+}
+
+// Progress は取り込みの進み具合（済んだ数・全体の数）を受け取る。
+type Progress func(done, total int)
+
+// tick は1つ済むたびに呼ぶ。
+func (r *Result) tick(total int) {
+	r.done++
+	if r.progress != nil {
+		r.progress(r.done, total)
+	}
 }
 
 // まとめて書く上限（件数と、本文のおおよその大きさ）。
@@ -52,40 +66,50 @@ func (r Result) String() string {
 
 // Run は tool の元データ（dir）を取り込む。dir の形は各ツールの既定の置き場所と同じ。
 func Run(st *store.Store, tool, host, dir string) (Result, error) {
-	r, err := run(st, tool, host, dir)
+	return RunProgress(st, tool, host, dir, nil)
+}
+
+// RunProgress は Run と同じで、進み具合を p に知らせる。
+func RunProgress(st *store.Store, tool, host, dir string, p Progress) (Result, error) {
+	r, err := run(st, tool, host, dir, p)
 	if ferr := r.flush(st); err == nil {
 		err = ferr
 	}
 	return r, err
 }
 
-func run(st *store.Store, tool, host, dir string) (Result, error) {
+func run(st *store.Store, tool, host, dir string, p Progress) (Result, error) {
 	switch tool {
 	case claudecode.Tool:
-		return Claude(st, host, dir)
+		return claudeWith(st, host, dir, p)
 	case codex.Tool:
-		return Codex(st, host, dir)
+		return codexWith(st, host, dir, p)
 	case antigravity.Tool:
-		return Antigravity(st, host, dir)
+		return antigravityWith(st, host, dir, p)
 	case opencode.Tool:
 		return OpenCode(st, host, dir)
 	case chatgpt.Tool:
-		return WebExport(st, chatgpt.Tool, host, dir)
+		return webExportWith(st, chatgpt.Tool, host, dir, p)
 	case claudeai.Tool:
-		return WebExport(st, claudeai.Tool, host, dir)
+		return webExportWith(st, claudeai.Tool, host, dir, p)
 	case gemini.Tool:
-		return Gemini(st, host, dir)
+		return geminiWith(st, host, dir, p)
 	}
 	return Result{}, fmt.Errorf("知らないツール: %s", tool)
 }
 
 func Claude(st *store.Store, host, dir string) (Result, error) {
-	var r Result
+	return claudeWith(st, host, dir, nil)
+}
+
+func claudeWith(st *store.Store, host, dir string, p Progress) (Result, error) {
+	r := Result{progress: p}
 	files, err := claudecode.Files(dir)
 	if err != nil {
 		return r, err
 	}
 	for _, f := range files {
+		r.tick(len(files))
 		id, _ := claudecode.ExternalID(f)
 		stamp := claudecode.Stamp(f)
 		if st.Stamp(claudecode.Tool, host, id) == stamp {
@@ -105,13 +129,18 @@ func Claude(st *store.Store, host, dir string) (Result, error) {
 }
 
 func Codex(st *store.Store, host, dir string) (Result, error) {
-	var r Result
+	return codexWith(st, host, dir, nil)
+}
+
+func codexWith(st *store.Store, host, dir string, p Progress) (Result, error) {
+	r := Result{progress: p}
 	sessions, err := codex.Sessions(filepath.Join(dir, "sessions"))
 	if err != nil {
 		return r, err
 	}
 	titles := codex.Titles(filepath.Join(dir, "session_index.jsonl"))
 	for _, s := range sessions {
+		r.tick(len(sessions))
 		stamp := s.Stamp() + titles[s.ID]
 		if st.Stamp(codex.Tool, host, s.ID) == stamp {
 			r.Skipped++
@@ -133,12 +162,17 @@ func Codex(st *store.Store, host, dir string) (Result, error) {
 }
 
 func Antigravity(st *store.Store, host, dir string) (Result, error) {
-	var r Result
+	return antigravityWith(st, host, dir, nil)
+}
+
+func antigravityWith(st *store.Store, host, dir string, p Progress) (Result, error) {
+	r := Result{progress: p}
 	files, err := antigravity.Files(dir)
 	if err != nil {
 		return r, err
 	}
 	for _, f := range files {
+		r.tick(len(files))
 		id, stamp := antigravity.ExternalID(f), antigravity.Stamp(f)
 		if st.Stamp(antigravity.Tool, host, id) == stamp {
 			r.Skipped++
@@ -223,7 +257,11 @@ type webConv struct {
 // WebExport は Web のチャットの書き出し（ChatGPT・claude.ai）を読む。同じ会話が
 // 複数の書き出しにあれば、後に置かれた書き出しのものを使う。
 func WebExport(st *store.Store, tool, host, dir string) (Result, error) {
-	var r Result
+	return webExportWith(st, tool, host, dir, nil)
+}
+
+func webExportWith(st *store.Store, tool, host, dir string, p Progress) (Result, error) {
+	r := Result{progress: p}
 	files, err := webexport.Files(dir)
 	if err != nil {
 		return r, err
@@ -265,6 +303,7 @@ func WebExport(st *store.Store, tool, host, dir string) (Result, error) {
 		}
 	}
 	for _, id := range order {
+		r.tick(len(order))
 		w := byID[id]
 		if st.Stamp(tool, host, id) == w.stamp {
 			r.Skipped++
@@ -316,7 +355,11 @@ func put(st *store.Store, host string, c *model.Conversation, stamp string, r *R
 
 // Gemini は Takeout から取り出したマイ アクティビティの HTML を読む。何度上げても、同じ件は1つにまとめる。
 func Gemini(st *store.Store, host, dir string) (Result, error) {
-	var r Result
+	return geminiWith(st, host, dir, nil)
+}
+
+func geminiWith(st *store.Store, host, dir string, p Progress) (Result, error) {
+	r := Result{progress: p}
 	var es []gemini.Entry
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".html") {
@@ -332,7 +375,9 @@ func Gemini(st *store.Store, host, dir string) (Result, error) {
 	if err != nil {
 		return r, err
 	}
-	for _, c := range gemini.Group(es) {
+	groups := gemini.Group(es)
+	for _, c := range groups {
+		r.tick(len(groups))
 		if st.Stamp(gemini.Tool, host, c.ID) == c.Stamp {
 			r.Skipped++
 			continue

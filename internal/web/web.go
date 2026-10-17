@@ -117,6 +117,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /c/{id}/export.md", s.exportMD)
 	mux.HandleFunc("GET /upload", s.uploadForm)
+	mux.HandleFunc("GET /upload/jobs/{id}", s.jobState)
 	mux.HandleFunc("GET /settings", s.settings)
 	mux.HandleFunc("GET /settings/{section}", s.settings)
 	mux.HandleFunc("GET /settings/machines/{host}", s.settings)

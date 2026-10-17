@@ -27,7 +27,7 @@
 </div>
 <script>
 (function(){
-  var T={wait:{{t "待機"}},up:{{t "送信中"}},imp:{{t "取り込み中"}},ok:{{t "%d 件取り込み"}},same:{{t "%d 件は変更なし"}},open:{{t "開く"}},pick:{{t "中身を選ぶ"}}};
+  var T={wait:{{t "待機"}},up:{{t "送信中"}},imp:{{t "取り込み中"}},queue:{{t "順番待ち"}},ok:{{t "%d 件取り込み"}},same:{{t "%d 件は変更なし"}},open:{{t "開く"}},pick:{{t "中身を選ぶ"}}};
   var d=document.getElementById('drop'), f=document.getElementById('files'), q=document.getElementById('queue'), busy=false, todo=[];
   function size(n){return n>=1<<30?(n/(1<<30)).toFixed(1)+' GB':n>=1<<20?(n/(1<<20)).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'}
   function add(files){
@@ -38,6 +38,23 @@
       li.querySelector('.qs').textContent=T.wait; q.appendChild(li); todo.push([file,li]);
     });
     next();
+  }
+  // 取り込みは裏で進むので、進み具合を見に行ってバーを伸ばす
+  function watch(r,li,st,bar){
+    li.className='run imp'; bar.style.width='0%'; st.textContent=T.queue;
+    (function poll(){
+      fetch('/upload/jobs/'+r.job).then(function(x){if(!x.ok)throw new Error(x.status);return x.json()}).then(function(j){
+        if(j.state==='waiting'){st.textContent=T.queue}
+        else if(j.state==='running'){st.textContent=T.imp+' '+j.done+' / '+j.total; bar.style.width=(j.total?j.done/j.total*100:0)+'%'}
+        if(j.state==='error'){li.className='err'; st.textContent=j.error; return}
+        if(j.state==='done'){
+          li.className='ok'; st.innerHTML='';
+          var s=document.createElement('span'); s.textContent=r.label+' · '+T.ok.replace('%d',j.imported)+(j.skipped?' · '+T.same.replace('%d',j.skipped):''); st.appendChild(s);
+          var a=document.createElement('a'); a.href=r.href; a.textContent=T.open; st.appendChild(a); return;
+        }
+        setTimeout(poll,1000);
+      }).catch(function(e){li.className='err'; st.textContent=String(e)});
+    })();
   }
   function next(){
     if(busy||!todo.length)return; busy=true;
@@ -51,9 +68,7 @@
       bar.style.width='100%';
       if(r.error){li.className='err'; st.textContent=r.error;}
       else if(r.export){li.className='ok'; st.textContent=r.label; openExport(r.href);}
-      else{li.className='ok'; st.innerHTML='';
-        var s=document.createElement('span'); s.textContent=r.label+' · '+T.ok.replace('%d',r.imported)+(r.skipped?' · '+T.same.replace('%d',r.skipped):''); st.appendChild(s);
-        var a=document.createElement('a'); a.href=r.href; a.textContent=T.open; st.appendChild(a);}
+      else if(r.job){watch(r,li,st,bar)}
       busy=false; next();
     };
     x.onerror=function(){li.className='err'; st.textContent='network error'; busy=false; next();};

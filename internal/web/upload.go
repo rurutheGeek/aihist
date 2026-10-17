@@ -3,7 +3,9 @@ package web
 import (
 	"archive/zip"
 	"bufio"
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +17,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rurutheGeek/aihist/internal/adapter/antigravity"
@@ -113,13 +116,17 @@ func (s *Server) apiImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ingest(host, tool string) (ingest.Result, error) {
+	return s.ingestProgress(host, tool, nil)
+}
+
+func (s *Server) ingestProgress(host, tool string, p ingest.Progress) (ingest.Result, error) {
 	dir, err := s.raw.Root(host, tool)
 	if err != nil {
 		return ingest.Result{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	res, err := ingest.Run(s.st, tool, host, dir)
+	res, err := ingest.RunProgress(s.st, tool, host, dir, p)
 	log.Printf("%s/%s: %s %v", host, tool, res, err)
 	return res, err
 }
@@ -153,6 +160,7 @@ type uploaded struct {
 	Error    string `json:"error,omitempty"`
 	Href     string `json:"href,omitempty"`
 	Export   bool   `json:"export,omitempty"` // 書き出しの一覧を受け取り、中身を落とし始めた
+	Job      string `json:"job,omitempty"`    // 裏で取り込んでいる仕事
 }
 
 // manifestUpload は上げたファイルが claude.ai の書き出しの一覧なら、落とし始めて ok を返す。
@@ -205,10 +213,9 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		tool, _, err := s.store(host, fh)
 		if err != nil {
 			u.Error = tr(l, err.Error())
-		} else if res, err := s.ingest(host, tool); err != nil {
-			u.Error = err.Error()
 		} else {
-			u.Tool, u.Label, u.Imported, u.Skipped = tool, toolLabel(tool), res.Imported, res.Skipped
+			// 取り込みは裏で進める（大きなものは数分かかる）。画面は進み具合を見に来る
+			u.Tool, u.Label, u.Job = tool, toolLabel(tool), s.startJob(host, tool)
 			u.Href = "/?" + url.Values{"tool": {tool}, "host": {host}}.Encode()
 		}
 		out = append(out, u)
@@ -342,4 +349,61 @@ func (s *Server) storeGemini(host, name string, f multipart.File, size int64) (b
 		found = true
 	}
 	return found, nil
+}
+
+// job は裏で進める取り込み1つの様子。
+type job struct {
+	State    string `json:"state"` // waiting（ほかの取り込みの順番待ち） / running / done / error
+	Done     int    `json:"done"`
+	Total    int    `json:"total"`
+	Imported int    `json:"imported"`
+	Skipped  int    `json:"skipped"`
+	Error    string `json:"error,omitempty"`
+}
+
+var jobs = struct {
+	sync.Mutex
+	m map[string]*job
+}{m: map[string]*job{}}
+
+func (s *Server) startJob(host, tool string) string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	id := hex.EncodeToString(b)
+	j := &job{State: "waiting"}
+	jobs.Lock()
+	jobs.m[id] = j
+	jobs.Unlock()
+	go func() {
+		res, err := s.ingestProgress(host, tool, func(done, total int) {
+			jobs.Lock()
+			j.State, j.Done, j.Total = "running", done, total
+			jobs.Unlock()
+		})
+		jobs.Lock()
+		j.Imported, j.Skipped, j.State = res.Imported, res.Skipped, "done"
+		if err != nil {
+			j.State, j.Error = "error", err.Error()
+		}
+		jobs.Unlock()
+		// 見に来なくなった仕事は1時間で忘れる
+		time.AfterFunc(time.Hour, func() { jobs.Lock(); delete(jobs.m, id); jobs.Unlock() })
+	}()
+	return id
+}
+
+func (s *Server) jobState(w http.ResponseWriter, r *http.Request) {
+	jobs.Lock()
+	j, ok := jobs.m[r.PathValue("id")]
+	var v job
+	if ok {
+		v = *j
+	}
+	jobs.Unlock()
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
 }
