@@ -50,6 +50,8 @@ type Client struct {
 	Token  string
 	Host   string
 	HTTP   *http.Client
+	// NoImages は埋め込まれた画像を抜いて送る（AIHIST_IMAGES=0）
+	NoImages bool
 }
 
 // upload は body を1ファイルとして原本の置き場所へ送る。
@@ -132,7 +134,7 @@ func (c *Client) Push(src Source) (int, string, error) {
 		if err != nil {
 			return err
 		}
-		if h, ok := have[rel]; ok && h.Size == st.Size() && h.MTime == st.ModTime().UnixNano() {
+		if h, ok := have[rel]; ok && c.same(h, st.Size(), st.ModTime().UnixNano()) {
 			return nil
 		}
 		// 書き込み中の Antigravity の DB なども開ける（共有モードで読むだけ）
@@ -142,7 +144,17 @@ func (c *Client) Push(src Source) (int, string, error) {
 		}
 		defer f.Close()
 		q := url.Values{"host": {c.Host}, "tool": {src.Tool}, "path": {rel}}
-		res, err := c.req("PUT", "/api/files", q, &upload{f, st.Size(), st.ModTime()})
+		up := &upload{f, st.Size(), st.ModTime()}
+		// Antigravity の DB は形を変えられないので、そのまま送る
+		if c.NoImages && src.Tool != antigravity.Tool {
+			t, size, err := stripped(f)
+			if err != nil {
+				return err
+			}
+			defer drop(t)
+			up = &upload{t, size, st.ModTime()}
+		}
+		res, err := c.req("PUT", "/api/files", q, up)
 		if err != nil {
 			return err
 		}
@@ -212,8 +224,17 @@ func (c *Client) sendOpenCode(db *opencode.DB, id, rel string, mt time.Time) err
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
+	var body io.Reader = f
+	if c.NoImages {
+		t, n, err := stripped(f)
+		if err != nil {
+			return err
+		}
+		defer drop(t)
+		body, size = t, n
+	}
 	q := url.Values{"host": {c.Host}, "tool": {opencode.Tool}, "path": {rel}}
-	res, err := c.req("PUT", "/api/files", q, &upload{f, size, mt})
+	res, err := c.req("PUT", "/api/files", q, &upload{body, size, mt})
 	if err != nil {
 		return err
 	}

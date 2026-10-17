@@ -44,7 +44,7 @@ func clientConfig() map[string]string {
 			}
 		}
 	}
-	for _, k := range []string{"AIHIST_SERVER", "AIHIST_TOKEN", "AIHIST_HOST", "AIHIST_AUTO_UPDATE", "AIHIST_CLEANUP", "AIHIST_TOOLS"} {
+	for _, k := range []string{"AIHIST_SERVER", "AIHIST_TOKEN", "AIHIST_HOST", "AIHIST_AUTO_UPDATE", "AIHIST_CLEANUP", "AIHIST_TOOLS", "AIHIST_IMAGES"} {
 		if v := os.Getenv(k); v != "" {
 			cf[k] = v
 		}
@@ -103,6 +103,7 @@ func main() {
 			usage()
 		}
 		c := push.NewClient(*server, *token, *name)
+		c.NoImages = cf["AIHIST_IMAGES"] == "0"
 		// サーバーが配る実行ファイルに合わせて自分を新しくし、新しい方で送り直す（AIHIST_AUTO_UPDATE=0 で止める）
 		if cf["AIHIST_AUTO_UPDATE"] != "0" && os.Getenv("AIHIST_UPDATED") == "" {
 			if exe, err := c.Update(); err != nil {

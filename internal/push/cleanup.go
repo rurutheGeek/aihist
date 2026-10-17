@@ -54,7 +54,7 @@ func (c *Client) Cleanup(src Source, days int) (int, int64, error) {
 			return false
 		}
 		h, ok := have[rel]
-		return ok && h.Size == st.Size() && h.MTime == st.ModTime().UnixNano() && st.ModTime().Before(before)
+		return ok && c.same(h, st.Size(), st.ModTime().UnixNano()) && st.ModTime().Before(before)
 	}
 	n, size := 0, int64(0)
 	var dirs []string

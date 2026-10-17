@@ -53,6 +53,7 @@ $env:AIHIST_TOKEN="<トークン>"; irm https://<サーバー>/api/install.ps1 |
 | `AIHIST_EVERY` | 送る間隔（既定 `10m`。`0` なら今1回送るだけ） |
 | `AIHIST_HOST` | このマシンの名前（既定はホスト名。WSL では `-wsl` を付ける） |
 | `AIHIST_TOOLS` | 送る AI（`claude_code,codex,antigravity,opencode` をカンマ区切り）。無ければ、導入のときにこのマシンで見つかったものを並べて選ばせる |
+| `AIHIST_IMAGES` | `0` なら会話に埋め込まれた画像を 1 ピクセルの画像に置き換えて送る（元の AI へ戻しても読めるが、画像は無くなる。Antigravity の DB はそのまま）。無ければ導入のときに聞く |
 | `AIHIST_CLEANUP` | 送り終えた会話を手元から消す日数（サーバーの「設定 → 手元の片付け」より優先。`0` で消さない） |
 | `AIHIST_AUTO_UPDATE` | `0` で自動更新を止める（設定ファイルに書いてもよい） |
 | `AIHIST_BIN_DIR` | 実行ファイルの置き場所（既定 `~/.local/bin`。Windows は `%LOCALAPPDATA%\aihist`） |

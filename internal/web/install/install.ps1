@@ -2,6 +2,7 @@
 #   $env:AIHIST_TOKEN="<トークン>"; irm {{SERVER}}/api/install.ps1 | iex
 # $env:AIHIST_EVERY  送る間隔（既定 10m。m・h。0 なら今1回送るだけでタスクを置かない）
 # $env:AIHIST_HOST   このマシンの名前（既定はコンピューター名）
+# $env:AIHIST_IMAGES 0 なら埋め込まれた画像を抜いて送る（無ければ聞く）
 # $env:AIHIST_TOOLS  送る AI（claude_code,codex,antigravity,opencode をカンマ区切り。無ければ見つかったものから選ばせる）
 # 消すとき: irm {{SERVER}}/api/uninstall.ps1 | iex
 $ErrorActionPreference = 'Stop'
@@ -39,8 +40,14 @@ if ($null -eq $env:AIHIST_TOOLS) {
     }
   }
 }
+# 埋め込まれた画像も送るか（Enter は送る）
+$images = if ($env:AIHIST_IMAGES) { $env:AIHIST_IMAGES } else { '1' }
+if ($null -eq $env:AIHIST_IMAGES) {
+  $ans = Read-Host '画像も送る？ [Y/n]'
+  if ($ans -match '^[nN]') { $images = '0'; Write-Host '画像は送らない' }
+}
 $cfg = Join-Path $conf 'config'
-Set-Content -Encoding ascii -Path $cfg -Value @("AIHIST_SERVER=$server", "AIHIST_TOKEN=$env:AIHIST_TOKEN", "AIHIST_HOST=$host_", "AIHIST_TOOLS=$tools")
+Set-Content -Encoding ascii -Path $cfg -Value @("AIHIST_SERVER=$server", "AIHIST_TOKEN=$env:AIHIST_TOKEN", "AIHIST_HOST=$host_", "AIHIST_TOOLS=$tools", "AIHIST_IMAGES=$images")
 # 設定にはトークンが入るので、自分だけが読めるようにする
 icacls $cfg /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null
 Invoke-WebRequest -UseBasicParsing -Uri "$server/api/uninstall.ps1" -OutFile (Join-Path $dir 'uninstall.ps1')

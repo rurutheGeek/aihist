@@ -4,6 +4,7 @@
 # AIHIST_EVERY  送る間隔（既定 10m。s・m・h。0 なら今1回送るだけでタイマーを置かない）
 # AIHIST_HOST   このマシンの名前（既定はホスト名。WSL では -wsl を付ける）
 # AIHIST_BIN_DIR 実行ファイルの置き場所（既定 ~/.local/bin）
+# AIHIST_IMAGES 0 なら埋め込まれた画像を抜いて送る（無ければ聞く）
 # AIHIST_TOOLS  送る AI（claude_code,codex,antigravity,opencode をカンマ区切り。無ければ見つかったものから選ばせる）
 # 消すとき: curl -fsSL {{SERVER}}/api/uninstall.sh | sh （手元の ~/.config/aihist/uninstall.sh でもよい）
 set -eu
@@ -55,10 +56,18 @@ if [ -z "${AIHIST_TOOLS+x}" ] && [ -r /dev/tty ] && found=$("$bin" detect) && [ 
     tools=$(echo "$found" | awk -F'\t' -v pick=",$(echo "$ans" | tr -d ' ')," 'index(pick, "," NR ",") { printf "%s%s", sep, $1; sep = "," }')
   fi
 fi
+# 埋め込まれた画像も送るか（Enter は送る）
+images="${AIHIST_IMAGES:-1}"
+if [ -z "${AIHIST_IMAGES+x}" ] && [ -r /dev/tty ]; then
+  printf '画像も送る？ [Y/n]: '
+  read -r ans < /dev/tty || ans=""
+  case "$ans" in n* | N*) images=0 ;; esac
+fi
 (
   umask 077
-  printf 'AIHIST_SERVER=%s\nAIHIST_TOKEN=%s\nAIHIST_HOST=%s\nAIHIST_TOOLS=%s\n' "$server" "$AIHIST_TOKEN" "$host" "$tools" > "$conf/config"
+  printf 'AIHIST_SERVER=%s\nAIHIST_TOKEN=%s\nAIHIST_HOST=%s\nAIHIST_TOOLS=%s\nAIHIST_IMAGES=%s\n' "$server" "$AIHIST_TOKEN" "$host" "$tools" "$images" > "$conf/config"
 )
+[ "$images" = 0 ] && echo "画像は送らない"
 [ -n "$tools" ] && echo "送る AI: $tools"
 curl -fsSL -o "$conf/uninstall.sh" "$server/api/uninstall.sh"
 chmod +x "$conf/uninstall.sh"
