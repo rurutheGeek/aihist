@@ -1,0 +1,49 @@
+{{define "profile.html"}}{{template "head" (t "プロフィール")}}
+<div class="app">
+{{template "side" .}}
+<main class="main">
+  <div class="bar">
+    <button class="icon-btn menu" onclick="aihistMenu()" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="title">{{t "プロフィール"}}</div>
+    <button class="btn" type="button" id="pcopy">{{t "Markdown をコピー"}}</button>
+  </div>
+  <div class="scroll"><div class="col">
+    <form class="grp" id="pset">
+      <label class="row"><div class="rl">{{t "AI で整理するときに書き足す"}}</div><div class="rc"><input class="sw" type="checkbox" name="on" value="1"{{if .ProfileOn}} checked{{end}}></div></label>
+      <div class="row col"><div class="rl">{{t "AI への指示"}}</div><div class="rc"><textarea class="pnote" name="note" rows="3" placeholder="{{t "健康や家族のことは取り出さない"}}">{{.ProfileNote}}</textarea></div></div>
+    </form>
+    <div class="grp ptraits">
+      {{range .Traits}}<div class="row ptrait" data-id="{{.ID}}"><div class="rl"><textarea class="pt" rows="1" aria-label="{{t "特徴"}}">{{.Text}}</textarea><small>{{if .Count}}{{tf "会話 %d 件" .Count}} · {{end}}{{rel .Updated}}{{if .Prev}} · {{t "前は"}}：{{.Prev}}{{end}}</small></div><div class="rc"><button class="icon-btn pdel" type="button" aria-label="{{t "削除"}}">×</button></div></div>{{end}}
+      <div class="row ptrait new" data-id="0"><div class="rl"><textarea class="pt" rows="1" placeholder="＋ {{t "追加"}}" aria-label="{{t "追加"}}"></textarea></div></div>
+    </div>
+    <textarea id="pmd" hidden>{{.ProfileMD}}</textarea>
+  </div></div>
+</main>
+</div>
+<script>
+(function(){
+  function say(ok){var t=document.querySelector('.toast'); if(!t){t=document.createElement('div');t.className='toast';document.body.appendChild(t)} t.textContent=ok?{{t "保存した"}}:{{t "保存できなかった"}}; t.classList.toggle('bad',!ok); t.classList.add('show'); setTimeout(function(){t.classList.remove('show')},1400)}
+  var f=document.getElementById('pset'), tm;
+  function saveSet(){clearTimeout(tm); tm=setTimeout(function(){fetch('/profile/settings',{method:'POST',body:new URLSearchParams(new FormData(f))}).then(function(r){say(r.ok)})},400)}
+  f.addEventListener('change',saveSet); f.querySelector('textarea').addEventListener('input',saveSet);
+  function edit(row,text){
+    var p=new URLSearchParams({id:row.dataset.id,text:text});
+    return fetch('/profile/edit',{method:'POST',body:p}).then(function(r){say(r.ok); return r.ok});
+  }
+  document.querySelectorAll('.ptrait .pt').forEach(function(i){
+    var last=i.value;
+    function fit(){i.style.height='auto'; i.style.height=i.scrollHeight+'px'}
+    fit(); i.addEventListener('input',fit);
+    function save(){
+      var v=i.value.trim(), row=i.closest('.ptrait'); if(v===last.trim())return; last=i.value;
+      if(row.dataset.id==='0'&&!v)return;
+      edit(row,v).then(function(ok){if(ok&&(row.dataset.id==='0'||!v))location.reload()});
+    }
+    i.addEventListener('blur',save);
+    i.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();save()}});
+  });
+  document.querySelectorAll('.pdel').forEach(function(b){b.onclick=function(){var row=b.closest('.ptrait'); edit(row,'').then(function(ok){if(ok)row.remove()})}});
+  document.getElementById('pcopy').onclick=function(){aihistClip(document.getElementById('pmd').value); var b=this,o=b.textContent; b.textContent={{t "コピーした"}}; setTimeout(function(){b.textContent=o},1400)};
+})();
+</script>
+{{template "foot" .}}{{end}}

@@ -19,7 +19,7 @@ type Tag struct {
 type Knowledge struct {
 	Title       Text     `json:"title"`       // 検索しやすい「困ったこと」（答えは書かない）
 	Conclusion  Text     `json:"conclusion"`  // 何をしたら直ったか
-	Environment Text     `json:"environment"` // OS・ソフトと版など
+	Environment Text     `json:"environment"` // 関係する機器・ソフト・サービスと版
 	Symptom     Text     `json:"symptom"`
 	Cause       Text     `json:"cause"`
 	Solution    Text     `json:"solution"`
@@ -60,6 +60,26 @@ type Result struct {
 	Tags      []string    `json:"tags"`
 	Summary   string      `json:"summary"`
 	Knowledge []Knowledge `json:"knowledge"`
+	Profile   []Trait     `json:"profile"`
+}
+
+// Trait はユーザーについて会話から分かったこと。
+type Trait struct {
+	Text     Text     `json:"text"`
+	Evidence []string `json:"evidence"` // ユーザーの発言からそのまま写した文
+	Same     int64    `json:"same"`     // 今のプロフィールの同じ項目の番号
+	Replaces int64    `json:"replaces"` // 新しいことで置き換える項目の番号
+}
+
+// ProfileReq はプロフィールを書き足すときに渡すもの。nil なら取り出さない。
+type ProfileReq struct {
+	Existing []ExistingTrait
+	Note     string // ユーザーが書いた AI への指示（取り出してほしくない情報など）
+}
+
+type ExistingTrait struct {
+	ID   int64
+	Text string
 }
 
 func langName(lang string) string {
@@ -83,7 +103,7 @@ func LangOf(s string) string {
 }
 
 // Instructions は整理の決まり（API でも MCP でも同じものを使う）。
-func Instructions(tags []Tag, lang string) string {
+func Instructions(tags []Tag, lang string, prof *ProfileReq) string {
 	var tl strings.Builder
 	for _, t := range tags {
 		tl.WriteString("- " + t.Name)
@@ -95,9 +115,13 @@ func Instructions(tags []Tag, lang string) string {
 	if tl.Len() == 0 {
 		tl.WriteString("（タグは無い。tags は空の配列にする）\n")
 	}
+	keys := `{"tags": [...], "summary": "...", "knowledge": [...]}`
+	if prof != nil {
+		keys = `{"tags": [...], "summary": "...", "knowledge": [...], "profile": [...]}`
+	}
 	return `AI との会話の記録を整理する。会話を読み、次の形の JSON だけを返す。
 
-{"tags": [...], "summary": "...", "knowledge": [...]}
+` + keys + `
 
 ## tags
 次のタグのうち、この会話の主な話題に当てはまるものの名前（1〜3個。迷うものは付けない。無ければ空の配列）。ここに無いタグは作らない。
@@ -118,7 +142,7 @@ func Instructions(tags []Tag, lang string) string {
 各記事の形：
 {"title": 検索しやすい「困ったこと」。答えや原因は書かない。60字以内,
  "conclusion": 何をしたら直ったか。1〜2文,
- "environment": OS・ソフトと版など、誰にでも当てはまる情報だけ。分からなければ空,
+ "environment": 関係する機器・ソフト・サービスとその版など、誰にでも当てはまる情報だけ。分からなければ空,
  "symptom": 何が起きたか。エラーの文があれば短く引用（無ければ様子を書く）,
  "cause": 原因,
  "solution": 直し方の手順。Markdown の箇条書きやコードブロックを使ってよい,
@@ -132,19 +156,47 @@ func Instructions(tags []Tag, lang string) string {
 - 記録に無いことを書かない。推測で埋めない。solution には会話の中で実際に効いた方法だけを書き、会話に出ていない別の方法を足さない。cause は会話の中で確かめられた原因だけを書く（確かめていなければ「分かっていない」と書く）。
 - 個人の情報を書かない：マシン名・ユーザー名・人名・プロジェクト名・社名・ドメイン・IP アドレス・メールアドレス・パスの中の個人名・トークンやパスワード。必要なら <サーバー>・<プロジェクト>・<ユーザー> のように書く。
 - [トークン]・[メール] のような印は、すでに消した情報。そのまま扱う。
-- 文章は` + langName(lang) + `で書く。`
+- 文章は` + langName(lang) + `で書く。` + profileSection(prof)
+}
+
+func profileSection(p *ProfileReq) string {
+	if p == nil {
+		return ""
+	}
+	var ex strings.Builder
+	for i, t := range p.Existing {
+		if i == 300 {
+			break
+		}
+		fmt.Fprintf(&ex, "%d. %s\n", t.ID, t.Text)
+	}
+	if ex.Len() == 0 {
+		ex.WriteString("（まだ無い）\n")
+	}
+	note := ""
+	if strings.TrimSpace(p.Note) != "" {
+		note = "\n### ユーザーからの指示（必ず従う）\n" + p.Note + "\n"
+	}
+	return `
+
+## profile
+この会話の「ユーザー」の発言から分かる、ユーザーがどんな人か（していること・関心・好み・考え方・話し方・してほしいこと・してほしくないこと など）。AI がこのユーザーを理解して答え方を合わせるのに役立つことだけ。その会話で頼んだ用件そのものや、一度きりの事情は入れない。無ければ空の配列。
+各項目：{"text": 1文で, "evidence": その根拠になるユーザーの発言を記録からそのまま写した配列（1つ以上）, "same": 今のプロフィールに同じ内容があればその番号（無ければ 0）, "replaces": 今のプロフィールの項目が古くなった（変わった）ならその番号（無ければ 0）}
+
+### 今のプロフィール
+` + ex.String() + note
 }
 
 const readNotes = `AI との会話の記録が長いので、区切りごとに読み進めている。
 これまでのメモと次の区切りを読み、メモを書き足して {"notes": "..."} の JSON だけを返す。
-メモには、話題の流れ、出てきた問題・試したこと（失敗も）・原因・解決、環境の情報（OS・ソフトと版）を残す。
-あとで要約と、苦労して解決した問題の記事を書くのに要ることを落とさない。重複は省き、6000字以内にする。
+メモには、話題の流れ、出てきた問題・試したこと（失敗も）・原因・解決、関係する機器・ソフト・サービスとその版を残す。
+あとで要約と、苦労して解決した問題の記事と、ユーザーがどんな人か分かること（ユーザーの発言をそのまま「」で）を書くのに要ることを落とさない。重複は省き、6000字以内にする。
 エラーの文や失敗した結果、ユーザーの「まだ動かない」などの言葉は、あとで引用できるよう記録からそのまま「」で写しておく。
 記録に無いことを書かない。`
 
 // Organize は会話（Pages で分けたもの）を読み、タグ・要約・ナレッジを返す。
 // 長い会話は区切りごとに別のリクエストで読み進め、それまでのメモを次へ渡す。progress は読んだ区切りの数を受け取る。
-func (c Config) Organize(ctx context.Context, title string, pages []string, tags []Tag, lang string, progress func(done, total int)) (Result, error) {
+func (c Config) Organize(ctx context.Context, title string, pages []string, tags []Tag, lang string, prof *ProfileReq, progress func(done, total int)) (Result, error) {
 	if len(pages) == 0 {
 		return Result{}, nil
 	}
@@ -180,7 +232,7 @@ func (c Config) Organize(ctx context.Context, title string, pages []string, tags
 	var r Result
 	// 返事の形が崩れていたら、もう1回だけ頼む
 	for try := 0; ; try++ {
-		out, err := c.Chat(ctx, Instructions(tags, lang), user, true)
+		out, err := c.Chat(ctx, Instructions(tags, lang, prof), user, true)
 		if err == nil {
 			if err = decode(out, &r); err == nil {
 				break
@@ -193,7 +245,11 @@ func (c Config) Organize(ctx context.Context, title string, pages []string, tags
 	if progress != nil {
 		progress(len(pages), len(pages))
 	}
-	return r.Clean(tags, strings.Join(pages, "\n")), nil
+	r = r.Clean(tags, strings.Join(pages, "\n"))
+	if prof == nil {
+		r.Profile = nil
+	}
+	return r, nil
 }
 
 // Clean は決まりから外れたもの（無いタグ・空の記事・価値の低い記事・つまずきの証拠が記録に無い記事）を落とす。
@@ -219,6 +275,17 @@ func (r Result) Clean(tags []Tag, text string) Result {
 	}
 	r.Knowledge = ks
 	r.Summary = strings.TrimSpace(r.Summary)
+	// プロフィールは、ユーザーの発言にそのまま根拠があるものだけ
+	user := userText(text)
+	var ps []Trait
+	for _, p := range r.Profile {
+		p.Text = Text(strings.TrimSpace(string(p.Text)))
+		if p.Text == "" || !anyQuoted(p.Evidence, user) {
+			continue
+		}
+		ps = append(ps, p)
+	}
+	r.Profile = ps
 	return r
 }
 
@@ -232,6 +299,17 @@ func proven(ev []string, text string) bool {
 		}
 	}
 	return n >= 2
+}
+
+// userText は読ませた会話のうち、ユーザーの発言だけ。
+func userText(text string) string {
+	var b strings.Builder
+	for _, sec := range strings.Split("\n"+text, "\n## ") {
+		if strings.HasPrefix(sec, "ユーザー\n") {
+			b.WriteString(sec + "\n")
+		}
+	}
+	return b.String()
 }
 
 // anyQuoted は文のどれか1つが記録の中にそのままあるか。

@@ -56,11 +56,12 @@ func (s *Server) aiModels(w http.ResponseWriter, r *http.Request) {
 
 // テンプレートのタグ（設定の「タグ」から足せる）
 var tagTemplates = []struct{ Name, Desc string }{
-	{"開発", "プログラムやシステムを作る・直す"},
-	{"調査", "調べもの・比較・検証"},
-	{"設計", "仕組みや方針を考える"},
+	{"仕事", "仕事の作業・相談"},
+	{"調べもの", "調べる・比べる・確かめる"},
 	{"学習", "知らないことを教わる"},
 	{"文章", "文章を書く・直す・訳す"},
+	{"創作", "物語・絵・音楽などのアイデア"},
+	{"暮らし", "料理・買い物・健康・お金など"},
 	{"相談", "悩みや判断の相談"},
 	{"雑談", "目的の無いやりとり"},
 }
@@ -197,7 +198,7 @@ func (s *Server) organize(id int64, c ai.Config, l string) (int, error) {
 	pages := ai.Pages(msgs, ai.PageSize)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	res, err := c.Organize(ctx, conv.Title, pages, tags, l, nil)
+	res, err := c.Organize(ctx, conv.Title, pages, tags, l, s.profileReq(), nil)
 	if err != nil {
 		log.Printf("ai %d: %v", id, err)
 		return 0, err
@@ -224,7 +225,27 @@ func (s *Server) saveResult(conv *store.ConvRow, pages []string, res ai.Result, 
 			Warn: ai.Leaks(string(k.Title)+"\n"+body, words),
 		})
 	}
+	if s.profileOn() {
+		for _, t := range res.Profile {
+			s.st.AddTrait(string(t.Text), t.Same, t.Replaces, [3]string{conv.Tool, conv.Host, conv.ExternalID})
+		}
+	}
 	return len(res.Knowledge), nil
+}
+
+func (s *Server) profileOn() bool { return s.st.Setting("profile_on", "0") == "1" }
+
+// profileReq はプロフィールを書き足すときに AI へ渡すもの（使わない設定なら nil）。
+func (s *Server) profileReq() *ai.ProfileReq {
+	if !s.profileOn() {
+		return nil
+	}
+	p := &ai.ProfileReq{Note: s.st.Setting("profile_note", "")}
+	ts, _ := s.st.Profile()
+	for _, t := range ts {
+		p.Existing = append(p.Existing, ai.ExistingTrait{ID: t.ID, Text: t.Text})
+	}
+	return p
 }
 
 // aiTags はタグの一覧（AI に渡す形）。

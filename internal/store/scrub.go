@@ -65,7 +65,7 @@ func (s *Store) Rewrite(fn func(string) string, progress func(done, total int)) 
 		}
 	}
 	// 要約とナレッジも書き換える
-	for _, c := range [][3]string{{"conv_meta", "rowid", "summary"}, {"knowledge", "id", "title"}, {"knowledge", "id", "body"}} {
+	for _, c := range [][3]string{{"conv_meta", "rowid", "summary"}, {"knowledge", "id", "title"}, {"knowledge", "id", "body"}, {"profile", "id", "text"}, {"profile", "id", "prev"}} {
 		rows, err := s.db.Query(`SELECT ` + c[1] + `, ` + c[2] + ` FROM ` + c[0])
 		if err != nil {
 			return changed, err

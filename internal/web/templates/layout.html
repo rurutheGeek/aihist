@@ -352,6 +352,13 @@ body.resizing{cursor:col-resize;user-select:none}
 .kbtns form{display:contents}
 .kmeta{margin-top:8px}
 .kst{white-space:normal;text-align:right;max-width:60%}
+.ptrait .rl{flex:1;min-width:0}
+.pt{width:100%;border:0;background:transparent;color:var(--fg);font:inherit;font-size:14.5px;line-height:1.5;padding:2px 0;outline:none;resize:none;overflow:hidden;display:block}
+.pt:focus{border-bottom:1px solid var(--line)}
+.ptrait .pdel{opacity:0;font-size:16px}
+.ptrait:hover .pdel{opacity:1}
+.ptrait.new .pt{color:var(--mute)}
+.pnote{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:14px;background:var(--bg);color:var(--fg);resize:vertical}
 .aisum{margin:0 0 18px}
 .aisum p{margin:8px 0 2px;line-height:1.7;font-size:14.5px}
 .ctags{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -512,6 +519,7 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
     <button class="sbox" type="button" data-search><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>{{t "検索"}}</span></button>
     <nav class="snav-main">
       <a href="/knowledge"{{if eq .Page "knowledge"}} class="on"{{end}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M8 7h6M8 11h6"/></svg>{{t "ナレッジ"}}{{if .KDrafts}}<span class="badge">{{.KDrafts}}</span>{{end}}</a>
+      <a href="/profile"{{if eq .Page "profile"}} class="on"{{end}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>{{t "プロフィール"}}</a>
       <a href="/upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>{{t "アップロード"}}</a>
     </nav>
   </div>

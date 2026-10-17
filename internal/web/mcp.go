@@ -54,7 +54,9 @@ var mcpTools = []mcpTool{
 	{"save_organized", "会話を整理した結果を保存する。tags はタグの一覧にある名前だけ。knowledge は下書きに入る（利用者が登録する）。evidence は会話からそのまま写した文で、記録に無ければ捨てられる。",
 		obj(map[string]any{"id": num, "model": str, "tags": strs, "summary": str, "knowledge": map[string]any{"type": "array", "items": obj(map[string]any{
 			"title": str, "conclusion": str, "environment": str, "symptom": str, "cause": str, "solution": str, "failed": str, "struggle": str, "evidence": strs, "fixed": strs, "score": num,
-		}, "title", "conclusion", "solution", "evidence", "fixed", "score")}}, "id", "summary")},
+		}, "title", "conclusion", "solution", "evidence", "fixed", "score")},
+			"profile": map[string]any{"type": "array", "items": obj(map[string]any{"text": str, "evidence": strs, "same": num, "replaces": num}, "text", "evidence")}}, "id", "summary")},
+	{"get_profile", "ユーザーのプロフィール（どんな人か・好み・してほしいこと）。答え方をユーザーに合わせるために、作業の最初に読む。", obj(map[string]any{})},
 	{"search_knowledge", "登録したナレッジ（苦労して解決した問題の記事）を探す。", obj(map[string]any{"query": str})},
 }
 
@@ -160,6 +162,7 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		Tags      []string       `json:"tags"`
 		Summary   string         `json:"summary"`
 		Knowledge []ai.Knowledge `json:"knowledge"`
+		Profile   []ai.Trait     `json:"profile"`
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -212,14 +215,14 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		}
 		return fmt.Sprintf("# %s\n(id %d · %s · 区切り %d / %d)\n\n%s", c.Title, c.ID, toolLabel(c.Tool), a.Page, len(pages), pages[a.Page-1]), nil
 	case "organize_instructions":
-		return ai.Instructions(s.aiTags(), "") + "\n\n結果は save_organized に渡す（JSON の各項目をそのまま引数にする）。", nil
+		return ai.Instructions(s.aiTags(), "", s.profileReq()) + "\n\n結果は save_organized に渡す（JSON の各項目をそのまま引数にする）。", nil
 	case "save_organized":
 		c, msgs, err := s.st.Get(a.ID)
 		if err != nil {
 			return "", fmt.Errorf("会話 %d が無い", a.ID)
 		}
 		pages := ai.Pages(msgs, ai.PageSize)
-		res := ai.Result{Tags: a.Tags, Summary: a.Summary, Knowledge: a.Knowledge}.Clean(s.aiTags(), strings.Join(pages, "\n"))
+		res := ai.Result{Tags: a.Tags, Summary: a.Summary, Knowledge: a.Knowledge, Profile: a.Profile}.Clean(s.aiTags(), strings.Join(pages, "\n"))
 		model := "mcp"
 		if a.Model != "" {
 			model = "mcp: " + a.Model
@@ -234,6 +237,12 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 			msg += fmt.Sprintf("。ナレッジ %d 件は決まり（score %d 以上・evidence と fixed が会話にそのままあること・conclusion と solution）に合わず捨てた", dropped, ai.MinScore)
 		}
 		return msg, nil
+	case "get_profile":
+		ts, err := s.st.Profile()
+		if err != nil {
+			return "", err
+		}
+		return profileMarkdown(ts), nil
 	case "search_knowledge":
 		ks, err := s.st.KnowledgeList("registered", a.Query)
 		if err != nil {
