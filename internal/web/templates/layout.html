@@ -291,6 +291,19 @@ body.resizing{cursor:col-resize;user-select:none}
 .conv .br{margin-left:auto}
 .conv:hover .br,.conv.on .br{visibility:hidden}
 .conv .s{font-size:12px;color:var(--mute);margin:-4px 10px 6px 25px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.side.sel .conv>a{padding-left:34px}
+.side .conv .sk{display:none;position:absolute;left:9px;top:8px;width:16px;height:16px;margin:0;accent-color:var(--fg);cursor:pointer}
+.side.sel .conv .sk{display:block}
+.side.sel .conv>a i{display:none}
+.side.sel .conv .dots{display:none!important}
+.selbar{display:none;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);font-size:13px}
+.side.sel .selbar{display:flex}
+.selbar b{font-weight:600;margin-right:auto;white-space:nowrap}
+.selbar button{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:7px;padding:3px 8px;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.selbar button:hover{background:var(--hover)}
+.selbar button.red{color:#d93025}
+.selbar button:disabled{opacity:.45;cursor:default}
+.rmenu button.red{color:#d93025}
 .rmenu{position:fixed;z-index:40;min-width:210px;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.2);padding:4px}
 .rmenu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;border:0;background:transparent;padding:7px 10px;border-radius:7px;font-size:13.5px;cursor:pointer;text-align:left}
 .rmenu button:hover{background:var(--hover)}
@@ -462,6 +475,7 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
       <a href="/upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>{{t "アップロード"}}</a>
     </nav>
   </div>
+  <div class="selbar"><b></b><button type="button" data-sel="all">{{t "すべて選択"}}</button><button type="button" data-sel="arch">{{t "アーカイブ"}}</button><button type="button" class="red" data-sel="del">{{t "削除"}}</button><button type="button" data-sel="off">{{t "キャンセル"}}</button></div>
   <div class="convs" id="sidelist" data-cur="{{with .C}}{{.ID}}{{end}}">{{template "sidelist" .}}</div>
   <div class="side-foot">
     <a href="/settings" data-settings><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>{{t "設定"}}</a>
@@ -477,6 +491,7 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
 
 {{define "row"}}{{$c := .c}}{{$r := .root}}<div class="conv{{if $r.C}}{{if eq $c.ID $r.C.ID}} on{{end}}{{end}}" data-id="{{$c.ID}}" data-tool="{{$c.Tool}}" data-ext="{{$c.ExternalID}}" data-pinned="{{if $c.Pinned}}1{{end}}" data-archived="{{if $c.Archived}}1{{end}}">
   <a href="/c/{{$c.ID}}{{$r.Keep}}" data-tip="{{if $c.Title}}{{oneline $c.Title}}{{else}}{{$c.ExternalID}}{{end}}" data-when="{{rel $c.UpdatedAt}}"><i style="background:{{toolColor $c.Tool}}"></i><span class="ct">{{if $c.Title}}{{oneline $c.Title}}{{else}}{{$c.ExternalID}}{{end}}</span>{{if gt $c.Branches 1}}<em class="br">{{$c.Branches}}</em>{{end}}</a>
+  <input class="sk" type="checkbox" tabindex="-1" aria-label="{{t "選択"}}">
   <button class="dots" type="button" aria-label="{{tf "%sのその他のオプション" (or $c.Title $c.ExternalID)}}"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
   {{if $c.Snippet}}<div class="s">{{hl $c.Snippet}}</div>{{end}}
 </div>{{end}}
@@ -662,7 +677,7 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
     fetch('/side?'+q+(cur?'&cur='+cur:'')).then(function(r){return r.text()}).then(function(t){
       var open=list.querySelector('.fmenu:not([hidden])'), sub=open&&open.querySelector('.fi.open');
       var idx=sub?Array.prototype.indexOf.call(open.children,sub):-1;
-      list.innerHTML=t;
+      list.innerHTML=t; markSel();
       if(open){var m=list.querySelector('.fmenu');m.hidden=false; place(m,list.querySelector('[data-fmenu]')); if(idx>=0&&m.children[idx])openSub(m.children[idx])}
       history.replaceState(history.state,'',location.pathname+(q?'?'+q:''));
       document.querySelectorAll('a[href^="/c/"]').forEach(function(a){if(!list.contains(a))return; a.href=a.pathname+(q?'?'+q:'')});
@@ -684,6 +699,8 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
       if(fi&&!e.target.closest('.fsub')){openSub(fi); e.stopPropagation(); return}
       var q=e.target.closest('a[data-q]');
       if(q){e.preventDefault(); e.stopPropagation(); if(!q.closest('.fmenu'))closeF(); swap(q.getAttribute('href').replace(/^\?/,'')); return}
+      var cv=e.target.closest('.conv');
+      if(cv&&side.classList.contains('sel')){e.preventDefault(); e.stopPropagation(); pick(cv.dataset.id,!chosen.has(cv.dataset.id)); return}
       var d=e.target.closest('.dots');
       if(d){e.preventDefault(); e.stopPropagation(); closeF(); rowMenu(d.closest('.conv'),d); return}
     });
@@ -697,7 +714,7 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
   });
   // 行のメニュー
   var rm=document.getElementById('rmenu');
-  var T={pin:{{t "ピン留め"}},unpin:{{t "ピン留めを外す"}},rename:{{t "名前を変更"}},cont:{{t "元の AI で続ける"}},md:{{t "別のAIへ渡す"}},arch:{{t "アーカイブ"}},unarch:{{t "アーカイブを外す"}},copied:{{t "コピーした"}},newname:{{t "新しい名前"}}};
+  var T={pin:{{t "ピン留め"}},unpin:{{t "ピン留めを外す"}},rename:{{t "名前を変更"}},cont:{{t "元の AI で続ける"}},md:{{t "別のAIへ渡す"}},arch:{{t "アーカイブ"}},unarch:{{t "アーカイブを外す"}},copied:{{t "コピーした"}},newname:{{t "新しい名前"}},sel:{{t "選択"}},del:{{t "削除"}},delq:{{t "この会話を削除する？"}},delsq:{{t "%d 件の会話を削除する？"}},seln:{{t "%d 件を選択中"}}};
   function post(id,body){return fetch('/c/'+id+'/meta',{method:'POST',body:new URLSearchParams(body)})}
   function refresh(){swap(location.search.replace(/^\?/,''))}
   function rowMenu(row,btn){
@@ -707,10 +724,12 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
       [T.rename,'R',function(){var cur=row.querySelector('.ct').textContent,n=prompt(T.newname,cur); if(n!==null&&n!==cur)post(id,{title:n}).then(refresh)}],
       [T.cont,'',function(){aihistClip('aihist restore '+row.dataset.ext); say(true,T.copied)}],
       [T.md,'',function(){fetch('/c/'+id+'/export.md').then(function(r){return r.text()}).then(function(t){aihistClip(t); say(true,T.copied)})}],
-      [arch?T.unarch:T.arch,'A',function(){post(id,{archived:arch?'0':'1'}).then(refresh)}]
+      [arch?T.unarch:T.arch,'A',function(){post(id,{archived:arch?'0':'1'}).then(refresh)}],
+      [T.sel,'S',function(){selOn(); pick(id,true)}],
+      [T.del,'D',function(){if(confirm(T.delq))del([id])},'red']
     ];
     rm.innerHTML='';
-    items.forEach(function(it){var b=document.createElement('button');b.type='button';b.setAttribute('role','menuitem');b.innerHTML='<span></span><kbd></kbd>';b.firstChild.textContent=it[0];b.lastChild.textContent=it[1];b.onclick=function(){rm.hidden=true;it[2]()};b.dataset.key=it[1].toLowerCase();rm.appendChild(b)});
+    items.forEach(function(it){var b=document.createElement('button');b.type='button';b.setAttribute('role','menuitem');b.innerHTML='<span></span><kbd></kbd>';b.firstChild.textContent=it[0];b.lastChild.textContent=it[1];if(it[3])b.className=it[3];b.onclick=function(){rm.hidden=true;it[2]()};b.dataset.key=it[1].toLowerCase();rm.appendChild(b)});
     var r=btn.getBoundingClientRect(); rm.style.left=Math.min(r.right+4,innerWidth-220)+'px'; rm.style.top=Math.min(r.top,innerHeight-240)+'px'; rm.hidden=false; tip.hidden=true;
   }
   document.addEventListener('keydown',function(e){
@@ -718,6 +737,35 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
     var b=rm.querySelector('[data-key="'+e.key.toLowerCase()+'"]'); if(b){e.preventDefault();b.click()}
     if(e.key==='Escape')rm.hidden=true;
   });
+  // 選択（まとめてアーカイブ・削除）
+  var side=document.querySelector('.side'), bar=side&&side.querySelector('.selbar'), chosen=new Set();
+  function markSel(){
+    if(!list)return;
+    list.querySelectorAll('.conv').forEach(function(c){var on=chosen.has(c.dataset.id); c.querySelector('.sk').checked=on; c.classList.toggle('on',on)});
+    if(bar){bar.querySelector('b').textContent=T.seln.replace('%d',chosen.size); bar.querySelectorAll('[data-sel=arch],[data-sel=del]').forEach(function(b){b.disabled=!chosen.size})}
+  }
+  function pick(id,on){if(on)chosen.add(id);else chosen.delete(id); markSel()}
+  function selOn(){side.classList.add('sel'); markSel()}
+  function selOff(){side.classList.remove('sel'); chosen.clear(); if(list)list.querySelectorAll('.conv').forEach(function(c){c.querySelector('.sk').checked=false; c.classList.toggle('on',c.dataset.id===list.dataset.cur)})}
+  function del(ids){
+    var b=new URLSearchParams(); ids.forEach(function(i){b.append('id',i)});
+    fetch('/c/delete',{method:'POST',body:b}).then(function(){
+      if(list&&ids.indexOf(list.dataset.cur)>=0){location.href='/'+location.search;return}
+      selOff(); refresh();
+    });
+  }
+  if(bar)bar.addEventListener('click',function(e){
+    var b=e.target.closest('[data-sel]'); if(!b)return;
+    var ids=Array.from(chosen);
+    switch(b.dataset.sel){
+      case 'all': list.querySelectorAll('.conv').forEach(function(c){chosen.add(c.dataset.id)}); markSel(); break;
+      case 'arch': var p=new URLSearchParams({archived:'1'}); ids.forEach(function(i){p.append('id',i)}); fetch('/c/archive',{method:'POST',body:p}).then(function(){selOff();refresh()}); break;
+      case 'del': if(confirm(T.delsq.replace('%d',ids.length)))del(ids); break;
+      case 'off': selOff();
+    }
+  });
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&side&&side.classList.contains('sel')&&rm.hidden)selOff()});
+
   // 吹き出し（行の題名といつの会話か・ボタンのショートカット）
   var tip=document.getElementById('tip'), tt2;
   document.addEventListener('mouseover',function(e){

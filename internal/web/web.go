@@ -105,6 +105,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /static/", http.FileServerFS(static))
 	mux.HandleFunc("GET /c/{id}", s.show)
 	mux.HandleFunc("POST /c/{id}/meta", s.setMeta)
+	mux.HandleFunc("POST /c/delete", s.deleteConvs)
+	mux.HandleFunc("POST /c/archive", s.archiveConvs)
 	mux.HandleFunc("GET /search", s.search)
 	mux.HandleFunc("GET /side", s.sideList)
 	mux.HandleFunc("GET /find/{tool}/{host}/{ext}", func(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +127,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /settings/cleanup", s.setCleanup)
 	mux.HandleFunc("POST /settings/schedule", s.setSchedule)
 	mux.HandleFunc("POST /settings/upload", s.setUpload)
+	mux.HandleFunc("POST /settings/deleted/forget", s.forgetDeleted)
 	mux.HandleFunc("POST /settings/machines/{host}", s.setMachine)
 	mux.HandleFunc("POST /settings/machines/{host}/delete", s.deleteMachine)
 	mux.HandleFunc("GET /settings/preview", s.preview)

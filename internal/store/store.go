@@ -23,6 +23,13 @@ CREATE TABLE IF NOT EXISTS conv_meta (
   archived INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (tool, host, external_id)
 );
+CREATE TABLE IF NOT EXISTS deleted (
+  tool TEXT NOT NULL,
+  host TEXT NOT NULL,
+  external_id TEXT NOT NULL,
+  deleted_at INTEGER NOT NULL,
+  PRIMARY KEY (tool, host, external_id)
+);
 CREATE TABLE IF NOT EXISTS machines (
   host TEXT PRIMARY KEY,
   seen_at INTEGER NOT NULL DEFAULT 0,
@@ -246,6 +253,11 @@ func (s *Store) PutMany(cs []*model.Conversation, stamps []string) error {
 }
 
 func putTx(tx *sql.Tx, c *model.Conversation, stamp string) error {
+	var gone int
+	tx.QueryRow(`SELECT count(*) FROM deleted WHERE tool=? AND host=? AND external_id=?`, c.Tool, c.Host, c.ExternalID).Scan(&gone)
+	if gone > 0 {
+		return nil
+	}
 	if _, err := tx.Exec(`DELETE FROM conversations WHERE tool=? AND host=? AND external_id=?`, c.Tool, c.Host, c.ExternalID); err != nil {
 		return err
 	}

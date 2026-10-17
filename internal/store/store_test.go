@@ -135,3 +135,27 @@ func TestMeta(t *testing.T) {
 		t.Fatalf("all: %+v", rows)
 	}
 }
+
+func TestDeleteKeepsMark(t *testing.T) {
+	st, _ := Open(filepath.Join(t.TempDir(), "a.db"))
+	c := &model.Conversation{Tool: "codex", Host: "h", ExternalID: "x1", Title: "a", Messages: []model.Message{{Role: "user", Parts: []model.Part{{Kind: model.Text, Text: "hi"}}}}}
+	if err := st.Put(c, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := st.Lookup("codex", "h", "x1")
+	if n, err := st.Delete(id); err != nil || n != 1 {
+		t.Fatal(n, err)
+	}
+	st.Put(c, "s2")
+	if id, _ := st.Lookup("codex", "h", "x1"); id != 0 {
+		t.Fatal("came back")
+	}
+	if st.Deleted() != 1 {
+		t.Fatal("mark")
+	}
+	st.ForgetDeleted()
+	st.Put(c, "s3")
+	if id, _ := st.Lookup("codex", "h", "x1"); id == 0 {
+		t.Fatal("not reimported")
+	}
+}

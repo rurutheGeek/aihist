@@ -160,7 +160,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 		d["NewCmds"] = commands(s.origin(r), newTok)
 	}
 	d["Cmds"] = commands(s.origin(r), "")
-	d["Usage"], d["Page"] = s.usage(), "settings"
+	d["Usage"], d["Page"], d["Deleted"] = s.usage(), "settings", s.st.Deleted()
 	days, _ := strconv.Atoi(s.st.Setting("cleanup_days", "0"))
 	d["Cleanup"], d["CleanupOpts"] = days, []int{0, 7, 14, 30, 90}
 	d["Machines"] = s.machineViews(lang(r))
@@ -347,4 +347,14 @@ func (s *Server) uploadAttach() string {
 		return "-"
 	}
 	return "*"
+}
+
+// forgetDeleted は消した会話の印を消す。次に同じ元データが来たら、また取り込む。
+func (s *Server) forgetDeleted(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	s.st.ForgetDeleted()
+	done(w, r, "/settings/storage")
 }

@@ -340,6 +340,10 @@ func put(st *store.Store, host string, c *model.Conversation, stamp string, r *R
 		return nil
 	}
 	c.Host = host
+	if st.IsDeleted(c.Tool, host, c.ExternalID) {
+		r.Skipped++
+		return nil
+	}
 	r.pending, r.stamps = append(r.pending, c), append(r.stamps, stamp)
 	for _, m := range c.Messages {
 		for _, p := range m.Parts {

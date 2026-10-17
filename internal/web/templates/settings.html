@@ -115,6 +115,9 @@
         <div class="row"><div class="rl">{{t "データベース"}}</div><div class="rc mute">{{bytes .Usage.DB}}</div></div>
         <div class="row"><div class="rl">{{t "原本"}}</div><div class="rc mute">{{bytes .Usage.Raw}}</div></div>
       </div>
+      <div class="grp">
+        <div class="row"><div class="rl">{{t "削除した会話のキャッシュ"}}<small>{{tf "%d 件" .Deleted}}</small></div><div class="rc"><form method="post" action="/settings/deleted/forget" data-confirm="{{t "キャッシュを消すと、削除した会話は次に送られたときにまた取り込まれます。消す？"}}"><button class="btn"{{if not .Deleted}} disabled{{end}}>{{t "キャッシュを削除"}}</button></form></div></div>
+      </div>
       <div class="gt">{{t "マシンと AI ごと"}}</div>
       <div class="grp">
         {{range .Usage.Rows}}<div class="row"><div class="rl"><span><i class="dot" style="background:{{toolColor .Tool}}"></i>{{.Label}}</span><small>{{.Host}} · {{tf "%d 件" .Convs}}</small></div><div class="rc mute">{{bytes .Bytes}}</div></div>{{end}}

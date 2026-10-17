@@ -98,3 +98,39 @@ func (s *Server) sideList(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, r, "sidelist", d)
 }
+
+// deleteConvs は会話を消す（行の ⋮ メニューと選択から）。id を何個でも受け取る。
+func (s *Server) deleteConvs(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	r.ParseForm()
+	var ids []int64
+	for _, v := range r.Form["id"] {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	if _, err := s.st.Delete(ids...); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// archiveConvs は選んだ会話をまとめてアーカイブする（外す）。
+func (s *Server) archiveConvs(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	r.ParseForm()
+	b := r.FormValue("archived") == "1"
+	for _, v := range r.Form["id"] {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			s.st.SetMeta(id, nil, nil, &b)
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
