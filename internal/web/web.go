@@ -128,6 +128,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /settings/preview", s.preview)
 	mux.HandleFunc("GET /exports/{host}/{id}", s.exportPage)
 	mux.HandleFunc("POST /exports/{host}/{id}/import", s.exportImport)
+	mux.HandleFunc("POST /exports/{host}/{id}/files", s.exportUpload)
 	mux.HandleFunc("POST /settings/tokens/{id}/delete", s.deleteToken)
 	mux.Handle("GET /setup", http.RedirectHandler("/settings", http.StatusMovedPermanently))
 	mux.HandleFunc("POST /upload", s.upload)

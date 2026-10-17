@@ -6,14 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/rurutheGeek/aihist/internal/adapter/claudeai"
@@ -21,7 +19,8 @@ import (
 )
 
 // claude.ai の書き出しは、ダウンロード先を並べた JSON（manifest）と、種類ごとの zip に分かれる。
-// manifest を上げると、サーバーが zip を落とし、画面で取り込むものを選ばせる。
+// claude.ai はブラウザ以外からのダウンロードを止めているので、manifest を上げたら各 zip のリンクを出し、
+// 利用者のブラウザで落とした zip をもう一度上げてもらい、画面で取り込むものを選ばせる。
 
 const exportTool = "claude_ai_export"
 
@@ -60,13 +59,7 @@ func readManifest(b []byte) (*manifest, error) {
 	return &m, nil
 }
 
-// exportState は落としている途中の様子（ファイル名ごと）。
-var exportState = struct {
-	sync.Mutex
-	m map[string]string // dir/filename → "" 落としている途中、それ以外は誤り
-}{m: map[string]string{}}
-
-// startExport は manifest を置き、zip を順に落とし始める。書き出しの ID を返す。
+// startExport は manifest を置き、書き出しの ID を返す。
 func (s *Server) startExport(host string, b []byte) (string, error) {
 	m, err := readManifest(b)
 	if err != nil {
@@ -87,68 +80,7 @@ func (s *Server) startExport(host string, b []byte) (string, error) {
 	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), b, 0o644); err != nil {
 		return "", err
 	}
-	go s.download(dir, m)
 	return id, nil
-}
-
-func (s *Server) download(dir string, m *manifest) {
-	c := &http.Client{Timeout: 2 * time.Hour}
-	for _, f := range m.Files {
-		dst := filepath.Join(dir, f.Filename)
-		key := dst
-		if _, err := os.Stat(dst); err == nil {
-			continue
-		}
-		exportState.Lock()
-		if _, busy := exportState.m[key]; busy && exportState.m[key] == "" {
-			exportState.Unlock()
-			continue
-		}
-		exportState.m[key] = ""
-		exportState.Unlock()
-		err := fetchTo(c, f.URL, dst)
-		exportState.Lock()
-		if err != nil {
-			log.Printf("export %s: %v", f.Filename, err)
-			exportState.m[key] = err.Error()
-		} else {
-			delete(exportState.m, key)
-		}
-		exportState.Unlock()
-	}
-}
-
-func fetchTo(c *http.Client, u, dst string) error {
-	res, err := c.Get(u)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		b, _ := io.ReadAll(io.LimitReader(res.Body, 300))
-		if strings.Contains(string(b), "Just a moment") {
-			return errors.New("claude.ai がサーバーからのダウンロードを止めている（ブラウザでしか落とせない）")
-		}
-		return fmt.Errorf("%s %s", res.Status, strings.TrimSpace(string(b)))
-	}
-	tmp := dst + ".part"
-	f, err := os.Create(tmp)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(f, res.Body); err != nil {
-		f.Close()
-		os.Remove(tmp)
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	if _, err := zip.OpenReader(tmp); err != nil {
-		os.Remove(tmp)
-		return errors.New("zip ではないものが返ってきた（リンクが切れたか、ログインが要る）")
-	}
-	return os.Rename(tmp, dst)
 }
 
 // 書き出しの種類と、aihist で取り込めるか。
@@ -168,8 +100,8 @@ var categories = map[string]struct {
 type exportFile struct {
 	Category, Label, Filename string
 	Readable                  bool
-	State                     string // waiting / downloading / done / error / imported
-	Error                     string
+	URL                       string
+	State                     string // waiting（まだ上げていない） / done / imported
 	Bytes                     int64
 	Count                     int // 会話の数（読めたとき）
 }
@@ -187,32 +119,28 @@ func (s *Server) exportDir(host, id string) (string, error) {
 
 var raw0 = regexp.MustCompile(`^[0-9A-Za-z]{1,64}$`)
 
-func (s *Server) exportFiles(host, id string) ([]exportFile, bool, error) {
+func (s *Server) exportFiles(host, id string) ([]exportFile, error) {
 	dir, err := s.exportDir(host, id)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	m, err := readManifest(b)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	imported, _ := s.raw.Root(host, claudeai.Tool)
-	busy := false
 	var out []exportFile
 	for _, f := range m.Files {
 		c := categories[f.Category]
 		if c.Label == "" {
 			c.Label = f.Category
 		}
-		e := exportFile{Category: f.Category, Label: c.Label, Filename: f.Filename, Readable: c.Readable, State: "waiting"}
+		e := exportFile{Category: f.Category, Label: c.Label, Filename: f.Filename, Readable: c.Readable, State: "waiting", URL: f.URL}
 		p := filepath.Join(dir, f.Filename)
-		exportState.Lock()
-		msg, inState := exportState.m[p]
-		exportState.Unlock()
 		if st, err := os.Stat(p); err == nil {
 			e.State, e.Bytes = "done", st.Size()
 			if e.Readable {
@@ -227,25 +155,16 @@ func (s *Server) exportFiles(host, id string) ([]exportFile, bool, error) {
 			if _, err := os.Stat(filepath.Join(imported, "export", id+"-"+f.Filename)); err == nil {
 				e.State = "imported"
 			}
-		} else if inState && msg == "" {
-			e.State, busy = "downloading", true
-			if st, err := os.Stat(p + ".part"); err == nil {
-				e.Bytes = st.Size()
-			}
-		} else if inState {
-			e.State, e.Error = "error", msg
-		} else {
-			busy = true
 		}
 		out = append(out, e)
 	}
-	return out, busy, nil
+	return out, nil
 }
 
 // exportPage は落とした書き出しの中身を並べ、取り込むものを選ばせる。
 func (s *Server) exportPage(w http.ResponseWriter, r *http.Request) {
 	host, id := r.PathValue("host"), r.PathValue("id")
-	files, busy, err := s.exportFiles(host, id)
+	files, err := s.exportFiles(host, id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -255,7 +174,13 @@ func (s *Server) exportPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	d["Files"], d["Busy"], d["ExportHost"], d["ExportID"], d["Page"] = files, busy, host, id, "upload"
+	waiting := 0
+	for _, f := range files {
+		if f.State == "waiting" {
+			waiting++
+		}
+	}
+	d["Files"], d["Waiting"], d["ExportHost"], d["ExportID"], d["Page"] = files, waiting, host, id, "upload"
 	s.render(w, r, "export.html", d)
 }
 
@@ -271,7 +196,7 @@ func (s *Server) exportImport(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	files, _, err := s.exportFiles(host, id)
+	files, err := s.exportFiles(host, id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -301,4 +226,83 @@ func (s *Server) exportImport(w http.ResponseWriter, r *http.Request) {
 		s.ingest(host, claudeai.Tool)
 	}
 	http.Redirect(w, r, "/exports/"+url.PathEscape(host)+"/"+id, http.StatusSeeOther)
+}
+
+// exportUpload は、ブラウザで落とした zip を受け取り、書き出しの一覧と名前が合うものを置く。
+func (s *Server) exportUpload(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	host, id := r.PathValue("host"), r.PathValue("id")
+	dir, err := s.exportDir(host, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	files, err := s.exportFiles(host, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	l := lang(r)
+	type res struct {
+		Name  string `json:"name"`
+		Error string `json:"error,omitempty"`
+	}
+	var out []res
+	for _, fh := range r.MultipartForm.File["files"] {
+		name := filepath.Base(strings.ReplaceAll(fh.Filename, `\`, "/"))
+		// ブラウザが同じ名前を避けて付ける「 (1)」は外して照らす
+		name = dup.ReplaceAllString(name, "$1$2")
+		ok := false
+		for _, f := range files {
+			ok = ok || f.Filename == name
+		}
+		if !ok {
+			out = append(out, res{fh.Filename, tr(l, "この書き出しのファイルではない")})
+			continue
+		}
+		src, err := fh.Open()
+		if err == nil {
+			err = saveZip(src, filepath.Join(dir, name))
+			src.Close()
+		}
+		if err != nil {
+			out = append(out, res{fh.Filename, tr(l, err.Error())})
+			continue
+		}
+		out = append(out, res{Name: fh.Filename})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
+}
+
+var dup = regexp.MustCompile(`^(.*?)(?: \(\d+\))(\.zip)$`)
+
+func saveZip(r io.Reader, dst string) error {
+	tmp := dst + ".part"
+	f, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(f, r); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if z, err := zip.OpenReader(tmp); err != nil {
+		os.Remove(tmp)
+		return errors.New("zip ではない")
+	} else {
+		z.Close()
+	}
+	return os.Rename(tmp, dst)
 }

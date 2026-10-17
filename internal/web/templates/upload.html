@@ -49,7 +49,7 @@
       var r; try{r=JSON.parse(x.responseText)[0]}catch(e){r={error:x.status+' '+x.responseText}}
       bar.style.width='100%';
       if(r.error){li.className='err'; st.textContent=r.error;}
-      else if(r.export){li.className='ok'; st.innerHTML=''; var e=document.createElement('a'); e.href=r.href; e.textContent=T.pick; st.appendChild(e);}
+      else if(r.export){location.href=r.href; return}
       else{li.className='ok'; st.innerHTML='';
         var s=document.createElement('span'); s.textContent=r.label+' · '+T.ok.replace('%d',r.imported)+(r.skipped?' · '+T.same.replace('%d',r.skipped):''); st.appendChild(s);
         var a=document.createElement('a'); a.href=r.href; a.textContent=T.open; st.appendChild(a);}
