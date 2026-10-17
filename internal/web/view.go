@@ -150,7 +150,7 @@ var tools = map[string]struct{ Label, Color, Mark string }{
 	"opencode":    {"OpenCode", "#6d63f2", "O"},
 	"antigravity": {"Antigravity", "#3b82f6", "A"},
 	"chatgpt":     {"ChatGPT", "#74aa9c", "G"},
-	"claude_ai":   {"Claude", "#c96442", "W"},
+	"claude_ai":   {"claude.ai", "#c96442", "W"},
 	"gemini":      {"Gemini", "#a142f4", "M"},
 }
 

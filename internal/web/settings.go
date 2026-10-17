@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -117,7 +118,7 @@ func humanBytes(n int64) string {
 // settings は設定の画面（マシンから送る・容量・言語）。
 // 設定の画面の項目（左の一覧の順）。
 var sections = []struct{ Key, Label string }{
-	{"general", "一般"}, {"sending", "送信"}, {"machines", "マシン"}, {"tokens", "トークン"}, {"storage", "容量"},
+	{"general", "一般"}, {"sending", "送信"}, {"upload", "アップロード"}, {"machines", "マシン"}, {"tokens", "トークン"}, {"storage", "容量"},
 }
 
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
@@ -162,6 +163,11 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	days, _ := strconv.Atoi(s.st.Setting("cleanup_days", "0"))
 	d["Cleanup"], d["CleanupOpts"] = days, []int{0, 7, 14, 30, 90}
 	d["Machines"] = s.machineViews(lang(r))
+	var ut []toolOpt
+	for _, t := range uploadTools {
+		ut = append(ut, toolOpt{Tool: t, Label: toolLabel(t), On: s.uploadAllowed(t)})
+	}
+	d["UploadTools"], d["UploadAttach"] = ut, s.st.Setting("upload_attachments", "1") != "0"
 	d["Schedule"] = s.st.Setting("schedule", DefaultSchedule)
 	d["Next"] = s.nextRuns(lang(r), d["Schedule"].(string), 3)
 	d["CleanupOpts2"] = []int{-1, 0, 7, 14, 30, 90}
@@ -278,4 +284,29 @@ func (s *Server) setCleanup(w http.ResponseWriter, r *http.Request) {
 		s.st.SetSetting("cleanup_days", strconv.Itoa(d))
 	}
 	done(w, r, "/settings/sending")
+}
+
+// アップロードで受け付ける AI（設定の「アップロード」に並べる順）。
+var uploadTools = []string{"claude_code", "codex", "antigravity", "chatgpt", "claude_ai", "gemini"}
+
+// setUpload はアップロードで取り込む種類を保存する。外したものだけを覚え、あとで増えた AI は取り込む。
+func (s *Server) setUpload(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	r.ParseForm()
+	l := []string{"*"}
+	for _, t := range uploadTools {
+		if !slices.Contains(r.Form["tool"], t) {
+			l = append(l, "-"+t)
+		}
+	}
+	s.st.SetSetting("upload_tools", strings.Join(l, ","))
+	a := "0"
+	if r.FormValue("attachments") == "1" {
+		a = "1"
+	}
+	s.st.SetSetting("upload_attachments", a)
+	done(w, r, "/settings/upload")
 }

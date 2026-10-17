@@ -124,6 +124,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /settings/tokens", s.addToken)
 	mux.HandleFunc("POST /settings/cleanup", s.setCleanup)
 	mux.HandleFunc("POST /settings/schedule", s.setSchedule)
+	mux.HandleFunc("POST /settings/upload", s.setUpload)
 	mux.HandleFunc("POST /settings/machines/{host}", s.setMachine)
 	mux.HandleFunc("POST /settings/machines/{host}/delete", s.deleteMachine)
 	mux.HandleFunc("GET /settings/preview", s.preview)

@@ -22,7 +22,7 @@
     </label>
     <div class="field"><span class="fl">{{t "マシン名"}}</span><input id="host" list="hosts" value="upload" autocomplete="off"><datalist id="hosts">{{range .Hosts}}<option value="{{.}}">{{end}}</datalist></div>
     <ul class="queue" id="queue"></ul>
-    <a class="grp row link auto" href="/settings/tokens" onclick="event.preventDefault();openSettings('tokens')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><div class="rl"><span>{{t "マシンから自動で送る"}}</span></div><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></a>
+    <a class="grp row link auto" href="/settings/upload" onclick="event.preventDefault();openSettings('upload')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><div class="rl"><span>{{t "取り込む種類"}}</span></div><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></a>
   </div></div>
 </main>
 </div>

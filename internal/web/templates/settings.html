@@ -36,6 +36,18 @@
       </form>
 
     </section>
+    <section data-sec="upload">
+      <h1>{{t "アップロード"}}</h1>
+      <form method="post" action="/settings/upload" data-auto>
+        <div class="gt">{{t "取り込む AI"}}</div>
+        <div class="grp">
+          {{range .UploadTools}}<label class="row"><div class="rl"><span><i class="dot" style="background:{{toolColor .Tool}}"></i>{{.Label}}</span></div><div class="rc"><input class="sw" type="checkbox" name="tool" value="{{.Tool}}"{{if .On}} checked{{end}}></div></label>{{end}}
+        </div>
+        <div class="grp">
+          <label class="row"><div class="rl">{{t "添付ファイル（画像・PDF など）も取り込む"}}</div><div class="rc"><input class="sw" type="checkbox" name="attachments" value="1"{{if .UploadAttach}} checked{{end}}></div></label>
+        </div>
+      </form>
+    </section>
     <section data-sec="machines">
       <h1>{{t "マシン"}}</h1>
       <div class="grp">

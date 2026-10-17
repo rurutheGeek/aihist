@@ -93,3 +93,12 @@ func drop(f *os.File) {
 func (c *Client) same(h raw.Info, size int64, mtime int64) bool {
 	return h.MTime == mtime && (c.NoImages || h.Size == size)
 }
+
+// Strip は r から添付ファイルを抜いた写しを返す（アップロードでも使う）。使い終わったら done を呼ぶ。
+func Strip(r io.Reader) (f *os.File, size int64, done func(), err error) {
+	f, size, err = stripped(r)
+	if err != nil {
+		return nil, 0, func() {}, err
+	}
+	return f, size, func() { drop(f) }, nil
+}

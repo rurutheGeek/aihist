@@ -28,6 +28,7 @@ import (
 	"github.com/rurutheGeek/aihist/internal/adapter/gemini"
 	"github.com/rurutheGeek/aihist/internal/adapter/webexport"
 	"github.com/rurutheGeek/aihist/internal/ingest"
+	"github.com/rurutheGeek/aihist/internal/push"
 )
 
 // auth は /api に、設定の画面で発行したトークンか、起動時に渡したトークン（AIHIST_TOKEN）を求める。
@@ -177,6 +178,9 @@ func (s *Server) manifestUpload(host string, fh *multipart.FileHeader) (string, 
 	if !isManifest(b) {
 		return "", false, nil
 	}
+	if !s.uploadAllowed(claudeai.Tool) {
+		return "", true, errNotAllowed
+	}
 	id, err := s.startExport(host, b)
 	return id, true, err
 }
@@ -232,7 +236,11 @@ func (s *Server) store(host string, fh *multipart.FileHeader) (tool, rel string,
 	defer f.Close()
 	name := path.Base(strings.ReplaceAll(fh.Filename, `\`, "/"))
 	// Google Takeout（zip）か、そこから出したマイ アクティビティの HTML なら Gemini の会話だけを置く
-	if ok, err := s.storeGemini(host, name, f, fh.Size); ok || err != nil {
+	allowGemini := s.uploadAllowed(gemini.Tool)
+	if ok, err := s.storeGemini(host, name, f, fh.Size, allowGemini); ok || err != nil {
+		if ok && !allowGemini {
+			return "", "", errNotAllowed
+		}
 		return gemini.Tool, "", err
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
@@ -247,10 +255,30 @@ func (s *Server) store(host string, fh *multipart.FileHeader) (tool, rel string,
 	if tool == "" {
 		return "", "", errors.New("会話の記録ではない")
 	}
+	if !s.uploadAllowed(tool) {
+		return "", "", errNotAllowed
+	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return "", "", err
 	}
-	return tool, rel, s.raw.Put(host, tool, rel, f, time.Now())
+	var body io.Reader = f
+	// 添付ファイルを取り込まない設定なら、埋め込まれた画像などを抜いてから置く（形のある記録だけ）
+	if s.st.Setting("upload_attachments", "1") == "0" && (tool == claudecode.Tool || tool == codex.Tool) {
+		t, _, done, err := push.Strip(f)
+		if err != nil {
+			return "", "", err
+		}
+		defer done()
+		body = t
+	}
+	return tool, rel, s.raw.Put(host, tool, rel, body, time.Now())
+}
+
+var errNotAllowed = errors.New("取り込まない設定にしている")
+
+// uploadAllowed は設定の「アップロード」で tool を取り込むことにしているか。
+func (s *Server) uploadAllowed(tool string) bool {
+	return push.Selected(s.st.Setting("upload_tools", "*"), tool)
 }
 
 // detect はファイル名と先頭行から、どのツールの記録かと置き場所を決める。
@@ -302,13 +330,16 @@ func detectWeb(name string, f multipart.File, size int64) string {
 
 // storeGemini は Takeout の zip から Gemini アプリのマイ アクティビティの HTML だけを取り出して置く
 // （zip には写真など他のサービスも入っていて大きいので、丸ごとは置かない）。
-func (s *Server) storeGemini(host, name string, f multipart.File, size int64) (bool, error) {
+func (s *Server) storeGemini(host, name string, f multipart.File, size int64, put bool) (bool, error) {
 	stamp := time.Now().Format("20060102-150405")
 	if strings.HasSuffix(name, ".html") {
 		head := make([]byte, 2<<20)
 		n, _ := io.ReadFull(f, head)
 		if !gemini.Is(head[:n]) {
 			return false, nil
+		}
+		if !put {
+			return true, nil
 		}
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return true, err
@@ -336,6 +367,9 @@ func (s *Server) storeGemini(host, name string, f multipart.File, size int64) (b
 		r.Close()
 		if !gemini.Is(head[:n]) {
 			continue
+		}
+		if !put {
+			return true, nil
 		}
 		r, err = e.Open()
 		if err != nil {
