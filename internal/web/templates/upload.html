@@ -77,14 +77,17 @@
 <script>
 (function(){
   var m=document.getElementById('exp'), base='', list=m.querySelector('.xl'), err=m.querySelector('.xerr'), fin=m.querySelector('.xdone');
-  var X={dl:{{t "ダウンロード"}},wait:{{t "zip を待っている"}},got:{{t "取り込み中"}},imp:{{t "%d 件を取り込んだ"}},up:{{t "送信中"}}};
+  var X={dl:{{t "ダウンロード"}},wait:{{t "zip を待っている"}},got:{{t "取り込み中"}},imp:{{t "%d 件を取り込んだ"}},up:{{t "送信中"}},fail:{{t "送れなかった"}}};
   function esc(t){var d=document.createElement('div');d.textContent=t;return d.innerHTML}
+  var poll;
   function draw(st){
+    clearTimeout(poll);
+    if(st.importing)poll=setTimeout(function(){fetch(base+'/state').then(function(r){return r.json()}).then(draw).catch(fail)},1500);
     list.innerHTML='';
     st.files.forEach(function(f){
       var row=document.createElement('div'); row.className='row';
       var right=f.State==='waiting'?'<a class="btn" target="_blank" rel="noreferrer noopener" href="'+esc(f.URL)+'">'+esc(X.dl)+'</a>'
-        :f.State==='imported'?'<span class="ok">✓ '+esc(X.imp.replace('%d',f.Count))+'</span>':'<span class="mute">'+esc(X.got)+'</span>';
+        :f.State==='imported'?'<span class="ok">✓ '+esc(X.imp.replace('%d',f.Count))+'</span>':'<span class="mute spin">'+esc(X.got)+'</span>';
       row.innerHTML='<div class="rl"><span>'+esc(f.Label)+'</span><small>'+esc(f.State==='waiting'?X.wait:f.Filename)+'</small></div><div class="rc">'+right+'</div>';
       var a=row.querySelector('a.btn'); if(a)a.addEventListener('click',function(){a.classList.add('done')});
       list.appendChild(row);
@@ -92,9 +95,10 @@
     fin.hidden=!st.done; if(st.done)fin.querySelector('a').href=st.href;
     m.querySelector('.xdrop').hidden=st.done;
   }
+  function fail(e){err.textContent=X.fail+' ('+(e&&e.message||e)+')'}
   window.openExport=function(href){
     base=href; m.classList.add('open'); err.textContent='';
-    fetch(base+'/state').then(function(r){return r.json()}).then(draw);
+    fetch(base+'/state').then(function(r){return r.json()}).then(draw).catch(fail);
     history.replaceState(null,'','/upload#export='+href.replace('/exports/',''));
   };
   function close(){m.classList.remove('open'); history.replaceState(null,'','/upload')}
@@ -102,10 +106,10 @@
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&m.classList.contains('open'))close()});
   function send(files){
     var fd=new FormData(); Array.from(files).forEach(function(x){fd.append('files',x)}); err.textContent=X.up;
-    fetch(base+'/files',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(a){
+    fetch(base+'/files',{method:'POST',body:fd}).then(function(r){if(!r.ok)throw new Error(r.status+' '+r.statusText);return r.json()}).then(function(a){
       err.textContent=a.results.filter(function(x){return x.error}).map(function(x){return x.name+': '+x.error}).join('\n');
       draw(a.state);
-    });
+    }).catch(fail);
   }
   var box=m.querySelector('.xbox'), inp=m.querySelector('.xdrop input');
   inp.onchange=function(){send(inp.files);inp.value=''};

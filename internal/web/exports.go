@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rurutheGeek/aihist/internal/adapter/claudeai"
@@ -173,9 +174,10 @@ func (s *Server) exportPage(w http.ResponseWriter, r *http.Request) {
 
 // exportState は窓に出す状態。取り込めるもの（未対応でないもの）だけを並べる。
 type exportStateJSON struct {
-	Files []exportFile `json:"files"`
-	Done  bool         `json:"done"` // 全部取り込んだ
-	Href  string       `json:"href"` // 取り込んだ会話の一覧
+	Files     []exportFile `json:"files"`
+	Importing bool         `json:"importing"` // 裏で取り込んでいる途中
+	Done      bool         `json:"done"`      // 全部取り込んだ
+	Href      string       `json:"href"`      // 取り込んだ会話の一覧
 }
 
 func (s *Server) exportStatus(l, host, id string) (exportStateJSON, error) {
@@ -184,6 +186,9 @@ func (s *Server) exportStatus(l, host, id string) (exportStateJSON, error) {
 		return exportStateJSON{}, err
 	}
 	st := exportStateJSON{Files: []exportFile{}, Done: true, Href: "/?" + url.Values{"tool": {claudeai.Tool}, "host": {host}}.Encode()}
+	importing.Lock()
+	st.Importing = importing.m[host+"/"+id] || importing.m[host+"/"+id+"?"]
+	importing.Unlock()
 	for _, f := range files {
 		if !categories[f.Category].Readable {
 			continue
@@ -205,8 +210,27 @@ func (s *Server) exportStateAPI(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(st)
 }
 
+// importing は裏で取り込んでいる書き出し（大きな書き出しは数十秒かかるので、画面は進み具合を見に来る）。
+var importing = struct {
+	sync.Mutex
+	m map[string]bool
+}{m: map[string]bool{}}
+
 // importReady は届いていて、まだ取り込んでいない zip を取り込む。
 func (s *Server) importReady(host, id string) {
+	k := host + "/" + id
+	importing.Lock()
+	if importing.m[k] {
+		importing.Unlock()
+		return
+	}
+	importing.m[k] = true
+	importing.Unlock()
+	defer func() {
+		importing.Lock()
+		delete(importing.m, k)
+		importing.Unlock()
+	}()
 	dir, err := s.exportDir(host, id)
 	if err != nil {
 		return
@@ -285,8 +309,17 @@ func (s *Server) exportUpload(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, res{Name: fh.Filename})
 	}
-	s.importReady(host, id)
+	importing.Lock()
+	importing.m[host+"/"+id+"?"] = true // 下の go が始まる前に状態を聞かれても「取り込み中」と返す
+	importing.Unlock()
+	go func() {
+		s.importReady(host, id)
+		importing.Lock()
+		delete(importing.m, host+"/"+id+"?")
+		importing.Unlock()
+	}()
 	st, _ := s.exportStatus(l, host, id)
+	st.Importing = true
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"results": out, "state": st})
 }
