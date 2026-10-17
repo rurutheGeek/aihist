@@ -26,7 +26,7 @@
 </div>
 <script>
 (function(){
-  var T={wait:{{t "待機"}},up:{{t "送信中"}},imp:{{t "取り込み中"}},ok:{{t "%d 件取り込み"}},same:{{t "%d 件は変更なし"}},open:{{t "開く"}}};
+  var T={wait:{{t "待機"}},up:{{t "送信中"}},imp:{{t "取り込み中"}},ok:{{t "%d 件取り込み"}},same:{{t "%d 件は変更なし"}},open:{{t "開く"}},pick:{{t "中身を選ぶ"}}};
   var d=document.getElementById('drop'), f=document.getElementById('files'), q=document.getElementById('queue'), busy=false, todo=[];
   function size(n){return n>=1<<30?(n/(1<<30)).toFixed(1)+' GB':n>=1<<20?(n/(1<<20)).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'}
   function add(files){
@@ -49,6 +49,7 @@
       var r; try{r=JSON.parse(x.responseText)[0]}catch(e){r={error:x.status+' '+x.responseText}}
       bar.style.width='100%';
       if(r.error){li.className='err'; st.textContent=r.error;}
+      else if(r.export){li.className='ok'; st.innerHTML=''; var e=document.createElement('a'); e.href=r.href; e.textContent=T.pick; st.appendChild(e);}
       else{li.className='ok'; st.innerHTML='';
         var s=document.createElement('span'); s.textContent=r.label+' · '+T.ok.replace('%d',r.imported)+(r.skipped?' · '+T.same.replace('%d',r.skipped):''); st.appendChild(s);
         var a=document.createElement('a'); a.href=r.href; a.textContent=T.open; st.appendChild(a);}

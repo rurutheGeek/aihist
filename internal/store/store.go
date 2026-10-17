@@ -14,6 +14,16 @@ import (
 )
 
 const schema = `
+CREATE TABLE IF NOT EXISTS machines (
+  host TEXT PRIMARY KEY,
+  seen_at INTEGER NOT NULL DEFAULT 0,
+  version TEXT NOT NULL DEFAULT '',
+  detected TEXT NOT NULL DEFAULT '[]',
+  tools TEXT NOT NULL DEFAULT '*',
+  attachments INTEGER NOT NULL DEFAULT 1,
+  schedule TEXT NOT NULL DEFAULT '',
+  cleanup INTEGER NOT NULL DEFAULT -1
+);
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

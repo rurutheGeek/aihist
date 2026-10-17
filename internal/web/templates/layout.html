@@ -147,6 +147,28 @@ mark{background:var(--mark);color:inherit;border-radius:3px;padding:0 1px}
 .newtok .warn{font-size:12.5px;color:var(--err);margin:0 0 10px}
 .stats.left{justify-content:flex-start;margin:0 0 14px}
 .cmdl span{width:auto;min-width:3em}
+.sched{margin:0 0 10px}
+.sched.off{opacity:.45;pointer-events:none}
+.srow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px}
+.srow select,.srow input[type=time],.mrow select{border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:5px 8px}
+.wd{display:inline-flex;gap:4px}
+.wd input{position:absolute;opacity:0;pointer-events:none}
+.wd span{display:inline-block;width:30px;text-align:center;border:1px solid var(--line);border-radius:8px;padding:3px 0;font-size:13px;cursor:pointer;color:var(--mute)}
+.wd input:checked+span{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.next{font-size:12.5px;margin-top:6px}
+.mcard{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:0 0 12px}
+.mh{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin:0 0 8px}
+.mh b{font-size:15px}
+.mh span{font-size:12.5px}
+.mh .nx{margin-left:auto;color:var(--mute)}
+.mrow{display:grid;grid-template-columns:8em 1fr;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px}
+.ml{color:var(--mute);font-size:12.5px;padding-top:2px}
+.chk{display:flex;flex-wrap:wrap;gap:6px 16px}
+.chk label,.chk1{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.chk small{color:var(--faint)}
+.chk1{margin:0 0 8px}
+.mact{display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid var(--line)}
+@media (max-width:600px){.mrow{grid-template-columns:1fr}}
 .empty{color:var(--faint);font-size:13px;padding:24px 12px;text-align:center}
 
 /* 右の本文 */

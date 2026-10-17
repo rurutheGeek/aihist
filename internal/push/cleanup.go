@@ -11,18 +11,6 @@ import (
 	"github.com/rurutheGeek/aihist/internal/raw"
 )
 
-// ClientConfig はサーバーが各マシンへ配る設定。
-type ClientConfig struct {
-	CleanupDays int `json:"cleanup_days"` // 0 は消さない
-}
-
-// Config はサーバーの設定を読む（古いサーバーには無いので、読めなければ既定値）。
-func (c *Client) Config() ClientConfig {
-	var cf ClientConfig
-	c.getJSON("/api/client", nil, &cf)
-	return cf
-}
-
 // deletable は消してよいファイルか。索引など、会話そのものでないものは消さない。
 func deletable(tool, rel string) bool {
 	switch tool {

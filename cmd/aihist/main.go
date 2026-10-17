@@ -2,16 +2,14 @@
 package main
 
 import (
+	_ "time/tzdata"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/rurutheGeek/aihist/internal/adapter/antigravity"
 	"github.com/rurutheGeek/aihist/internal/adapter/claudecode"
@@ -44,7 +42,7 @@ func clientConfig() map[string]string {
 			}
 		}
 	}
-	for _, k := range []string{"AIHIST_SERVER", "AIHIST_TOKEN", "AIHIST_HOST", "AIHIST_AUTO_UPDATE", "AIHIST_CLEANUP", "AIHIST_TOOLS", "AIHIST_IMAGES"} {
+	for _, k := range []string{"AIHIST_SERVER", "AIHIST_TOKEN", "AIHIST_HOST", "AIHIST_AUTO_UPDATE", "AIHIST_CLEANUP", "AIHIST_TOOLS", "AIHIST_IMAGES", "AIHIST_ATTACHMENTS"} {
 		if v := os.Getenv(k); v != "" {
 			cf[k] = v
 		}
@@ -92,71 +90,8 @@ func main() {
 
 	// push は DB を使わない
 	if args[0] == "push" {
-		fs := flag.NewFlagSet("push", flag.ExitOnError)
-		cf := clientConfig()
-		server := fs.String("server", cf["AIHIST_SERVER"], "送り先 http://host:port")
-		token := fs.String("token", cf["AIHIST_TOKEN"], "トークン")
-		name := fs.String("host", or(cf["AIHIST_HOST"], host), "このマシンの名前")
-		every := fs.Duration("every", 0, "この間隔で送り続ける（0 は1回だけ）")
-		fs.Parse(args[1:])
-		if *server == "" {
-			usage()
-		}
-		c := push.NewClient(*server, *token, *name)
-		c.NoImages = cf["AIHIST_IMAGES"] == "0"
-		// サーバーが配る実行ファイルに合わせて自分を新しくし、新しい方で送り直す（AIHIST_AUTO_UPDATE=0 で止める）
-		if cf["AIHIST_AUTO_UPDATE"] != "0" && os.Getenv("AIHIST_UPDATED") == "" {
-			if exe, err := c.Update(); err != nil {
-				log.Printf("更新: %v", err)
-			} else if exe != "" {
-				log.Printf("新しい aihist に入れ替えた")
-				cmd := exec.Command(exe, os.Args[1:]...)
-				cmd.Stdout, cmd.Stderr, cmd.Env = os.Stdout, os.Stderr, append(os.Environ(), "AIHIST_UPDATED=1")
-				if err := cmd.Run(); err != nil {
-					if e, ok := err.(*exec.ExitError); ok {
-						os.Exit(e.ExitCode())
-					}
-					log.Fatal(err)
-				}
-				return
-			}
-		}
-		for {
-			// 送り終えた古い会話を手元から消す日数。サーバーの設定に従い、手元の AIHIST_CLEANUP（日数、0 で消さない）が優先する
-			days := c.Config().CleanupDays
-			if v, err := strconv.Atoi(cf["AIHIST_CLEANUP"]); err == nil {
-				days = v
-			}
-			for _, src := range push.Defaults(home) {
-				if !push.Selected(cf["AIHIST_TOOLS"], src.Tool) {
-					continue
-				}
-				n, res, err := c.Push(src)
-				switch {
-				case err != nil:
-					log.Printf("%s: %v", src.Tool, err)
-					continue
-				case n > 0:
-					log.Printf("%s: %d ファイル送信、%s", src.Tool, n, res)
-				}
-				if n, size, err := c.Cleanup(src, days); err != nil {
-					log.Printf("%s: 片付け: %v", src.Tool, err)
-				} else if n > 0 {
-					log.Printf("%s: %d 日より前の %d ファイル（%.1f MB）を手元から消した", src.Tool, days, n, float64(size)/(1<<20))
-				}
-			}
-			if push.Selected(cf["AIHIST_TOOLS"], "opencode") {
-				if n, res, err := c.PushOpenCode(push.OpenCodeDB(home)); err != nil {
-					log.Printf("opencode: %v", err)
-				} else if n > 0 {
-					log.Printf("opencode: %d 会話送信、%s", n, res)
-				}
-			}
-			if *every == 0 {
-				return
-			}
-			time.Sleep(*every)
-		}
+		runPush(home, host, args[1:])
+		return
 	}
 
 	// detect は、このマシンにある AI の記録を「ツール<TAB>ファイル数<TAB>バイト数」で出す（導入スクリプトが選ばせるのに使う）

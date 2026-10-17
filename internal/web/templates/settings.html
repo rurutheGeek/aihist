@@ -7,10 +7,35 @@
     <div class="title">{{t "設定"}}</div>
   </div>
   <div class="scroll"><div class="col">
-    <nav class="tabs"><a href="#machines">{{t "マシンから送る"}}</a><a href="#cleanup">{{t "手元の片付け"}}</a><a href="#storage">{{t "容量"}}</a><a href="#language">{{t "言語"}}</a></nav>
+    <nav class="tabs"><a href="#timing">{{t "送るタイミング"}}</a><a href="#machines">{{t "マシン"}}</a><a href="#cleanup">{{t "手元の片付け"}}</a><a href="#storage">{{t "容量"}}</a><a href="#language">{{t "言語"}}</a></nav>
+
+    <section class="setup" id="timing">
+      <h2>{{t "送るタイミング"}}</h2>
+      <form method="post" action="/settings/schedule" class="tz-form">
+        {{template "sched" .Schedule}}
+        <input type="hidden" name="tz">
+        <button class="btn pri">{{t "保存"}}</button>
+      </form>
+    </section>
 
     <section class="setup" id="machines">
-      <h2>{{t "マシンから送る"}}</h2>
+      <h2>{{t "マシン"}}</h2>
+      {{range .Machines}}<form class="mcard" id="m-{{.Host}}" method="post" action="/settings/machines/{{.Host}}">
+        <div class="mh"><b>{{.Host}}</b><span class="mute">{{if .SeenAt.IsZero}}{{t "未接続"}}{{else}}{{t "最後に連絡"}} {{when .SeenAt}}{{end}}{{with .Version}} · {{.}}{{end}}</span>{{with .Next}}<span class="nx">{{t "次に送る"}} {{index . 0}}</span>{{end}}</div>
+        <div class="mrow"><span class="ml">{{t "送る AI"}}</span><div class="chk">
+          {{range .Tools}}<label><input type="checkbox" name="tool" value="{{.Tool}}"{{if .On}} checked{{end}}><i class="dot" style="background:{{toolColor .Tool}}"></i>{{.Label}} <small>{{bytes .Bytes}}</small></label>{{else}}<span class="mute">{{t "まだ報告が無い"}}</span>{{end}}
+          <label><input type="checkbox" name="all_tools" value="1"{{if .AllTools}} checked{{end}}>{{t "あとで見つかった AI も送る"}}</label>
+        </div></div>
+        <div class="mrow"><span class="ml">{{t "添付ファイル"}}</span><div class="chk"><label><input type="checkbox" name="attachments" value="1"{{if .Attachments}} checked{{end}}>{{t "画像・PDF などの添付ファイルも送る"}}</label></div></div>
+        <div class="mrow"><span class="ml">{{t "送るタイミング"}}</span><div>
+          <label class="chk1"><input type="checkbox" name="follow" value="1"{{if .Follow}} checked{{end}} onchange="this.closest('div').querySelector('.sched').classList.toggle('off',this.checked)">{{t "全体の設定に従う"}}</label>
+          <div class="sched-wrap">{{template "sched" .Schedule}}</div>
+        </div></div>
+        <div class="mrow"><span class="ml">{{t "手元の片付け"}}</span><div><select name="cleanup">{{$c := .Cleanup}}{{range $.CleanupOpts2}}<option value="{{.}}"{{if eq . $c}} selected{{end}}>{{if eq . -1}}{{t "全体の設定に従う"}}{{else if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>
+        <div class="mact"><button class="btn pri">{{t "保存"}}</button><button class="btn sm" formaction="/settings/machines/{{.Host}}/delete" onclick="return confirm({{t "このマシンの設定を消す？"}})">{{t "削除"}}</button></div>
+      </form>{{end}}
+
+      <h3>{{t "マシンを追加"}}</h3>
       {{if .NewToken}}<div class="newtok">
         <div class="nt"><b>{{.NewName}}</b><code id="tok">{{.NewToken}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div>
         <div class="warn">{{t "このトークンは今しか表示されない"}}</div>
@@ -63,8 +88,56 @@
 </div>
 <script>
 function aihistCopy(b){var t=b.previousElementSibling.textContent;navigator.clipboard.writeText(t).then(function(){var o=b.textContent;b.textContent={{t "コピーした"}};setTimeout(function(){b.textContent=o},1400)})}
+
+// 送るタイミングの組み立て。画面では選ぶだけにし、中では cron の形にして送る
+(function(){
+  function pad(n){return (n<10?'0':'')+n}
+  document.querySelectorAll('.sched').forEach(function(el){
+    var hid=el.querySelector('input[name=schedule]'), k=el.querySelector('.k'), n=el.querySelector('.n'), h=el.querySelector('.h'),
+        m=el.querySelector('.m'), d=el.querySelector('.d'), tm=el.querySelector('.tm'), nx=el.querySelector('.next'),
+        wd=Array.from(el.querySelectorAll('.wd input'));
+    for(var i=1;i<=31;i++){var o=document.createElement('option');o.value=o.textContent=i;d.appendChild(o)}
+    // 今の式を部品に戻す（この画面で作る形だけ）
+    var f=(hid.value||'*/10 * * * *').split(/\s+/), kind='min';
+    if(f[1]==='*'&&f[2]==='*'&&f[4]==='*'){kind='min'; n.value=f[0]==='*'?'1':f[0].replace('*/','')}
+    else if(f[1].indexOf('*/')===0||(f[1]==='*'&&/^\d+$/.test(f[0]))){kind='hour'; h.value=f[1]==='*'?'1':f[1].replace('*/',''); m.value=f[0]}
+    else if(f[4]!=='*'){kind='week'; f[4].split(',').forEach(function(x){if(wd[+x%7])wd[+x%7].checked=true}); tm.value=pad(+f[1])+':'+pad(+f[0])}
+    else if(f[2]!=='*'){kind='month'; d.value=f[2]; tm.value=pad(+f[1])+':'+pad(+f[0])}
+    else {kind='day'; tm.value=pad(+f[1])+':'+pad(+f[0])}
+    k.value=kind;
+    function build(){
+      var t=(tm.value||'09:00').split(':'), H=+t[0], M=+t[1], c;
+      switch(k.value){
+        case 'min': c=(n.value==='1'?'*':'*/'+n.value)+' * * * *'; break;
+        case 'hour': c=m.value+' '+(h.value==='1'?'*':'*/'+h.value)+' * * *'; break;
+        case 'day': c=M+' '+H+' * * *'; break;
+        case 'week': var ds=wd.filter(function(x){return x.checked}).map(function(x){return x.value}); if(!ds.length){wd[1].checked=true;ds=['1']} c=M+' '+H+' * * '+ds.join(','); break;
+        case 'month': c=M+' '+H+' '+d.value+' * *'; break;
+      }
+      hid.value=c;
+      el.querySelectorAll('.p').forEach(function(p){p.style.display=p.classList.contains('p-'+k.value)?'':'none'});
+      fetch('/settings/preview?schedule='+encodeURIComponent(c)).then(function(r){return r.json()}).then(function(a){nx.textContent=a&&a.length?{{t "次に送る"}}+' '+a.join('、'):''});
+    }
+    el.addEventListener('change',build); el.addEventListener('input',build); build();
+  });
+})();
+document.querySelectorAll('input[name=tz]').forEach(function(i){try{i.value=Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){}});
+document.querySelectorAll('.mcard .sched').forEach(function(el){var f=el.closest('form').querySelector('input[name=follow]');if(f&&f.checked)el.classList.add('off')});
 document.querySelectorAll('input[name=lang]').forEach(function(i){i.onchange=function(){
   document.cookie='lang='+i.value+';path=/;max-age='+(i.value?31536000:0)+';samesite=lax'; location.reload();
 }});
 </script>
 {{template "foot"}}{{end}}
+
+{{define "sched"}}<div class="sched" data-cron="{{.}}">
+  <input type="hidden" name="schedule" value="{{.}}">
+  <div class="srow">
+    <select class="k"><option value="min">{{t "数分ごと"}}</option><option value="hour">{{t "数時間ごと"}}</option><option value="day">{{t "毎日"}}</option><option value="week">{{t "毎週"}}</option><option value="month">{{t "毎月"}}</option></select>
+    <span class="p p-min"><select class="n">{{range (list 1 2 3 5 10 15 20 30)}}<option value="{{.}}">{{.}}</option>{{end}}</select> {{t "分ごと"}}</span>
+    <span class="p p-hour"><select class="h">{{range (list 1 2 3 4 6 8 12)}}<option value="{{.}}">{{.}}</option>{{end}}</select> {{t "時間ごと、"}}<select class="m">{{range (list 0 5 10 15 20 25 30 35 40 45 50 55)}}<option value="{{.}}">{{.}}</option>{{end}}</select> {{t "分に"}}</span>
+    <span class="p p-week wd">{{range $i, $d := (list "日" "月" "火" "水" "木" "金" "土")}}<label><input type="checkbox" value="{{$i}}"><span>{{t $d}}</span></label>{{end}}</span>
+    <span class="p p-month">{{if eq lang "en"}}on day {{end}}<select class="d"></select>{{if ne lang "en"}} 日{{end}}</span>
+    <span class="p p-day p-week p-month"><input type="time" class="tm" value="09:00"></span>
+  </div>
+  <div class="next mute"></div>
+</div>{{end}}

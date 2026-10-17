@@ -1,0 +1,23 @@
+{{define "export.html"}}{{template "head" (t "claude.ai の書き出し")}}
+{{if .Busy}}<meta http-equiv="refresh" content="3">{{end}}
+<div class="app">
+{{template "side" .}}
+<main class="main">
+  <div class="bar">
+    <button class="icon-btn menu" onclick="document.querySelector('.app').classList.add('open')" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="title">{{t "claude.ai の書き出し"}}</div>
+  </div>
+  <div class="scroll"><div class="col">
+    <form method="post" action="/exports/{{.ExportHost}}/{{.ExportID}}/import">
+      <ul class="queue">
+      {{range .Files}}<li class="{{if eq .State "error"}}err{{else if or (eq .State "done") (eq .State "imported")}}ok{{else}}run{{end}}">
+        <label class="qn"><input type="checkbox" name="file" value="{{.Filename}}"{{if and .Readable (eq .State "done")}} checked{{else}} disabled{{end}}><span class="nm">{{t .Label}}</span><small>{{.Filename}}{{if .Bytes}} · {{bytes .Bytes}}{{end}}</small></label>
+        <div class="qs">{{if eq .State "waiting"}}{{t "待機"}}{{else if eq .State "downloading"}}{{t "ダウンロード中"}}{{else if eq .State "error"}}{{.Error}}{{else if eq .State "imported"}}{{t "取り込み済み"}}{{if .Count}} · {{tf "%d 件" .Count}}{{end}}{{else if .Readable}}{{tf "%d 件" .Count}}{{else}}{{t "未対応"}}{{end}}</div>
+      </li>{{end}}
+      </ul>
+      <button class="btn pri"{{if .Busy}} disabled{{end}}>{{t "取り込む"}}</button>
+    </form>
+  </div></div>
+</main>
+</div>
+{{template "foot"}}{{end}}

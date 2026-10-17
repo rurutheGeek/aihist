@@ -42,7 +42,7 @@ curl -fsSL https://<サーバー>/api/install.sh | AIHIST_TOKEN=<トークン> s
 $env:AIHIST_TOKEN="<トークン>"; irm https://<サーバー>/api/install.ps1 | iex  # Windows
 ```
 
-常駐はしない。OS のタイマー（systemd のユーザータイマー、無ければ cron、macOS は launchd、Windows はタスク スケジューラ）が 10 分ごとに `aihist push` を1回動かす。2回目からは変わったファイルだけを送るので、1回は数秒・メモリ 10 MB ほどで終わる。
+常駐はしない。OS のタイマー（systemd のユーザータイマー、無ければ cron、macOS は launchd、Windows はタスク スケジューラ）が1分ごとに `aihist push -tick` を起こし、送る時刻でなければすぐ終わる。送る時刻・送る AI・添付ファイル・手元の片付けは、画面左下の「設定」で全体とマシンごとに決める（各マシンは数分のうちに受け取る）。2回目からは変わったファイルだけを送るので、1回は数秒・メモリ 10 MB ほどで終わる。
 
 送る前に、サーバーが配る実行ファイル（`/api/bin`）と自分の sha256 を比べ、違えば入れ替えてから送る。サーバーを新しくすれば、対応するツールが増えても各マシンでやり直すことは無い。
 
@@ -50,10 +50,10 @@ $env:AIHIST_TOKEN="<トークン>"; irm https://<サーバー>/api/install.ps1 |
 
 | 変数 | 意味 |
 |---|---|
-| `AIHIST_EVERY` | 送る間隔（既定 `10m`。`0` なら今1回送るだけ） |
+| `AIHIST_EVERY` | `0` なら今1回送るだけで、タイマーを置かない |
 | `AIHIST_HOST` | このマシンの名前（既定はホスト名。WSL では `-wsl` を付ける） |
-| `AIHIST_TOOLS` | 送る AI（`claude_code,codex,antigravity,opencode` をカンマ区切り）。無ければ、導入のときにこのマシンで見つかったものを並べて選ばせる |
-| `AIHIST_IMAGES` | `0` なら会話に埋め込まれた画像を 1 ピクセルの画像に置き換えて送る（元の AI へ戻しても読めるが、画像は無くなる。Antigravity の DB はそのまま）。無ければ導入のときに聞く |
+| `AIHIST_TOOLS` | 送る AI の最初の値（`claude_code,codex,antigravity,opencode` をカンマ区切り）。無ければ、導入のときにこのマシンで見つかったものを並べて選ばせる |
+| `AIHIST_ATTACHMENTS` | 添付ファイル（画像・PDF・音声など）を送るかの最初の値。送らないときは、会話に埋め込まれたものを同じ種類のごく小さな中身に置き換える（元の AI へ戻しても読めるが、中身は無くなる。Antigravity の DB はそのまま）。無ければ導入のときに聞く |
 | `AIHIST_CLEANUP` | 送り終えた会話を手元から消す日数（サーバーの「設定 → 手元の片付け」より優先。`0` で消さない） |
 | `AIHIST_AUTO_UPDATE` | `0` で自動更新を止める（設定ファイルに書いてもよい） |
 | `AIHIST_BIN_DIR` | 実行ファイルの置き場所（既定 `~/.local/bin`。Windows は `%LOCALAPPDATA%\aihist`） |

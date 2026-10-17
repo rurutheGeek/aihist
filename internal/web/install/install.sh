@@ -1,11 +1,13 @@
 #!/bin/sh
-# aihist を入れて、このマシンの会話を定期的に送る（常駐はせず、タイマーが一定間隔で1回ずつ動かす）。
+# aihist を入れて、このマシンの会話を送る。常駐はせず、タイマーが1分ごとに起こし、
+# サーバーの設定の画面で決めた時刻のときだけ送る（それ以外はすぐ終わる）。
 #   curl -fsSL {{SERVER}}/api/install.sh | AIHIST_TOKEN=<トークン> sh
-# AIHIST_EVERY  送る間隔（既定 10m。s・m・h。0 なら今1回送るだけでタイマーを置かない）
+# AIHIST_EVERY  0 なら今1回送るだけで、タイマーを置かない
 # AIHIST_HOST   このマシンの名前（既定はホスト名。WSL では -wsl を付ける）
 # AIHIST_BIN_DIR 実行ファイルの置き場所（既定 ~/.local/bin）
-# AIHIST_IMAGES 0 なら埋め込まれた画像を抜いて送る（無ければ聞く）
 # AIHIST_TOOLS  送る AI（claude_code,codex,antigravity,opencode をカンマ区切り。無ければ見つかったものから選ばせる）
+# AIHIST_ATTACHMENTS 0 なら添付ファイル（画像など）を送らない（無ければ聞く）
+# 送る AI と添付ファイルは、サーバーのこのマシンの設定の最初の値になる（あとは設定の画面で変える）
 # 消すとき: curl -fsSL {{SERVER}}/api/uninstall.sh | sh （手元の ~/.config/aihist/uninstall.sh でもよい）
 set -eu
 server='{{SERVER}}'
@@ -20,14 +22,8 @@ case "$(uname -m)" in
   aarch64 | arm64) arch=arm64 ;;
   *) echo "対応していない CPU: $(uname -m)" >&2; exit 1 ;;
 esac
-every="${AIHIST_EVERY:-10m}"
-case "$every" in
-  0) secs=0 ;;
-  *s) secs=${every%s} ;;
-  *m) secs=$((${every%m} * 60)) ;;
-  *h) secs=$((${every%h} * 3600)) ;;
-  *) echo "AIHIST_EVERY は 30s・10m・1h の形で" >&2; exit 1 ;;
-esac
+timer=1
+[ "${AIHIST_EVERY:-}" = 0 ] && timer=0
 bindir="${AIHIST_BIN_DIR:-$HOME/.local/bin}"
 bin="$bindir/aihist"
 host="${AIHIST_HOST:-$(hostname)}"
@@ -56,26 +52,24 @@ if [ -z "${AIHIST_TOOLS+x}" ] && [ -r /dev/tty ] && found=$("$bin" detect) && [ 
     tools=$(echo "$found" | awk -F'\t' -v pick=",$(echo "$ans" | tr -d ' ')," 'index(pick, "," NR ",") { printf "%s%s", sep, $1; sep = "," }')
   fi
 fi
-# 埋め込まれた画像も送るか（Enter は送る）
-images="${AIHIST_IMAGES:-1}"
-if [ -z "${AIHIST_IMAGES+x}" ] && [ -r /dev/tty ]; then
-  printf '画像も送る？ [Y/n]: '
+# 添付ファイル（画像など）も送るか（Enter は送る）
+attach="${AIHIST_ATTACHMENTS:-1}"
+if [ -z "${AIHIST_ATTACHMENTS+x}" ] && [ -r /dev/tty ]; then
+  printf '添付ファイル（画像など）も送る？ [Y/n]: '
   read -r ans < /dev/tty || ans=""
-  case "$ans" in n* | N*) images=0 ;; esac
+  case "$ans" in n* | N*) attach=0 ;; esac
 fi
 (
   umask 077
-  printf 'AIHIST_SERVER=%s\nAIHIST_TOKEN=%s\nAIHIST_HOST=%s\nAIHIST_TOOLS=%s\nAIHIST_IMAGES=%s\n' "$server" "$AIHIST_TOKEN" "$host" "$tools" "$images" > "$conf/config"
+  printf 'AIHIST_SERVER=%s\nAIHIST_TOKEN=%s\nAIHIST_HOST=%s\n' "$server" "$AIHIST_TOKEN" "$host" > "$conf/config"
 )
-[ "$images" = 0 ] && echo "画像は送らない"
-[ -n "$tools" ] && echo "送る AI: $tools"
 curl -fsSL -o "$conf/uninstall.sh" "$server/api/uninstall.sh"
 chmod +x "$conf/uninstall.sh"
 # 消すときに残さないよう、置いたものを書き留める
 : > "$conf/installed"
 echo "$bin" >> "$conf/installed"
 
-if [ "$secs" -gt 0 ]; then
+if [ "$timer" = 1 ]; then
   if [ "$os" = darwin ]; then
     plist="$HOME/Library/LaunchAgents/aihist.push.plist"
     mkdir -p "$HOME/Library/LaunchAgents"
@@ -84,8 +78,8 @@ if [ "$secs" -gt 0 ]; then
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>aihist.push</string>
-  <key>ProgramArguments</key><array><string>$bin</string><string>push</string></array>
-  <key>StartInterval</key><integer>$secs</integer>
+  <key>ProgramArguments</key><array><string>$bin</string><string>push</string><string>-tick</string></array>
+  <key>StartInterval</key><integer>60</integer>
   <key>RunAtLoad</key><true/>
   <key>ProcessType</key><string>Background</string>
   <key>LowPriorityIO</key><true/>
@@ -95,7 +89,7 @@ PLIST
     launchctl bootout "gui/$(id -u)/aihist.push" 2>/dev/null || true
     launchctl bootstrap "gui/$(id -u)" "$plist"
     echo "launchd $plist" >> "$conf/installed"
-    echo "launchd で $every ごとに送る"
+    echo "launchd に置いた（送る時刻はサーバーの設定の画面で決める）"
   elif systemctl --user show-environment >/dev/null 2>&1; then
     units="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
     mkdir -p "$units"
@@ -105,18 +99,16 @@ Description=aihist: 会話を送る
 
 [Service]
 Type=oneshot
-ExecStart=$bin push
+ExecStart=$bin push -tick
 Nice=10
 IOSchedulingClass=idle
 UNIT
     cat > "$units/aihist-push.timer" <<UNIT
 [Unit]
-Description=aihist: $every ごとに会話を送る
+Description=aihist: 送る時刻か確かめる
 
 [Timer]
-OnStartupSec=1min
-OnUnitActiveSec=$secs
-Persistent=true
+OnCalendar=minutely
 
 [Install]
 WantedBy=timers.target
@@ -129,17 +121,16 @@ UNIT
     if command -v loginctl >/dev/null 2>&1 && [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)" = no ]; then
       loginctl enable-linger 2>/dev/null && echo "linger" >> "$conf/installed" || true
     fi
-    echo "systemd のタイマーで $every ごとに送る"
+    echo "systemd のタイマーに置いた（送る時刻はサーバーの設定の画面で決める）"
   elif command -v crontab >/dev/null 2>&1; then
-    m=$(( (secs + 59) / 60 ))
-    if [ "$m" -ge 60 ]; then sched="0 */$((m / 60)) * * *"; else sched="*/$m * * * *"; fi
-    cmd="$bin push"
+    sched="* * * * *"
+    cmd="$bin push -tick"
     command -v flock >/dev/null 2>&1 && cmd="flock -n '$conf/lock' $cmd"
     { crontab -l 2>/dev/null | grep -v '# aihist-push$' || true; echo "$sched $cmd >/dev/null 2>&1 # aihist-push"; } | crontab -
     echo "cron" >> "$conf/installed"
-    echo "cron で $every ごとに送る"
+    echo "cron に置いた（送る時刻はサーバーの設定の画面で決める）"
   else
     echo "タイマーを置けない（systemd --user も cron も無い）。今1回だけ送る" >&2
   fi
 fi
-"$bin" push
+"$bin" push -init-tools "${tools:-*}" -init-attachments "$attach"

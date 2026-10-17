@@ -8,7 +8,7 @@ COPY . .
 RUN set -e; mkdir -p /out/bin; \
     for t in linux/amd64 linux/arm64 windows/amd64 darwin/arm64; do \
       os=${t%/*}; arch=${t#*/}; ext=; [ "$os" = windows ] && ext=.exe; \
-      CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w" -o "/out/bin/aihist-$os-$arch$ext" ./cmd/aihist; \
+      CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "/out/bin/aihist-$os-$arch$ext" ./cmd/aihist; \
     done; \
     cp "/out/bin/aihist-$TARGETOS-$TARGETARCH" /out/aihist; \
     mkdir -p /out/data

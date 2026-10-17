@@ -48,10 +48,12 @@ func Detect(home string) []Found {
 	return out
 }
 
-// Selected は AIHIST_TOOLS（カンマ区切り。空なら全部）に tool が入っているか。
+// Selected は送る AI の並び（カンマ区切り）に tool が入っているか。空と "*" は全部。
+// "*,-opencode" は opencode 以外の全部（あとで見つかったものも送る）。
 func Selected(list, tool string) bool {
-	if strings.TrimSpace(list) == "" {
-		return true
+	l := strings.Split(strings.ReplaceAll(list, " ", ""), ",")
+	if l[0] == "" || l[0] == "*" {
+		return !slices.Contains(l, "-"+tool)
 	}
-	return slices.Contains(strings.Split(strings.ReplaceAll(list, " ", ""), ","), tool)
+	return slices.Contains(l, tool)
 }

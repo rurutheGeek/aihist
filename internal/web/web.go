@@ -77,6 +77,7 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 		"summary":   summary,
 		"base":      base,
 		"bytes":     humanBytes,
+		"list":      func(v ...any) []any { return v },
 		"add64":     func(a, b int64) int64 { return a + b },
 	}
 	tmpl := map[string]*template.Template{}
@@ -108,6 +109,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /settings", s.settings)
 	mux.HandleFunc("POST /settings/tokens", s.addToken)
 	mux.HandleFunc("POST /settings/cleanup", s.setCleanup)
+	mux.HandleFunc("POST /settings/schedule", s.setSchedule)
+	mux.HandleFunc("POST /settings/machines/{host}", s.setMachine)
+	mux.HandleFunc("POST /settings/machines/{host}/delete", s.deleteMachine)
+	mux.HandleFunc("GET /settings/preview", s.preview)
+	mux.HandleFunc("GET /exports/{host}/{id}", s.exportPage)
+	mux.HandleFunc("POST /exports/{host}/{id}/import", s.exportImport)
 	mux.HandleFunc("POST /settings/tokens/{id}/delete", s.deleteToken)
 	mux.Handle("GET /setup", http.RedirectHandler("/settings", http.StatusMovedPermanently))
 	mux.HandleFunc("POST /upload", s.upload)
@@ -123,6 +130,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/bin/{name}", s.auth(s.apiBin))
 	mux.HandleFunc("GET /api/find", s.auth(s.apiFind))
 	mux.HandleFunc("GET /api/client", s.auth(s.apiClient))
+	mux.HandleFunc("POST /api/machine", s.auth(s.apiMachine))
 	return mux
 }
 

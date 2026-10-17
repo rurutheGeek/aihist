@@ -1,20 +1,16 @@
-# aihist を入れて、このマシンの会話を定期的に送る（常駐はせず、タスク スケジューラが一定間隔で1回ずつ動かす）。
+# aihist を入れて、このマシンの会話を送る。常駐はせず、タスク スケジューラが1分ごとに起こし、
+# サーバーの設定の画面で決めた時刻のときだけ送る（それ以外はすぐ終わる）。
 #   $env:AIHIST_TOKEN="<トークン>"; irm {{SERVER}}/api/install.ps1 | iex
-# $env:AIHIST_EVERY  送る間隔（既定 10m。m・h。0 なら今1回送るだけでタスクを置かない）
+# $env:AIHIST_EVERY  0 なら今1回送るだけで、タスクを置かない
 # $env:AIHIST_HOST   このマシンの名前（既定はコンピューター名）
-# $env:AIHIST_IMAGES 0 なら埋め込まれた画像を抜いて送る（無ければ聞く）
 # $env:AIHIST_TOOLS  送る AI（claude_code,codex,antigravity,opencode をカンマ区切り。無ければ見つかったものから選ばせる）
+# $env:AIHIST_ATTACHMENTS 0 なら添付ファイル（画像など）を送らない（無ければ聞く）
+# 送る AI と添付ファイルは、サーバーのこのマシンの設定の最初の値になる（あとは設定の画面で変える）
 # 消すとき: irm {{SERVER}}/api/uninstall.ps1 | iex
 $ErrorActionPreference = 'Stop'
 $server = '{{SERVER}}'
 if (-not $env:AIHIST_TOKEN) { throw 'AIHIST_TOKEN が要る' }
-$every = if ($env:AIHIST_EVERY) { $env:AIHIST_EVERY } else { '10m' }
-$interval = switch -Regex ($every) {
-  '^0$' { $null; break }
-  '^(\d+)m$' { New-TimeSpan -Minutes $Matches[1]; break }
-  '^(\d+)h$' { New-TimeSpan -Hours $Matches[1]; break }
-  default { throw 'AIHIST_EVERY は 10m・1h の形で' }
-}
+$timer = $env:AIHIST_EVERY -ne '0'
 $dir = Join-Path $env:LOCALAPPDATA 'aihist'
 $conf = Join-Path $env:APPDATA 'aihist'
 New-Item -ItemType Directory -Force -Path $dir, $conf | Out-Null
@@ -40,25 +36,26 @@ if ($null -eq $env:AIHIST_TOOLS) {
     }
   }
 }
-# 埋め込まれた画像も送るか（Enter は送る）
-$images = if ($env:AIHIST_IMAGES) { $env:AIHIST_IMAGES } else { '1' }
-if ($null -eq $env:AIHIST_IMAGES) {
-  $ans = Read-Host '画像も送る？ [Y/n]'
-  if ($ans -match '^[nN]') { $images = '0'; Write-Host '画像は送らない' }
+# 添付ファイル（画像など）も送るか（Enter は送る）
+$attach = if ($env:AIHIST_ATTACHMENTS) { $env:AIHIST_ATTACHMENTS } else { '1' }
+if ($null -eq $env:AIHIST_ATTACHMENTS) {
+  $ans = Read-Host '添付ファイル（画像など）も送る？ [Y/n]'
+  if ($ans -match '^[nN]') { $attach = '0' }
 }
 $cfg = Join-Path $conf 'config'
-Set-Content -Encoding ascii -Path $cfg -Value @("AIHIST_SERVER=$server", "AIHIST_TOKEN=$env:AIHIST_TOKEN", "AIHIST_HOST=$host_", "AIHIST_TOOLS=$tools", "AIHIST_IMAGES=$images")
+Set-Content -Encoding ascii -Path $cfg -Value @("AIHIST_SERVER=$server", "AIHIST_TOKEN=$env:AIHIST_TOKEN", "AIHIST_HOST=$host_")
 # 設定にはトークンが入るので、自分だけが読めるようにする
 icacls $cfg /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null
 Invoke-WebRequest -UseBasicParsing -Uri "$server/api/uninstall.ps1" -OutFile (Join-Path $dir 'uninstall.ps1')
 
-if ($interval) {
+if ($timer) {
   # conhost --headless で、動くたびに窓が出ないようにする
-  $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless `"$exe`" push"
-  $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval $interval
+  $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless `"$exe`" push -tick"
+  $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1)
   $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
     -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 1) -Priority 7
   Register-ScheduledTask -TaskName 'aihist-push' -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
-  Write-Host "タスク スケジューラで $every ごとに送る"
+  Write-Host 'タスク スケジューラに置いた（送る時刻はサーバーの設定の画面で決める）'
 }
-& $exe push
+$tl = if ($tools) { $tools } else { '*' }
+& $exe push -init-tools $tl -init-attachments $attach

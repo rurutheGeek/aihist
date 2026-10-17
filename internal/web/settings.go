@@ -1,7 +1,9 @@
 package web
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -11,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rurutheGeek/aihist/internal/store"
 )
 
 type cmdSet struct {
@@ -131,6 +135,10 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	d["Usage"], d["Page"] = s.usage(), "settings"
 	days, _ := strconv.Atoi(s.st.Setting("cleanup_days", "0"))
 	d["Cleanup"], d["CleanupOpts"] = days, []int{0, 7, 14, 30, 90}
+	d["Machines"] = s.machineViews(lang(r))
+	d["Schedule"] = s.st.Setting("schedule", DefaultSchedule)
+	d["Next"] = s.nextRuns(lang(r), d["Schedule"].(string), 3)
+	d["CleanupOpts2"] = []int{-1, 0, 7, 14, 30, 90}
 	d["Lang"] = ""
 	if c, err := r.Cookie("lang"); err == nil {
 		d["Lang"] = c.Value
@@ -167,11 +175,67 @@ func (s *Server) deleteToken(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
-// apiClient は各マシンへ配る設定（push が送るたびに読む）。
+// DefaultSchedule は送るタイミングの既定（設定の画面で変える）。
+const DefaultSchedule = "*/10 * * * *"
+
+// clientConfig はマシン host へ配る設定。マシンの設定が無い項目は全体の設定に従う。
+type clientConfig struct {
+	Schedule    string `json:"schedule"`
+	TZ          string `json:"tz"`
+	CleanupDays int    `json:"cleanup_days"`
+	Tools       string `json:"tools"`
+	Attachments bool   `json:"attachments"`
+}
+
+func (s *Server) clientConfig(host string) clientConfig {
+	m, _ := s.st.Machine(host)
+	cf := clientConfig{Schedule: m.Schedule, TZ: s.st.Setting("tz", ""), Tools: m.Tools, Attachments: m.Attachments, CleanupDays: m.Cleanup}
+	if cf.Schedule == "" {
+		cf.Schedule = s.st.Setting("schedule", DefaultSchedule)
+	}
+	if cf.CleanupDays < 0 {
+		cf.CleanupDays, _ = strconv.Atoi(s.st.Setting("cleanup_days", "0"))
+	}
+	return cf
+}
+
+// apiClient は各マシンへ配る設定（push が読む）。
 func (s *Server) apiClient(w http.ResponseWriter, r *http.Request) {
-	days, _ := strconv.Atoi(s.st.Setting("cleanup_days", "0"))
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"cleanup_days":%d}`, days)
+	json.NewEncoder(w).Encode(s.clientConfig(r.URL.Query().Get("host")))
+}
+
+// apiMachine はマシンからの報告（見つけた AI・版、初めてのときは導入で選んだ設定）を受ける。
+func (s *Server) apiMachine(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Host     string           `json:"host"`
+		Version  string           `json:"version"`
+		Detected []store.Detected `json:"detected"`
+		Init     *struct {
+			Tools       string `json:"tools"`
+			Attachments *bool  `json:"attachments"`
+		} `json:"init"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil || req.Host == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	var init *store.Machine
+	if req.Init != nil {
+		init = &store.Machine{Tools: "*", Attachments: true, Cleanup: -1}
+		if req.Init.Tools != "" {
+			init.Tools = req.Init.Tools
+		}
+		if req.Init.Attachments != nil {
+			init.Attachments = *req.Init.Attachments
+		}
+	}
+	if err := s.st.Report(req.Host, req.Version, req.Detected, init); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(s.clientConfig(req.Host))
 }
 
 func (s *Server) setCleanup(w http.ResponseWriter, r *http.Request) {

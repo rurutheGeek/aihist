@@ -150,6 +150,25 @@ type uploaded struct {
 	Skipped  int    `json:"skipped"`
 	Error    string `json:"error,omitempty"`
 	Href     string `json:"href,omitempty"`
+	Export   bool   `json:"export,omitempty"` // 書き出しの一覧を受け取り、中身を落とし始めた
+}
+
+// manifestUpload は上げたファイルが claude.ai の書き出しの一覧なら、落とし始めて ok を返す。
+func (s *Server) manifestUpload(host string, fh *multipart.FileHeader) (string, bool, error) {
+	if !strings.HasSuffix(fh.Filename, ".json") || fh.Size > 1<<20 {
+		return "", false, nil
+	}
+	f, err := fh.Open()
+	if err != nil {
+		return "", false, nil
+	}
+	defer f.Close()
+	b, _ := io.ReadAll(f)
+	if !isManifest(b) {
+		return "", false, nil
+	}
+	id, err := s.startExport(host, b)
+	return id, true, err
 }
 
 // upload は画面から上げられたファイルを、中身からツールを見分けて原本に置き、取り込む。
@@ -170,6 +189,17 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	var out []uploaded
 	for _, fh := range r.MultipartForm.File["files"] {
 		u := uploaded{Name: fh.Filename}
+		// claude.ai の書き出しの一覧（manifest）なら、サーバーが中身を落として選ばせる
+		if id, ok, err := s.manifestUpload(host, fh); ok {
+			if err != nil {
+				u.Error = err.Error()
+			} else {
+				u.Tool, u.Label, u.Export = claudeai.Tool, tr(l, "claude.ai の書き出し"), true
+				u.Href = "/exports/" + url.PathEscape(host) + "/" + id
+			}
+			out = append(out, u)
+			continue
+		}
 		tool, _, err := s.store(host, fh)
 		if err != nil {
 			u.Error = tr(l, err.Error())

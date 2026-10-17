@@ -88,3 +88,22 @@ func TestTokens(t *testing.T) {
 		t.Fatal("deleted")
 	}
 }
+
+func TestMachines(t *testing.T) {
+	st, _ := Open(filepath.Join(t.TempDir(), "a.db"))
+	defer st.Close()
+	if m, ok := st.Machine("pc"); ok || m.Tools != "*" || !m.Attachments || m.Cleanup != -1 {
+		t.Fatalf("%+v", m)
+	}
+	st.Report("pc", "v1", []Detected{{"codex", 2, 10}}, &Machine{Tools: "codex", Attachments: false, Cleanup: -1})
+	st.Report("pc", "v2", []Detected{{"codex", 3, 20}}, &Machine{Tools: "*", Attachments: true})
+	m, ok := st.Machine("pc")
+	if !ok || m.Version != "v2" || m.Tools != "codex" || m.Attachments || len(m.Detected) != 1 || m.Detected[0].Files != 3 {
+		t.Fatalf("%+v", m)
+	}
+	m.Schedule, m.Cleanup = "0 9 * * *", 7
+	st.SetMachine(m)
+	if m2, _ := st.Machine("pc"); m2.Schedule != "0 9 * * *" || m2.Cleanup != 7 || m2.Version != "v2" {
+		t.Fatalf("%+v", m2)
+	}
+}
