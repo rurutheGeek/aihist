@@ -107,3 +107,31 @@ func TestMachines(t *testing.T) {
 		t.Fatalf("%+v", m2)
 	}
 }
+
+func TestMeta(t *testing.T) {
+	st, _ := Open(filepath.Join(t.TempDir(), "a.db"))
+	defer st.Close()
+	now := time.Now()
+	st.Put(conv("claude_code", "pc", "1", "/w", now, "m"), "s")
+	st.Put(conv("claude_code", "pc", "2", "/w", now.Add(-time.Hour), "m"), "s")
+	rows, _ := st.List(Filter{})
+	id := rows[0].ID
+	name, yes := "改名", true
+	st.SetMeta(id, &name, &yes, nil)
+	// 取り込み直しても残る
+	st.Put(conv("claude_code", "pc", "1", "/w", now, "m"), "s2")
+	rows, _ = st.List(Filter{})
+	if rows[0].Title != "改名" || !rows[0].Pinned {
+		t.Fatalf("%+v", rows[0])
+	}
+	st.SetMeta(rows[0].ID, nil, nil, &yes)
+	if rows, _ = st.List(Filter{}); len(rows) != 1 || rows[0].ExternalID != "2" {
+		t.Fatalf("active: %+v", rows)
+	}
+	if rows, _ = st.List(Filter{Status: "archived"}); len(rows) != 1 || rows[0].ExternalID != "1" {
+		t.Fatalf("archived: %+v", rows)
+	}
+	if rows, _ = st.List(Filter{Status: "all"}); len(rows) != 2 {
+		t.Fatalf("all: %+v", rows)
+	}
+}

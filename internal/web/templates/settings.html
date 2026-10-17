@@ -1,16 +1,17 @@
 {{define "settings.html"}}{{template "head" (t "設定")}}
 <div class="app">
 {{template "side" .}}
-<main class="main">
-  <div class="bar">
-    <button class="icon-btn menu" onclick="document.querySelector('.app').classList.add('open')" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-    <div class="title">{{t "設定"}}</div>
-  </div>
-  <div class="scroll"><div class="sx">
-    <nav class="snav">{{range .SNav}}<a href="/settings/{{.Key}}"{{if eq .Key $.Section}} class="on"{{end}}>{{t .Label}}</a>{{end}}</nav>
+<main class="main"><div class="welcome"><h1>aihist</h1></div></main>
+</div>
+<div class="modal open" id="settings" data-loaded="1"><div class="mbox">{{template "settingsbody" .}}</div></div>
+{{template "foot" .}}{{end}}
+
+{{define "settingsbody"}}<div class="sx" data-sub="{{.Sub}}">
+  <div class="mtop"><b>{{t "設定"}}</b><button class="icon-btn" type="button" data-close aria-label="{{t "閉じる"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <nav class="snav">{{range .SNav}}<a href="/settings/{{.Key}}" data-go="{{.Key}}">{{t .Label}}</a>{{end}}</nav>
     <div class="sbody">
 
-    {{if eq .Sub "general"}}
+    <section data-sec="general">
       <h1>{{t "一般"}}</h1>
       <div class="grp">
         <div class="row"><div class="rl">{{t "言語"}}</div><div class="rc">
@@ -22,7 +23,8 @@
         </div></div>
       </div>
 
-    {{else if eq .Sub "sending"}}
+    </section>
+    <section data-sec="sending">
       <h1>{{t "送信"}}</h1>
       <div class="gt">{{t "すべてのマシンの既定"}}</div>
       <form class="grp" method="post" action="/settings/schedule" data-auto>
@@ -33,15 +35,17 @@
         <div class="row"><div class="rl">{{t "手元の片付け"}}</div><div class="rc"><select name="days">{{range .CleanupOpts}}<option value="{{.}}"{{if eq . $.Cleanup}} selected{{end}}>{{if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>
       </form>
 
-    {{else if eq .Sub "machines"}}
+    </section>
+    <section data-sec="machines">
       <h1>{{t "マシン"}}</h1>
       <div class="grp">
-        {{range .Machines}}<a class="row link" href="/settings/machines/{{.Host}}"><div class="rl"><b>{{.Host}}</b><small>{{if .SeenAt.IsZero}}{{t "未接続"}}{{else}}{{t "最後に連絡"}} {{when .SeenAt}}{{end}}</small></div><div class="rc"><span class="mute">{{with .Next}}{{t "次に送る"}} {{index . 0}}{{end}}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></div></a>
-        {{else}}<div class="row"><div class="rl mute">{{t "まだマシンが無い"}}</div><div class="rc"><a class="btn" href="/settings/tokens">{{t "マシンを追加"}}</a></div></div>{{end}}
+        {{range .Machines}}<a class="row link" href="/settings/machines/{{.Host}}" data-go="m:{{.Host}}"><div class="rl"><b>{{.Host}}</b><small>{{if .SeenAt.IsZero}}{{t "未接続"}}{{else}}{{t "最後に連絡"}} {{when .SeenAt}}{{end}}</small></div><div class="rc"><span class="mute">{{with .Next}}{{t "次に送る"}} {{index . 0}}{{end}}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></div></a>
+        {{else}}<div class="row"><div class="rl mute">{{t "まだマシンが無い"}}</div><div class="rc"><a class="btn" href="/settings/tokens" data-go="tokens">{{t "マシンを追加"}}</a></div></div>{{end}}
       </div>
 
-    {{else if eq .Sub "machine"}}{{with .M}}
-      <a class="back" href="/settings/machines"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg>{{t "マシン"}}</a>
+    </section>
+    {{range .Machines}}<section data-sec="m:{{.Host}}" data-parent="machines">
+      <a class="back" href="/settings/machines" data-go="machines"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg>{{t "マシン"}}</a>
       <h1>{{.Host}}</h1>
       <form method="post" action="/settings/machines/{{.Host}}" data-auto>
         <div class="gt">{{t "送る AI"}}</div>
@@ -64,12 +68,11 @@
         <div class="row"><div class="rl">{{t "版"}}</div><div class="rc mute">{{or .Version "—"}}</div></div>
         <div class="row"><div class="rl">{{t "次に送る"}}</div><div class="rc mute">{{with .Next}}{{index . 0}}{{else}}—{{end}}</div></div>
       </div>
-      <form class="grp danger" method="post" action="/settings/machines/{{.Host}}/delete" onsubmit="return confirm({{t "このマシンを一覧から消す？"}})">
+      <form class="grp danger" method="post" action="/settings/machines/{{.Host}}/delete" data-confirm="{{t "このマシンを一覧から消す？"}}">
         <div class="row"><div class="rl">{{t "このマシンを一覧から消す"}}</div><div class="rc"><button class="btn red">{{t "削除"}}</button></div></div>
       </form>
-    {{end}}
-
-    {{else if eq .Sub "tokens"}}
+    </section>{{end}}
+    <section data-sec="tokens">
       <h1>{{t "トークン"}}</h1>
       {{if .NewToken}}<div class="grp hl">
         <div class="row"><div class="rl"><b>{{.NewName}}</b><small class="warn">{{t "このトークンは今しか表示されない"}}</small></div><div class="rc"><code class="tk">{{.NewToken}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>
@@ -80,7 +83,7 @@
       </form>
       <div class="grp">
         {{if .EnvToken}}<div class="row"><div class="rl">AIHIST_TOKEN<small>{{t "環境変数"}}</small></div></div>{{end}}
-        {{range .Tokens}}<div class="row"><div class="rl">{{.Name}}<small>{{t "作成"}} {{when .CreatedAt}} · {{t "最後に使った"}} {{if .UsedAt.IsZero}}{{t "未使用"}}{{else}}{{when .UsedAt}}{{end}}</small></div><div class="rc"><form method="post" action="/settings/tokens/{{.ID}}/delete" onsubmit="return confirm({{t "このトークンを削除する？"}})"><button class="btn red">{{t "削除"}}</button></form></div></div>{{end}}
+        {{range .Tokens}}<div class="row"><div class="rl">{{.Name}}<small>{{t "作成"}} {{when .CreatedAt}} · {{t "最後に使った"}} {{if .UsedAt.IsZero}}{{t "未使用"}}{{else}}{{when .UsedAt}}{{end}}</small></div><div class="rc"><form method="post" action="/settings/tokens/{{.ID}}/delete" data-confirm="{{t "このトークンを削除する？"}}"><button class="btn red">{{t "削除"}}</button></form></div></div>{{end}}
       </div>
       <div class="gt">{{t "消す"}}</div>
       <div class="grp">
@@ -88,7 +91,8 @@
         <div class="row"><div class="rl">{{t "スクリプト"}}</div><div class="rc dl">{{range .Cmds}}<a class="btn" href="{{.Script}}" download="{{.Name}}">{{.Name}}</a><a class="btn" href="{{.UScript}}" download="{{.UName}}">{{.UName}}</a>{{end}}</div></div>
       </div>
 
-    {{else if eq .Sub "storage"}}
+    </section>
+    <section data-sec="storage">
       <h1>{{t "容量"}}</h1>
       <div class="grp">
         <div class="row"><div class="rl">{{t "合計"}}</div><div class="rc"><b>{{bytes (add64 .Usage.DB .Usage.Raw)}}</b></div></div>
@@ -99,71 +103,10 @@
       <div class="grp">
         {{range .Usage.Rows}}<div class="row"><div class="rl"><span><i class="dot" style="background:{{toolColor .Tool}}"></i>{{.Label}}</span><small>{{.Host}} · {{tf "%d 件" .Convs}}</small></div><div class="rc mute">{{bytes .Bytes}}</div></div>{{end}}
       </div>
-    {{end}}
+    </section>
     </div>
-  </div></div>
-  <div class="toast" id="toast">{{t "保存した"}}</div>
-</main>
-</div>
-<script>
-function aihistCopy(b){var t=b.previousElementSibling.textContent;navigator.clipboard.writeText(t).then(function(){var o=b.textContent;b.textContent={{t "コピーした"}};setTimeout(function(){b.textContent=o},1400)})}
-(function(){
-  function pad(n){return (n<10?'0':'')+n}
-  // 送るタイミングの組み立て。画面では選ぶだけにし、中では cron の形にして送る
-  document.querySelectorAll('.sched').forEach(function(el){
-    var hid=el.querySelector('input[name=schedule]'), k=el.querySelector('.k'), n=el.querySelector('.n'), h=el.querySelector('.h'),
-        m=el.querySelector('.m'), d=el.querySelector('.d'), tm=el.querySelector('.tm'), nx=el.querySelector('.next'),
-        wd=Array.from(el.querySelectorAll('.wd input'));
-    for(var i=1;i<=31;i++){var o=document.createElement('option');o.value=o.textContent=i;d.appendChild(o)}
-    var f=(hid.value||'*/10 * * * *').split(/\s+/), kind='min';
-    if(f[1]==='*'&&f[2]==='*'&&f[4]==='*'){kind='min'; n.value=f[0]==='*'?'1':f[0].replace('*/','')}
-    else if(f[1].indexOf('*/')===0||(f[1]==='*'&&/^\d+$/.test(f[0]))){kind='hour'; h.value=f[1]==='*'?'1':f[1].replace('*/',''); m.value=f[0]}
-    else if(f[4]!=='*'){kind='week'; f[4].split(',').forEach(function(x){if(wd[+x%7])wd[+x%7].checked=true}); tm.value=pad(+f[1])+':'+pad(+f[0])}
-    else if(f[2]!=='*'){kind='month'; d.value=f[2]; tm.value=pad(+f[1])+':'+pad(+f[0])}
-    else {kind='day'; tm.value=pad(+f[1])+':'+pad(+f[0])}
-    k.value=kind;
-    el.build=function(){
-      var t=(tm.value||'09:00').split(':'), H=+t[0], M=+t[1], c;
-      switch(k.value){
-        case 'min': c=(n.value==='1'?'*':'*/'+n.value)+' * * * *'; break;
-        case 'hour': c=m.value+' '+(h.value==='1'?'*':'*/'+h.value)+' * * *'; break;
-        case 'day': c=M+' '+H+' * * *'; break;
-        case 'week': var ds=wd.filter(function(x){return x.checked}).map(function(x){return x.value}); if(!ds.length){wd[1].checked=true;ds=['1']} c=M+' '+H+' * * '+ds.join(','); break;
-        case 'month': c=M+' '+H+' '+d.value+' * *'; break;
-      }
-      hid.value=c;
-      el.querySelectorAll('.p').forEach(function(p){p.style.display=p.classList.contains('p-'+k.value)?'':'none'});
-      fetch('/settings/preview?schedule='+encodeURIComponent(c)).then(function(r){return r.json()}).then(function(a){nx.textContent=a&&a.length?{{t "次に送る"}}+' '+a.join('、'):''});
-    };
-    el.build();
-  });
-  document.querySelectorAll('input[name=tz]').forEach(function(i){try{i.value=Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){}});
-  // 変えたらその場で保存する
-  var toast=document.getElementById('toast'), tt;
-  document.querySelectorAll('form[data-auto]').forEach(function(f){
-    var timer;
-    function save(){
-      clearTimeout(timer);
-      timer=setTimeout(function(){
-        fetch(f.action,{method:'POST',headers:{'X-Auto':'1'},body:new URLSearchParams(new FormData(f))}).then(function(r){
-          toast.textContent=r.ok?{{t "保存した"}}:{{t "保存できなかった"}};
-          toast.classList.toggle('bad',!r.ok); toast.classList.add('show'); clearTimeout(tt); tt=setTimeout(function(){toast.classList.remove('show')},1400);
-        });
-      },350);
-    }
-    f.addEventListener('change',function(e){
-      var s=e.target.closest('.sched'); if(s)s.build();
-      if(e.target.dataset.toggle==='own'){var o=f.querySelector('[data-own]'); if(o)o.hidden=e.target.checked}
-      save();
-    });
-    f.addEventListener('submit',function(e){e.preventDefault();save()});
-  });
-  document.querySelectorAll('input[name=lang]').forEach(function(i){i.onchange=function(){
-    document.cookie='lang='+i.value+';path=/;max-age='+(i.value?31536000:0)+';samesite=lax'; location.reload();
-  }});
-})();
-</script>
-{{template "foot"}}{{end}}
+  </div>
+</div>{{end}}
 
 {{define "sched"}}<div class="sched" data-cron="{{.}}">
   <input type="hidden" name="schedule" value="{{.}}">

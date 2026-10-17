@@ -78,7 +78,14 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 		"base":      base,
 		"bytes":     humanBytes,
 		"list":      func(v ...any) []any { return v },
-		"add64":     func(a, b int64) int64 { return a + b },
+		"dict": func(kv ...any) map[string]any {
+			m := map[string]any{}
+			for i := 0; i+1 < len(kv); i += 2 {
+				m[kv[i].(string)] = kv[i+1]
+			}
+			return m
+		},
+		"add64": func(a, b int64) int64 { return a + b },
 	}
 	tmpl := map[string]*template.Template{}
 	for _, l := range []string{"ja", "en"} {
@@ -86,6 +93,7 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 		funcs["tf"] = func(s string, a ...any) string { return trf(l, s, a...) }
 		funcs["day"] = func(t time.Time) string { return dayIn(l, t.Local()) }
 		funcs["lang"] = func() string { return l }
+		funcs["rel"] = func(t time.Time) string { return relIn(l, t) }
 		tmpl[l] = template.Must(template.New("").Funcs(funcs).ParseFS(files, "templates/*.html"))
 	}
 	return &Server{st: st, raw: rs, token: token, tmpl: tmpl}
@@ -96,6 +104,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.list)
 	mux.Handle("GET /static/", http.FileServerFS(static))
 	mux.HandleFunc("GET /c/{id}", s.show)
+	mux.HandleFunc("POST /c/{id}/meta", s.setMeta)
+	mux.HandleFunc("GET /search", s.search)
+	mux.HandleFunc("GET /side", s.sideList)
 	mux.HandleFunc("GET /find/{tool}/{host}/{ext}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := s.st.Lookup(r.PathValue("tool"), r.PathValue("host"), r.PathValue("ext"))
 		if err != nil {

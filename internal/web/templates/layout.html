@@ -221,6 +221,106 @@ input.sw:focus-visible{outline:2px solid var(--faint);outline-offset:2px}
   .grp .row{padding:11px 14px}
   .tk{max-width:150px}
 }
+.side{position:relative}
+.side-resize{position:absolute;top:0;right:-3px;width:6px;height:100%;cursor:col-resize;z-index:3}
+.side-resize:hover,body.resizing .side-resize{background:var(--line)}
+body.resizing{cursor:col-resize;user-select:none}
+.brand .icon-btn{width:30px;height:30px}
+.side-open{display:none;position:fixed;top:10px;left:10px;z-index:6;background:var(--bg);border:1px solid var(--line)}
+.app.collapsed .side{display:none}
+.app.collapsed~.side-open,.app.collapsed .side-open{display:inline-flex}
+.app.collapsed .bar{padding-left:54px}
+.modal{display:none;position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.35);align-items:center;justify-content:center;padding:24px}
+.modal.open{display:flex}
+.mbox{background:var(--bg);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(920px,100%);height:min(680px,100%);overflow:hidden;display:flex}
+.mbox .sx{display:grid;grid-template-columns:200px 1fr;grid-template-rows:auto 1fr;width:100%;max-width:none;margin:0;padding:0;gap:0}
+.mtop{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px 20px}
+.mtop b{font-size:16px}
+.mbox .snav{position:static;width:auto;padding:4px 10px 16px;border-right:1px solid var(--line);overflow-y:auto}
+.mbox .sbody{max-width:none;overflow-y:auto;padding:4px 28px 32px}
+.mbox section[hidden]{display:none}
+.mbox .sbody h1{font-size:19px;margin:6px 0 18px}
+@media (max-width:860px){
+  .modal{padding:0}
+  .mbox{border-radius:0;height:100%}
+  .mbox .sx{grid-template-columns:1fr;grid-template-rows:auto auto 1fr}
+  .mbox .snav{flex-direction:row;border-right:0;border-bottom:1px solid var(--line);padding:4px 10px 8px}
+  .mbox .sbody{padding:12px 14px 40px}
+  .side-resize,.side-open{display:none!important}
+}
+.brand{justify-content:flex-start;gap:6px;padding:0 2px}
+.brand b{font-size:16.5px}
+.sbox{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:7px 10px;color:var(--faint);font-size:14px;cursor:pointer;text-align:left}
+.sbox:hover{border-color:var(--faint);color:var(--mute)}
+.sbox svg{width:15px;height:15px}
+.snav-main{display:flex;flex-direction:column;gap:1px}
+.snav-main a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;font-size:14px}
+.snav-main a:hover{background:var(--hover)}
+.snav-main svg{width:16px;height:16px;color:var(--mute)}
+.sh{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--faint);padding:14px 10px 4px;position:relative}
+.sh.rec .fbtn{width:26px;height:26px;border-radius:7px}
+.sh.rec .fbtn svg{width:15px;height:15px}
+.fbtn.on{color:var(--fg);background:var(--hover)}
+.fmenu{position:fixed;z-index:20;min-width:230px;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:4px;color:var(--fg)}
+.fi{position:relative;display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;font-size:13.5px;cursor:default}
+.fi:hover,.fi.open{background:var(--hover)}
+.fi>span{flex:1}
+.fi>small{color:var(--faint);font-size:12.5px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fi>svg{width:14px;height:14px;color:var(--faint)}
+.fsub{display:none;position:fixed;min-width:220px;max-height:min(60vh,420px);overflow-y:auto;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:4px}
+.fi.open>.fsub{display:block}
+.fsub a{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:13.5px}
+.fsub a:hover{background:var(--hover)}
+.fsub .ck{width:14px;flex:none;display:inline-flex}
+.fsub .ck svg{width:14px;height:14px}
+.fsub i{width:8px;height:8px;border-radius:50%;flex:none}
+.fsub .fl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsub small{color:var(--faint);font-size:12px}
+.pills{padding:0 8px 4px}
+.conv{position:relative;display:block;padding:0;border-radius:9px;margin:1px 0}
+.conv>a{display:flex;align-items:center;gap:8px;padding:7px 30px 7px 10px;font-size:14px;white-space:nowrap;overflow:hidden;border-radius:9px}
+.conv>a i{width:7px;height:7px;border-radius:50%;flex:none}
+.conv .ct{overflow:hidden;text-overflow:ellipsis}
+.conv:hover{background:var(--hover)}
+.conv.on{background:var(--active)}
+.conv .dots{position:absolute;right:4px;top:5px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--mute);display:none;align-items:center;justify-content:center;cursor:pointer}
+.conv .dots svg{width:15px;height:15px}
+.conv:hover .dots,.conv.on .dots{display:inline-flex}
+.conv .dots:hover{background:var(--active);color:var(--fg)}
+.conv .br{margin-left:auto}
+.conv:hover .br,.conv.on .br{visibility:hidden}
+.conv .s{font-size:12px;color:var(--mute);margin:-4px 10px 6px 25px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rmenu{position:fixed;z-index:40;min-width:210px;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.2);padding:4px}
+.rmenu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;border:0;background:transparent;padding:7px 10px;border-radius:7px;font-size:13.5px;cursor:pointer;text-align:left}
+.rmenu button:hover{background:var(--hover)}
+.rmenu kbd,.kr kbd{font:11.5px ui-sans-serif,system-ui;color:var(--faint);border:1px solid var(--line);border-radius:5px;padding:1px 6px;background:var(--side)}
+.rmenu kbd:empty{display:none}
+.tip{position:fixed;z-index:45;max-width:320px;background:var(--fg);color:var(--bg);border-radius:8px;padding:6px 10px;font-size:12.5px;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.tip b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tip small{opacity:.7}
+.tip small:empty{display:none}
+.modal.top{align-items:flex-start;padding-top:12vh}
+.qbox{background:var(--bg);border:1px solid var(--line);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:min(640px,100%);max-height:70vh;display:flex;flex-direction:column;overflow:hidden}
+.qin{display:flex;align-items:center;gap:10px;padding:12px 12px 8px 16px}
+.qin svg{width:17px;height:17px;color:var(--faint)}
+.qin input{flex:1;border:0;outline:none;background:transparent;font-size:16px}
+.qtabs{display:flex;gap:4px;padding:0 12px 8px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line)}
+.qtabs button{border:0;background:transparent;border-radius:7px;padding:4px 10px;font-size:13px;color:var(--mute);cursor:pointer;white-space:nowrap}
+.qtabs button.on{background:var(--active);color:var(--fg);font-weight:600}
+.qres{overflow-y:auto;padding:6px}
+.qr{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px}
+.qr.on,.qr:hover{background:var(--hover)}
+.qr i{width:8px;height:8px;border-radius:50%;flex:none}
+.qt{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qt small{display:block;color:var(--mute);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qt small b{color:var(--fg)}
+.qw{font-size:12px;color:var(--faint);flex:none}
+.kbox{background:var(--bg);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:min(460px,100%);max-height:80vh;overflow-y:auto;padding-bottom:12px}
+.kl{padding:0 20px}
+.kg{font-size:12px;color:var(--faint);font-weight:600;margin:14px 0 4px}
+.kr{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:14px;border-bottom:1px solid var(--line)}
+.kr span:last-child{display:flex;gap:4px}
+.app.collapsed .side-open{top:8px;left:8px}
 .empty{color:var(--faint);font-size:13px;padding:24px 12px;text-align:center}
 
 /* 右の本文 */
@@ -334,66 +434,326 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
 <body>{{end}}
 
 {{define "side"}}
-<aside class="side">
+<aside class="side" aria-label="{{t "サイドバー"}}">
+  <div class="side-resize" role="separator" aria-label="{{t "サイドバーのサイズを変更"}}"></div>
   <div class="side-top">
-    <div class="brand"><a href="/"><b>aihist</b></a></div>
-    <form id="filters" method="get" action="/">
-      <div class="search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input type="search" name="q" value="{{.Filter.Query}}" placeholder="{{t "会話を検索"}}">
-        <button type="button" class="ftog{{if .On}} on{{end}}" title="{{t "絞り込み"}}" aria-expanded="false" onclick="aihistPanel()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7.5V19l-4 1.5v-8z"/></svg>{{if .On}}<b>{{.On}}</b>{{end}}</button>
-      </div>
-      {{if .Pills}}<div class="pills">
-        {{range .Pills}}<a class="pill" href="{{.Href}}">{{with .Color}}<i style="background:{{.}}"></i>{{end}}<span>{{t .Label}}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg></a>{{end}}
-        <a class="pill clear" href="{{.Clear}}">{{t "クリア"}}</a>
-      </div>{{end}}
-      <div class="panel" id="panel">
-        {{range .Sections}}<div class="fsec">
-          <div class="fh">{{t .Label}}</div>
-          <div class="opts-list{{if gt (len .Items) 6}} long{{end}}">
-          {{$dim := .Dim}}{{range $i, $it := .Items}}<label class="opt{{if and (ge $i 6) (not .On)}} more{{end}}"{{with .Title}} title="{{.}}"{{end}}><input type="checkbox" name="{{$dim}}" value="{{.Value}}"{{if .On}} checked{{end}}>{{with .Color}}<i style="background:{{.}}"></i>{{end}}<span>{{.Label}}</span><small>{{.Count}}</small></label>{{end}}
-          {{if gt (len .Items) 6}}<button type="button" class="moreb" onclick="this.parentNode.classList.toggle('all')"><span>{{t "さらに表示"}}</span><span>{{t "閉じる"}}</span></button>{{end}}
-          </div>
-        </div>{{end}}
-        <div class="fsec">
-          <div class="fh">{{t "期間"}}</div>
-          <div class="seg"><label><input type="radio" name="since" value=""{{if not .Filter.Since.IsZero}}{{else}} checked{{end}}><span>{{t "すべて"}}</span></label>{{range .Periods}}<label><input type="radio" name="since" value="{{.Value}}"{{if .On}} checked{{end}}><span>{{t .Label}}</span></label>{{end}}</div>
-        </div>
-        <div class="fsec">
-          <div class="fh">{{t "まとめ方"}}</div>
-          <div class="seg"><label><input type="radio" name="by" value=""{{if not .ByProject}} checked{{end}}><span>{{t "日付"}}</span></label><label><input type="radio" name="by" value="project"{{if .ByProject}} checked{{end}}><span>{{t "プロジェクト"}}</span></label></div>
-        </div>
-      </div>
-    </form>
-    <script>
-    (function(){
-      var f=document.getElementById('filters'),p=document.getElementById('panel'),b=f.querySelector('.ftog');
-      function set(o){p.classList.toggle('open',o);b.setAttribute('aria-expanded',o);try{localStorage.setItem('aihist.panel',o?'1':'')}catch(e){}}
-      window.aihistPanel=function(){set(!p.classList.contains('open'))};
-      try{if(localStorage.getItem('aihist.panel'))set(true)}catch(e){}
-      f.addEventListener('change',function(e){if(e.target.name!=='q'){
-        f.querySelectorAll('input').forEach(function(i){if(!i.value&&(i.type==='radio'||i.type==='search'))i.disabled=true});f.submit()}});
-      f.addEventListener('submit',function(){f.querySelectorAll('input').forEach(function(i){if(!i.value&&(i.type==='radio'||i.type==='search'))i.disabled=true})});
-    })();
-    </script>
+    <div class="brand">
+      <button class="icon-btn tipb" type="button" onclick="aihistSide()" aria-label="{{t "サイドバーを非表示"}}" data-tip="{{t "サイドバーを非表示"}}" data-key="Ctrl+B"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+      <a href="/"><b>aihist</b></a>
+    </div>
+    <button class="sbox" type="button" data-search><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>{{t "検索"}}</span></button>
+    <nav class="snav-main">
+      <a href="/upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>{{t "アップロード"}}</a>
+    </nav>
   </div>
-  <nav class="convs">
-    {{$sel := 0}}{{$root := ""}}{{with .C}}{{$sel = .ID}}{{$root = .RootID}}{{end}}
-    {{range .Groups}}<div class="group"{{with .Title}} title="{{.}}"{{end}}>{{.Label}}<small>{{len .Rows}}</small></div>
-    {{range .Rows}}
-      <a class="conv{{if or (eq .ID $sel) (and $.Group (index $.Group .ID))}} on{{end}}" href="/c/{{.ID}}{{$.Keep}}">
-        <div class="t"><i style="background:{{toolColor .Tool}}"></i><span>{{if .Title}}{{oneline .Title}}{{else}}{{.ExternalID}}{{end}}</span>{{if gt .Branches 1}}<em class="br">{{.Branches}}</em>{{end}}</div>
-        {{if .Snippet}}<div class="s">{{hl .Snippet}}</div>{{end}}
-        {{if .ParentID}}<div class="sub">↳ {{t "サブエージェント"}}</div>{{end}}
-      </a>
-    {{end}}{{else}}<div class="empty">{{t "見つからない"}}</div>{{end}}
-  </nav>
+  <div class="convs" id="sidelist" data-cur="{{with .C}}{{.ID}}{{end}}">{{template "sidelist" .}}</div>
   <div class="side-foot">
-    <a href="/upload"{{if eq (or .Page "") "upload"}} class="on"{{end}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>{{t "アップロード"}}</a>
-    <a href="/settings"{{if eq (or .Page "") "settings"}} class="on"{{end}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>{{t "設定"}}</a>
+    <a href="/settings" data-settings><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>{{t "設定"}}</a>
   </div>
 </aside>
 <div class="scrim" onclick="document.querySelector('.app').classList.remove('open')"></div>
+<button class="icon-btn side-open tipb" type="button" onclick="aihistSide()" aria-label="{{t "サイドバーを表示"}}" data-tip="{{t "サイドバーを表示"}}" data-key="Ctrl+B"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+<script>
+// 閉じたサイドバーと幅を、描く前に戻す
+(function(){try{var a=document.querySelector('.app');if(localStorage.getItem('aihist.side')==='closed'&&innerWidth>860)a.classList.add('collapsed');var w=localStorage.getItem('aihist.sidew');if(w)document.documentElement.style.setProperty('--side-w',w+'px')}catch(e){}})();
+</script>
 {{end}}
 
-{{define "foot"}}</body></html>{{end}}
+{{define "row"}}{{$c := .c}}{{$r := .root}}<div class="conv{{if $r.C}}{{if eq $c.ID $r.C.ID}} on{{end}}{{end}}" data-id="{{$c.ID}}" data-tool="{{$c.Tool}}" data-ext="{{$c.ExternalID}}" data-pinned="{{if $c.Pinned}}1{{end}}" data-archived="{{if $c.Archived}}1{{end}}">
+  <a href="/c/{{$c.ID}}{{$r.Keep}}" data-tip="{{if $c.Title}}{{oneline $c.Title}}{{else}}{{$c.ExternalID}}{{end}}" data-when="{{rel $c.UpdatedAt}}"><i style="background:{{toolColor $c.Tool}}"></i><span class="ct">{{if $c.Title}}{{oneline $c.Title}}{{else}}{{$c.ExternalID}}{{end}}</span>{{if gt $c.Branches 1}}<em class="br">{{$c.Branches}}</em>{{end}}</a>
+  <button class="dots" type="button" aria-label="{{tf "%sのその他のオプション" (or $c.Title $c.ExternalID)}}"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
+  {{if $c.Snippet}}<div class="s">{{hl $c.Snippet}}</div>{{end}}
+</div>{{end}}
+
+{{define "sidelist"}}
+  {{if .Pinned}}<div class="sh">{{t "ピン留め済み"}}</div>
+  {{range .Pinned}}{{template "row" (dict "c" . "root" $)}}{{end}}{{end}}
+  <div class="sh rec"><span>{{t "最近の項目"}}</span>
+    <button class="icon-btn fbtn{{if .Pills}} on{{end}}" type="button" data-fmenu aria-label="{{t "最近の項目を絞り込んでグループ化"}}" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+    <div class="fmenu" role="menu" hidden>
+      {{range .Menu}}<div class="fi" role="menuitem" aria-haspopup="menu" tabindex="-1"><span>{{t .Label}}</span><small>{{.Value}}</small><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>
+        <div class="fsub" role="menu">{{$multi := .Multi}}{{range .Items}}<a role="menuitem{{if $multi}}checkbox{{else}}radio{{end}}" aria-checked="{{.On}}" href="{{.Href}}" data-q{{with .Title}} title="{{.}}"{{end}}><span class="ck">{{if .On}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>{{end}}</span>{{with .Color}}<i style="background:{{.}}"></i>{{end}}<span class="fl">{{.Label}}</span>{{if $multi}}<small>{{.Count}}</small>{{end}}</a>{{end}}</div>
+      </div>{{end}}
+    </div>
+  </div>
+  {{if .Pills}}<div class="pills">{{range .Pills}}<a class="pill" href="{{.Href}}" data-q>{{with .Color}}<i style="background:{{.}}"></i>{{end}}<span>{{.Label}}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg></a>{{end}}<a class="pill clear" href="{{.Clear}}" data-q>{{t "クリア"}}</a></div>{{end}}
+  {{range .Groups}}{{if .Label}}<div class="group"{{with .Title}} title="{{.}}"{{end}}>{{.Label}}</div>{{end}}
+    {{range .Rows}}{{template "row" (dict "c" . "root" $)}}{{end}}
+  {{else}}{{if not .Pinned}}<div class="empty">{{t "見つからない"}}</div>{{end}}{{end}}
+{{end}}
+
+{{define "foot"}}
+<div class="modal" id="settings"><div class="mbox"></div></div>
+<div class="modal top" id="search"><div class="qbox" role="dialog" aria-label="{{t "検索"}}">
+  <div class="qin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="text" placeholder="{{t "会話を検索"}}" autocomplete="off"><button class="icon-btn" type="button" data-close aria-label="{{t "閉じる"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="qtabs"><button type="button" class="on" data-tool="">{{t "すべて"}}</button>{{range .Tools}}<button type="button" data-tool="{{.Name}}">{{toolLabel .Name}}</button>{{end}}</div>
+  <div class="qres"></div>
+</div></div>
+<div class="modal" id="keys"><div class="kbox" role="dialog" aria-label="{{t "キーボードショートカット"}}">
+  <div class="mtop"><b>{{t "キーボードショートカット"}}</b><button class="icon-btn" type="button" data-close aria-label="{{t "閉じる"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="kl">
+    <div class="kg">{{t "一般"}}</div>
+    <div class="kr"><span>{{t "検索"}}</span><span><kbd>Ctrl</kbd><kbd>K</kbd></span></div>
+    <div class="kr"><span>{{t "検索"}}</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>K</kbd></span></div>
+    <div class="kr"><span>{{t "サイドバーの表示/非表示"}}</span><span><kbd>Ctrl</kbd><kbd>B</kbd></span></div>
+    <div class="kr"><span>{{t "キーボードショートカット"}}</span><span><kbd>Ctrl</kbd><kbd>/</kbd></span></div>
+    <div class="kr"><span>{{t "設定"}}</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>,</kbd></span></div>
+    <div class="kg">{{t "会話の行のメニュー"}}</div>
+    <div class="kr"><span>{{t "ピン留め"}}</span><span><kbd>P</kbd></span></div>
+    <div class="kr"><span>{{t "名前を変更"}}</span><span><kbd>R</kbd></span></div>
+    <div class="kr"><span>{{t "アーカイブ"}}</span><span><kbd>A</kbd></span></div>
+    <div class="kg">{{t "会話の中"}}</div>
+    <div class="kr"><span>{{t "前の発言"}}</span><span><kbd>K</kbd></span></div>
+    <div class="kr"><span>{{t "次の発言"}}</span><span><kbd>J</kbd></span></div>
+  </div>
+</div></div>
+<div class="rmenu" id="rmenu" role="menu" hidden></div>
+<div class="tip" id="tip" hidden></div>
+<script>
+(function(){
+  var app=document.querySelector('.app'), modal=document.getElementById('settings');
+  var ms=document.querySelectorAll('#settings'); if(ms.length>1)ms[ms.length-1].remove();
+  // サイドバー: Ctrl+B（Mac は ⌘+B）で開け閉め、縁をつかんで幅を変える
+  window.aihistSide=function(){
+    if(!app)return;
+    if(innerWidth<=860){app.classList.toggle('open');return}
+    var c=app.classList.toggle('collapsed');
+    try{localStorage.setItem('aihist.side',c?'closed':'')}catch(e){}
+  };
+  window.aihistMenu=function(){ if(innerWidth<=860)app.classList.add('open'); else aihistSide(); };
+  document.addEventListener('keydown',function(e){
+    if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&!e.altKey&&e.key.toLowerCase()==='b'){e.preventDefault();aihistSide()}
+    if(e.key==='Escape'&&modal.classList.contains('open'))closeSettings();
+  });
+  var h=document.querySelector('.side-resize');
+  if(h){
+    h.addEventListener('pointerdown',function(e){
+      e.preventDefault(); h.setPointerCapture(e.pointerId); document.body.classList.add('resizing');
+      function mv(ev){var w=Math.max(220,Math.min(520,ev.clientX));document.documentElement.style.setProperty('--side-w',w+'px');try{localStorage.setItem('aihist.sidew',w)}catch(x){}}
+      function up(){h.removeEventListener('pointermove',mv);h.removeEventListener('pointerup',up);document.body.classList.remove('resizing')}
+      h.addEventListener('pointermove',mv); h.addEventListener('pointerup',up);
+    });
+    h.addEventListener('dblclick',function(){document.documentElement.style.removeProperty('--side-w');try{localStorage.removeItem('aihist.sidew')}catch(x){}});
+  }
+
+  // 設定の窓。読み込み直さずに開き、中の項目もその場で切り替える
+  var back=null;
+  function path(sec){return sec.indexOf('m:')===0?'/settings/machines/'+encodeURIComponent(sec.slice(2)):'/settings/'+sec}
+  function show(sec){
+    var box=modal.querySelector('.sx'); if(!box)return;
+    if(!box.querySelector('[data-sec="'+CSS.escape(sec)+'"]'))sec='general';
+    box.dataset.sub=sec;
+    box.querySelectorAll('[data-sec]').forEach(function(x){x.hidden=x.dataset.sec!==sec});
+    var top=sec.indexOf('m:')===0?'machines':sec;
+    box.querySelectorAll('.snav a').forEach(function(a){a.classList.toggle('on',a.dataset.go===top)});
+    box.querySelector('.sbody').scrollTop=0;
+    history.replaceState({settings:1},'',path(sec));
+  }
+  function load(sec,html){
+    var mb=modal.querySelector('.mbox'); mb.innerHTML=html; init(mb); show(sec);
+  }
+  window.openSettings=function(sec){
+    sec=sec||'general';
+    if(!modal.classList.contains('open')){back=location.pathname+location.search+location.hash; history.pushState({settings:1},'',path(sec))}
+    modal.classList.add('open'); app&&app.classList.remove('open');
+    fetch(path(sec),{headers:{'X-Panel':'1'}}).then(function(r){return r.text()}).then(function(t){load(sec,t)});
+  };
+  function closeSettings(){
+    modal.classList.remove('open');
+    if(back!==null){history.replaceState(null,'',back);back=null}
+    else if(location.pathname.indexOf('/settings')===0)history.replaceState(null,'','/');
+  }
+  window.addEventListener('popstate',function(){ if(modal.classList.contains('open')&&location.pathname.indexOf('/settings')!==0){modal.classList.remove('open');back=null} });
+  modal.addEventListener('click',function(e){
+    if(e.target===modal||e.target.closest('[data-close]')){closeSettings();return}
+    var g=e.target.closest('[data-go]'); if(g){e.preventDefault();show(g.dataset.go)}
+  });
+  document.querySelectorAll('[data-settings]').forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();openSettings()})});
+
+  window.aihistClip=function(t){if(navigator.clipboard&&isSecureContext)navigator.clipboard.writeText(t);else{var x=document.createElement('textarea');x.value=t;document.body.appendChild(x);x.select();document.execCommand('copy');x.remove()}};
+  window.aihistCopy=function(b){var t=b.previousElementSibling.textContent;navigator.clipboard.writeText(t).then(function(){var o=b.textContent;b.textContent={{t "コピーした"}};setTimeout(function(){b.textContent=o},1400)})};
+  var toast, tt;
+  function say(ok,msg){
+    if(!toast){toast=document.createElement('div');toast.className='toast';document.body.appendChild(toast)}
+    toast.textContent=msg||(ok?{{t "保存した"}}:{{t "保存できなかった"}}); toast.classList.toggle('bad',!ok); toast.classList.add('show');
+    clearTimeout(tt); tt=setTimeout(function(){toast.classList.remove('show')},1400);
+  }
+  function pad(n){return (n<10?'0':'')+n}
+  // 送るタイミングの組み立て。画面では選ぶだけにし、中では cron の形にして送る
+  function sched(el){
+    var hid=el.querySelector('input[name=schedule]'), k=el.querySelector('.k'), n=el.querySelector('.n'), hh=el.querySelector('.h'),
+        m=el.querySelector('.m'), d=el.querySelector('.d'), tm=el.querySelector('.tm'), nx=el.querySelector('.next'),
+        wd=Array.from(el.querySelectorAll('.wd input'));
+    for(var i=1;i<=31;i++){var o=document.createElement('option');o.value=o.textContent=i;d.appendChild(o)}
+    var f=(hid.value||'*/10 * * * *').split(/\s+/), kind='min';
+    if(f[1]==='*'&&f[2]==='*'&&f[4]==='*'){kind='min'; n.value=f[0]==='*'?'1':f[0].replace('*/','')}
+    else if(f[1].indexOf('*/')===0||(f[1]==='*'&&/^\d+$/.test(f[0]))){kind='hour'; hh.value=f[1]==='*'?'1':f[1].replace('*/',''); m.value=f[0]}
+    else if(f[4]!=='*'){kind='week'; f[4].split(',').forEach(function(x){if(wd[+x%7])wd[+x%7].checked=true}); tm.value=pad(+f[1])+':'+pad(+f[0])}
+    else if(f[2]!=='*'){kind='month'; d.value=f[2]; tm.value=pad(+f[1])+':'+pad(+f[0])}
+    else {kind='day'; tm.value=pad(+f[1])+':'+pad(+f[0])}
+    k.value=kind;
+    el.build=function(){
+      var t=(tm.value||'09:00').split(':'), H=+t[0], M=+t[1], c;
+      switch(k.value){
+        case 'min': c=(n.value==='1'?'*':'*/'+n.value)+' * * * *'; break;
+        case 'hour': c=m.value+' '+(hh.value==='1'?'*':'*/'+hh.value)+' * * *'; break;
+        case 'day': c=M+' '+H+' * * *'; break;
+        case 'week': var ds=wd.filter(function(x){return x.checked}).map(function(x){return x.value}); if(!ds.length){wd[1].checked=true;ds=['1']} c=M+' '+H+' * * '+ds.join(','); break;
+        case 'month': c=M+' '+H+' '+d.value+' * *'; break;
+      }
+      hid.value=c;
+      el.querySelectorAll('.p').forEach(function(p){p.style.display=p.classList.contains('p-'+k.value)?'':'none'});
+      fetch('/settings/preview?schedule='+encodeURIComponent(c)).then(function(r){return r.json()}).then(function(a){nx.textContent=a&&a.length?{{t "次に送る"}}+' '+a.join('、'):''});
+    };
+    el.build();
+  }
+  function init(root){
+    root.querySelectorAll('.sched').forEach(sched);
+    root.querySelectorAll('input[name=tz]').forEach(function(i){try{i.value=Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){}});
+    // 変えたらその場で保存する
+    root.querySelectorAll('form[data-auto]').forEach(function(f){
+      var timer;
+      function save(){ clearTimeout(timer); timer=setTimeout(function(){
+        fetch(f.action,{method:'POST',headers:{'X-Auto':'1'},body:new URLSearchParams(new FormData(f))}).then(function(r){say(r.ok)});
+      },350); }
+      f.addEventListener('change',function(e){
+        var s=e.target.closest('.sched'); if(s)s.build();
+        if(e.target.dataset.toggle==='own'){var o=f.querySelector('[data-own]'); if(o)o.hidden=e.target.checked}
+        save();
+      });
+      f.addEventListener('submit',function(e){e.preventDefault();save()});
+    });
+    // 追加・削除は送ったあと窓の中身を差し替える
+    root.querySelectorAll('form:not([data-auto])').forEach(function(f){
+      f.addEventListener('submit',function(e){
+        e.preventDefault();
+        if(f.dataset.confirm&&!confirm(f.dataset.confirm))return;
+        var sub=root.querySelector('.sx').dataset.sub;
+        fetch(f.action,{method:'POST',headers:{'X-Panel':'1'},body:new URLSearchParams(new FormData(f))}).then(function(r){return r.text()}).then(function(t){
+          load(f.action.indexOf('/tokens')>=0?'tokens':(f.action.indexOf('/delete')>=0?'machines':sub),t);
+        });
+      });
+    });
+    root.querySelectorAll('input[name=lang]').forEach(function(i){i.onchange=function(){
+      document.cookie='lang='+i.value+';path=/;max-age='+(i.value?31536000:0)+';samesite=lax'; location.reload();
+    }});
+  }
+
+  // ── 左の一覧: 絞り込みメニュー（子メニュー）・差し替え・行のメニュー・吹き出し
+  var list=document.getElementById('sidelist');
+  function swap(q){
+    var cur=list.dataset.cur||'';
+    fetch('/side?'+q+(cur?'&cur='+cur:'')).then(function(r){return r.text()}).then(function(t){
+      var open=list.querySelector('.fmenu:not([hidden])'), sub=open&&open.querySelector('.fi.open');
+      var idx=sub?Array.prototype.indexOf.call(open.children,sub):-1;
+      list.innerHTML=t;
+      if(open){var m=list.querySelector('.fmenu');m.hidden=false; place(m,list.querySelector('[data-fmenu]')); if(idx>=0&&m.children[idx])openSub(m.children[idx])}
+      history.replaceState(history.state,'',location.pathname+(q?'?'+q:''));
+      document.querySelectorAll('a[href^="/c/"]').forEach(function(a){if(!list.contains(a))return; a.href=a.pathname+(q?'?'+q:'')});
+    });
+  }
+  function closeF(){var m=list&&list.querySelector('.fmenu'); if(m)m.hidden=true}
+  // メニューは一覧の枠で切れないよう、画面に対して置く
+  function place(m,btn){var r=btn.getBoundingClientRect(); m.style.left=Math.min(r.left,innerWidth-240)+'px'; m.style.top=(r.bottom+4)+'px'}
+  function openSub(fi){
+    list.querySelectorAll('.fi.open').forEach(function(x){if(x!==fi)x.classList.remove('open')});
+    fi.classList.add('open'); var sub=fi.querySelector('.fsub'), r=fi.getBoundingClientRect();
+    sub.style.left=Math.min(r.right+4,innerWidth-230)+'px'; sub.style.top=Math.max(8,Math.min(r.top-5,innerHeight-sub.offsetHeight-8))+'px';
+  }
+  if(list){
+    list.addEventListener('click',function(e){
+      var fb=e.target.closest('[data-fmenu]');
+      if(fb){var m=list.querySelector('.fmenu'); m.hidden=!m.hidden; place(m,fb); e.stopPropagation(); return}
+      var fi=e.target.closest('.fi');
+      if(fi&&!e.target.closest('.fsub')){openSub(fi); e.stopPropagation(); return}
+      var q=e.target.closest('a[data-q]');
+      if(q){e.preventDefault(); e.stopPropagation(); if(!q.closest('.fmenu'))closeF(); swap(q.getAttribute('href').replace(/^\?/,'')); return}
+      var d=e.target.closest('.dots');
+      if(d){e.preventDefault(); e.stopPropagation(); closeF(); rowMenu(d.closest('.conv'),d); return}
+    });
+    list.addEventListener('mouseover',function(e){
+      var fi=e.target.closest('.fi'); if(fi&&!fi.classList.contains('open')&&!e.target.closest('.fsub'))openSub(fi);
+    });
+  }
+  document.addEventListener('click',function(e){
+    if(list&&!e.target.closest('.fmenu')){var m=list.querySelector('.fmenu'); if(m)m.hidden=true}
+    if(!e.target.closest('#rmenu'))rm.hidden=true;
+  });
+  // 行のメニュー
+  var rm=document.getElementById('rmenu');
+  var T={pin:{{t "ピン留め"}},unpin:{{t "ピン留めを外す"}},rename:{{t "名前を変更"}},cont:{{t "元の AI で続ける"}},md:{{t "別のAIへ渡す"}},arch:{{t "アーカイブ"}},unarch:{{t "アーカイブを外す"}},copied:{{t "コピーした"}},newname:{{t "新しい名前"}}};
+  function post(id,body){return fetch('/c/'+id+'/meta',{method:'POST',body:new URLSearchParams(body)})}
+  function refresh(){swap(location.search.replace(/^\?/,''))}
+  function rowMenu(row,btn){
+    var id=row.dataset.id, pinned=!!row.dataset.pinned, arch=!!row.dataset.archived;
+    var items=[
+      [pinned?T.unpin:T.pin,'P',function(){post(id,{pinned:pinned?'0':'1'}).then(refresh)}],
+      [T.rename,'R',function(){var cur=row.querySelector('.ct').textContent,n=prompt(T.newname,cur); if(n!==null&&n!==cur)post(id,{title:n}).then(refresh)}],
+      [T.cont,'',function(){aihistClip('aihist restore '+row.dataset.ext); say(true,T.copied)}],
+      [T.md,'',function(){fetch('/c/'+id+'/export.md').then(function(r){return r.text()}).then(function(t){aihistClip(t); say(true,T.copied)})}],
+      [arch?T.unarch:T.arch,'A',function(){post(id,{archived:arch?'0':'1'}).then(refresh)}]
+    ];
+    rm.innerHTML='';
+    items.forEach(function(it){var b=document.createElement('button');b.type='button';b.setAttribute('role','menuitem');b.innerHTML='<span></span><kbd></kbd>';b.firstChild.textContent=it[0];b.lastChild.textContent=it[1];b.onclick=function(){rm.hidden=true;it[2]()};b.dataset.key=it[1].toLowerCase();rm.appendChild(b)});
+    var r=btn.getBoundingClientRect(); rm.style.left=Math.min(r.right+4,innerWidth-220)+'px'; rm.style.top=Math.min(r.top,innerHeight-240)+'px'; rm.hidden=false; tip.hidden=true;
+  }
+  document.addEventListener('keydown',function(e){
+    if(rm.hidden||e.ctrlKey||e.metaKey)return;
+    var b=rm.querySelector('[data-key="'+e.key.toLowerCase()+'"]'); if(b){e.preventDefault();b.click()}
+    if(e.key==='Escape')rm.hidden=true;
+  });
+  // 吹き出し（行の題名といつの会話か・ボタンのショートカット）
+  var tip=document.getElementById('tip'), tt2;
+  document.addEventListener('mouseover',function(e){
+    var a=e.target.closest('[data-tip]'); clearTimeout(tt2);
+    var fm=list&&list.querySelector('.fmenu');
+    if(!a||!rm.hidden||(fm&&!fm.hidden)){tip.hidden=true;return}
+    tt2=setTimeout(function(){
+      tip.innerHTML='<b></b><small></small>'; tip.firstChild.textContent=a.dataset.tip; tip.lastChild.textContent=a.dataset.when||a.dataset.key||'';
+      var r=a.getBoundingClientRect(), side=a.closest('.conv');
+      tip.hidden=false;
+      if(side){tip.style.left=(document.querySelector('.side').getBoundingClientRect().right+6)+'px'; tip.style.top=r.top+'px'}
+      else{tip.style.left=r.left+'px'; tip.style.top=(r.bottom+6)+'px'}
+    },side0(a)?350:250);
+  });
+  function side0(a){return !!a.closest('.conv')}
+
+  // ── 検索の窓（Ctrl+K・Ctrl+Shift+K）
+  var sm=document.getElementById('search'), si=sm.querySelector('input'), sr=sm.querySelector('.qres'), stool='', sel=0, st;
+  function esc(t){var d=document.createElement('div');d.textContent=t;return d.innerHTML}
+  function mark(t){return esc(t).replace(/\x02/g,'<b>').replace(/\x03/g,'</b>')}
+  function find(){
+    clearTimeout(st); st=setTimeout(function(){
+      fetch('/search?q='+encodeURIComponent(si.value)+'&tool='+encodeURIComponent(stool)).then(function(r){return r.json()}).then(function(a){
+        sel=0; sr.innerHTML=a.length?'':'<div class="empty">'+esc({{t "見つからない"}})+'</div>';
+        a.forEach(function(h,i){var x=document.createElement('a');x.href='/c/'+h.id;x.className='qr'+(i===0?' on':'');
+          x.innerHTML='<i style="background:'+esc(h.color)+'"></i><span class="qt">'+esc(h.title)+(h.snippet?'<small>'+mark(h.snippet)+'</small>':'')+'</span><span class="qw">'+esc(h.when)+'</span>';
+          sr.appendChild(x)});
+      });
+    },120);
+  }
+  window.openSearch=function(){sm.classList.add('open'); si.value=''; find(); setTimeout(function(){si.focus()},0)};
+  function closeSearch(){sm.classList.remove('open')}
+  si.addEventListener('input',find);
+  si.addEventListener('keydown',function(e){
+    var rs=sr.querySelectorAll('.qr'); if(!rs.length)return;
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault(); rs[sel].classList.remove('on'); sel=(sel+(e.key==='ArrowDown'?1:-1)+rs.length)%rs.length; rs[sel].classList.add('on'); rs[sel].scrollIntoView({block:'nearest'})}
+    if(e.key==='Enter'){e.preventDefault(); location.href=rs[sel].href}
+  });
+  sm.querySelector('.qtabs').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;sm.querySelectorAll('.qtabs button').forEach(function(x){x.classList.toggle('on',x===b)});stool=b.dataset.tool;find();si.focus()});
+  sm.addEventListener('click',function(e){if(e.target===sm||e.target.closest('[data-close]'))closeSearch()});
+  document.querySelectorAll('[data-search]').forEach(function(b){b.addEventListener('click',openSearch)});
+  // ── ショートカット一覧（Ctrl+/）
+  var km=document.getElementById('keys');
+  km.addEventListener('click',function(e){if(e.target===km||e.target.closest('[data-close]'))km.classList.remove('open')});
+  document.addEventListener('keydown',function(e){
+    var c=e.ctrlKey||e.metaKey, k=e.key.toLowerCase();
+    if(c&&k==='k'){e.preventDefault();openSearch()}
+    else if(c&&e.shiftKey&&(k===','||e.code==='Comma')){e.preventDefault();openSettings()}
+    else if(c&&(k==='/'||e.code==='Slash')){e.preventDefault();km.classList.toggle('open')}
+    else if(e.key==='Escape'){closeSearch();km.classList.remove('open')}
+  });
+  if(modal.dataset.loaded){init(modal);show(modal.querySelector('.sx').dataset.sub)}
+})();
+</script>
+</body></html>{{end}}

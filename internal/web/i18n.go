@@ -76,14 +76,46 @@ var english = map[string]string{
 	"自動":     "Auto",
 	// アップロード
 	"ファイルをドロップ、またはクリックして選ぶ": "Drop files here or click to choose",
-	"送る":         "Upload",
-	"待機":         "Waiting",
-	"送信中":        "Uploading",
-	"取り込み中":      "Importing",
-	"%d 件取り込み":   "%d imported",
-	"%d 件は変更なし":  "%d unchanged",
-	"会話の記録ではない":  "Not a conversation log",
-	"開く":         "Open",
+	"送る":           "Upload",
+	"待機":           "Waiting",
+	"送信中":          "Uploading",
+	"取り込み中":        "Importing",
+	"%d 件取り込み":     "%d imported",
+	"%d 件は変更なし":    "%d unchanged",
+	"会話の記録ではない":    "Not a conversation log",
+	"開く":           "Open",
+	"サイドバー":        "Sidebar",
+	"サイドバーを非表示":    "Hide sidebar",
+	"サイドバーを表示":     "Show sidebar",
+	"サイドバーのサイズを変更": "Resize sidebar",
+	"検索":           "Search",
+	"ピン留め済み":       "Pinned",
+	"最近の項目":        "Recents",
+	"最近の項目を絞り込んでグループ化": "Filter and group recents",
+	"ステータス":        "Status",
+	"アクティブ":        "Active",
+	"アーカイブ済み":      "Archived",
+	"グループ化の基準":     "Group by",
+	"並び替え":         "Sort by",
+	"最終更新":         "Last updated",
+	"始めた日":         "Started",
+	"なし":           "None",
+	"%sのその他のオプション": "More options for %s",
+	"ピン留め":         "Pin",
+	"ピン留めを外す":      "Unpin",
+	"名前を変更":        "Rename",
+	"アーカイブ":        "Archive",
+	"アーカイブを外す":     "Unarchive",
+	"新しい名前":        "New name",
+	"キーボードショートカット": "Keyboard shortcuts",
+	"サイドバーの表示/非表示": "Toggle sidebar",
+	"会話の行のメニュー":    "Conversation menu",
+	"会話の中":         "In a conversation",
+	"一昨日":          "2 days ago",
+	"%d 日前":        "%d days ago",
+	"サイドバーを閉じる":    "Close sidebar",
+	"サイドバーを開く":     "Open sidebar",
+	"ドラッグで幅を変える（ダブルクリックで元に戻す）": "Drag to resize (double-click to reset)",
 	"一般":         "General",
 	"送信":         "Sending",
 	"トークン":       "Tokens",
@@ -195,4 +227,34 @@ func dayIn(l string, t time.Time) string {
 		return t.Format("January 2006")
 	}
 	return t.Format("2006年1月")
+}
+
+// relIn は行の吹き出しに出す、いつの会話か（今日 15:04・昨日・3 日前・10月2日）。
+func relIn(l string, t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	t = t.Local()
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	days := int(today.Sub(time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())).Hours() / 24)
+	switch {
+	case days <= 0:
+		return tr(l, "今日") + " " + t.Format("15:04")
+	case days == 1:
+		return tr(l, "昨日")
+	case days == 2:
+		return tr(l, "一昨日")
+	case days < 7:
+		return trf(l, "%d 日前", days)
+	case t.Year() == now.Year():
+		if l == "en" {
+			return t.Format("Jan 2")
+		}
+		return t.Format("1月2日")
+	}
+	if l == "en" {
+		return t.Format("Jan 2, 2006")
+	}
+	return t.Format("2006年1月2日")
 }

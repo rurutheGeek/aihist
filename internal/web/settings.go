@@ -148,17 +148,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	}
 	d["SNav"], d["Section"] = sections, sec
 	if host := r.PathValue("host"); host != "" {
-		sec = "machine"
-		d["Section"] = "machines"
-		for _, m := range s.machineViews(lang(r)) {
-			if m.Host == host {
-				d["M"] = m
-			}
-		}
-		if d["M"] == nil {
-			http.NotFound(w, r)
-			return
-		}
+		sec = "m:" + host
 	}
 	d["Sub"] = sec
 	toks, _ := s.st.Tokens()
@@ -178,6 +168,11 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	d["Lang"] = ""
 	if c, err := r.Cookie("lang"); err == nil {
 		d["Lang"] = c.Value
+	}
+	// 設定の窓は画面の上に開く。窓の中身だけを求められたら（X-Panel）中身だけを返す
+	if r.Header.Get("X-Panel") == "1" {
+		s.render(w, r, "settingsbody", d)
+		return
 	}
 	s.render(w, r, "settings.html", d)
 }

@@ -14,6 +14,15 @@ import (
 )
 
 const schema = `
+CREATE TABLE IF NOT EXISTS conv_meta (
+  tool TEXT NOT NULL,
+  host TEXT NOT NULL,
+  external_id TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  pinned INTEGER NOT NULL DEFAULT 0,
+  archived INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (tool, host, external_id)
+);
 CREATE TABLE IF NOT EXISTS machines (
   host TEXT PRIMARY KEY,
   seen_at INTEGER NOT NULL DEFAULT 0,
@@ -311,6 +320,8 @@ type ConvRow struct {
 	RootID        string
 	ContinuesFrom string // 続きのとき、前の会話の ID
 	Branches      int    // 一覧でまとめた数（自分を含む）
+	Pinned        bool   // ピン留め（まとめた会話のどれかに付いていれば）
+	Archived      bool   // アーカイブ（まとめた会話のどれかに付いていれば）
 	orphan        bool   // 親の会話が取り込まれていないサブエージェント
 }
 
@@ -321,6 +332,8 @@ type Filter struct {
 	Models   []string
 	Projects []string // 作業ディレクトリ
 	Since    time.Time
+	Status   string // "" と active はアーカイブしていないもの、archived はアーカイブしたもの、all は全部
+	Sort     string // "" は最終更新の新しい順、started は始めた日の新しい順
 	Limit    int
 	All      bool // まとめずに全部出す
 }
@@ -435,6 +448,10 @@ func (s *Store) Browse(f Filter) ([]ConvRow, map[string][]Facet, error) {
 			if hits != nil && !slices.ContainsFunc(g.members, func(i int) bool { _, ok := hits[rows[i].ID]; return ok }) {
 				continue
 			}
+			archived := slices.ContainsFunc(g.members, func(i int) bool { return rows[i].Archived })
+			if (f.Status == "archived") != archived && f.Status != "all" {
+				continue
+			}
 			gs = append(gs, g)
 		}
 		return rows, gs
@@ -482,11 +499,17 @@ func (s *Store) Browse(f Filter) ([]ConvRow, map[string][]Facet, error) {
 				if sn, ok := hits[rows[i].ID]; ok && rep.Snippet == "" {
 					rep.Snippet = sn
 				}
+				rep.Pinned = rep.Pinned || rows[i].Pinned
+				rep.Archived = rep.Archived || rows[i].Archived
 			}
 			out = append(out, rep)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
+	if f.Sort == "started" {
+		sort.SliceStable(out, func(i, j int) bool { return out[i].StartedAt.After(out[j].StartedAt) })
+	} else {
+		sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
+	}
 	if len(out) > f.Limit {
 		out = out[:f.Limit]
 	}
@@ -534,7 +557,11 @@ func (s *Store) query(q string, args ...any) ([]ConvRow, error) {
 		r.StartedAt, r.UpdatedAt = fromUnix(st), fromUnix(up)
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	return out, s.applyMeta(out)
 }
 
 // hits は本文に q を含む会話と、その抜粋（一致を \x02 \x03 で囲む）。
@@ -738,6 +765,9 @@ func (s *Store) Get(id int64) (*ConvRow, []model.Message, error) {
 		return nil, nil, err
 	}
 	r.StartedAt, r.UpdatedAt, r.Models = fromUnix(st), fromUnix(up), splitModels(ms)
+	one := []ConvRow{r}
+	s.applyMeta(one)
+	r = one[0]
 	rows, err := s.db.Query(`SELECT m.id, m.external_id, m.parent_external_id, m.role, m.created_at, m.model, m.sidechain,
 	    p.kind, p.text, p.tool_name, p.tool_call_id, p.is_error
 	  FROM messages m LEFT JOIN parts p ON p.message_id = m.id
