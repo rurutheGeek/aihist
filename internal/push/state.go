@@ -18,6 +18,7 @@ type ServerConfig struct {
 	Tools       string `json:"tools"` // "*" は全部
 	Attachments bool   `json:"attachments"`
 	Attach      string `json:"attach"` // 送る添付ファイルの種類（無ければ Attachments に従う）
+	Hide        string `json:"hide"`   // 送る前に消す情報の種類（無ければ消さない。古いサーバー）
 }
 
 // Init は初めて報告するときに渡す、導入で選んだ設定。

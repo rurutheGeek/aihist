@@ -70,7 +70,7 @@ func (s *Server) apiPut(w http.ResponseWriter, r *http.Request) {
 		mt = time.Unix(0, n)
 	}
 	q := r.URL.Query()
-	if err := s.raw.Put(q.Get("host"), q.Get("tool"), q.Get("path"), r.Body, mt); err != nil {
+	if err := s.putUpload(q.Get("host"), q.Get("tool"), q.Get("path"), r.Body, mt); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -264,14 +264,14 @@ func (s *Server) store(host string, fh *multipart.FileHeader) (tool, rel string,
 	var body io.Reader = f
 	// 添付ファイルを取り込まない設定なら、埋め込まれた画像などを抜いてから置く（形のある記録だけ）
 	if keep := s.uploadAttach(); !push.KeepsAll(keep) && (tool == claudecode.Tool || tool == codex.Tool) {
-		t, _, done, err := push.Strip(f, keep)
+		t, _, done, err := push.Strip(f, keep, "")
 		if err != nil {
 			return "", "", err
 		}
 		defer done()
 		body = t
 	}
-	return tool, rel, s.raw.Put(host, tool, rel, body, time.Now())
+	return tool, rel, s.putUpload(host, tool, rel, body, time.Now())
 }
 
 var errNotAllowed = errors.New("取り込まない設定にしている")
@@ -344,7 +344,7 @@ func (s *Server) storeGemini(host, name string, f multipart.File, size int64, pu
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return true, err
 		}
-		return true, s.raw.Put(host, gemini.Tool, "takeout/"+stamp+"-"+name, f, time.Now())
+		return true, s.putUpload(host, gemini.Tool, "takeout/"+stamp+"-"+name, f, time.Now())
 	}
 	if !strings.HasSuffix(name, ".zip") {
 		return false, nil
@@ -375,7 +375,7 @@ func (s *Server) storeGemini(host, name string, f multipart.File, size int64, pu
 		if err != nil {
 			return true, err
 		}
-		err = s.raw.Put(host, gemini.Tool, fmt.Sprintf("takeout/%s-%s-%d.html", stamp, strings.TrimSuffix(name, ".zip"), i), r, e.Modified)
+		err = s.putUpload(host, gemini.Tool, fmt.Sprintf("takeout/%s-%s-%d.html", stamp, strings.TrimSuffix(name, ".zip"), i), r, e.Modified)
 		r.Close()
 		if err != nil {
 			return true, err
@@ -400,10 +400,14 @@ var jobs = struct {
 	m map[string]*job
 }{m: map[string]*job{}}
 
-func (s *Server) startJob(host, tool string) string {
+func newJobID() string {
 	b := make([]byte, 8)
 	rand.Read(b)
-	id := hex.EncodeToString(b)
+	return hex.EncodeToString(b)
+}
+
+func (s *Server) startJob(host, tool string) string {
+	id := newJobID()
 	j := &job{State: "waiting"}
 	jobs.Lock()
 	jobs.m[id] = j

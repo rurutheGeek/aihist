@@ -127,6 +127,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /settings/cleanup", s.setCleanup)
 	mux.HandleFunc("POST /settings/schedule", s.setSchedule)
 	mux.HandleFunc("POST /settings/upload", s.setUpload)
+	mux.HandleFunc("POST /settings/hide", s.setHide)
+	mux.HandleFunc("POST /settings/purge", s.purge)
 	mux.HandleFunc("POST /settings/deleted/forget", s.forgetDeleted)
 	mux.HandleFunc("POST /settings/machines/{host}", s.setMachine)
 	mux.HandleFunc("POST /settings/machines/{host}/delete", s.deleteMachine)

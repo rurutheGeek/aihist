@@ -168,7 +168,8 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	for _, t := range uploadTools {
 		ut = append(ut, toolOpt{Tool: t, Label: toolLabel(t), On: s.uploadAllowed(t)})
 	}
-	d["UploadTools"], d["UploadAttach"] = ut, attachOpts(s.uploadAttach())
+	d["UploadTools"], d["UploadAttach"], d["UploadHide"] = ut, attachOpts(s.uploadAttach()), hideOpts(s.uploadHide())
+	d["Hide"] = hideOpts(s.hideDefault())
 	d["Schedule"] = s.st.Setting("schedule", DefaultSchedule)
 	d["Next"] = s.nextRuns(lang(r), d["Schedule"].(string), 3)
 	d["CleanupOpts2"] = []int{-1, 0, 7, 14, 30, 90}
@@ -224,11 +225,12 @@ type clientConfig struct {
 	Tools       string `json:"tools"`
 	Attachments bool   `json:"attachments"` // 種類を分ける前の版のマシン向け
 	Attach      string `json:"attach"`
+	Hide        string `json:"hide"`
 }
 
 func (s *Server) clientConfig(host string) clientConfig {
 	m, _ := s.st.Machine(host)
-	cf := clientConfig{Schedule: m.Schedule, TZ: s.st.Setting("tz", ""), Tools: m.Tools, Attach: m.Attach, Attachments: m.Attach != "-", CleanupDays: m.Cleanup}
+	cf := clientConfig{Schedule: m.Schedule, TZ: s.st.Setting("tz", ""), Tools: m.Tools, Attach: m.Attach, Attachments: m.Attach != "-", CleanupDays: m.Cleanup, Hide: s.hideFor(host)}
 	if cf.Schedule == "" {
 		cf.Schedule = s.st.Setting("schedule", DefaultSchedule)
 	}
@@ -306,6 +308,7 @@ func (s *Server) setUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	s.st.SetSetting("upload_tools", strings.Join(l, ","))
 	s.st.SetSetting("upload_attach", attachList(r.Form["attach"]))
+	s.st.SetSetting("upload_hide", hideList(r.Form["hide"]))
 	done(w, r, "/settings/upload")
 }
 

@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS machines (
   attachments INTEGER NOT NULL DEFAULT 1,
   schedule TEXT NOT NULL DEFAULT '',
   cleanup INTEGER NOT NULL DEFAULT -1,
-  attach TEXT NOT NULL DEFAULT '*'
+  attach TEXT NOT NULL DEFAULT '*',
+  hide TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
@@ -143,6 +144,11 @@ func migrate(db *sql.DB) error {
 	if err := migrateModels(db); err != nil {
 		return err
 	}
+	if !hasColumnIn(db, "machines", "hide") {
+		if _, err := db.Exec(`ALTER TABLE machines ADD COLUMN hide TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
 	// マシンの添付ファイルを種類ごとに選ぶ（"*" は全部。前の「送らない」は "-" にする）
 	var n int
 	db.QueryRow(`SELECT count(*) FROM pragma_table_info('machines') WHERE name='attach'`).Scan(&n)
@@ -166,6 +172,12 @@ func migrateModels(db *sql.DB) error {
 	    (SELECT DISTINCT model FROM messages WHERE conversation_id = conversations.id AND model NOT IN ('', '<synthetic>'))), '');
 	  UPDATE conversations SET models = model WHERE models = '' AND model NOT IN ('', '<synthetic>');`)
 	return err
+}
+
+func hasColumnIn(db *sql.DB, table, col string) bool {
+	var n int
+	db.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name=?`, table, col).Scan(&n)
+	return n > 0
 }
 
 func hasColumn(db *sql.DB, col string) bool {

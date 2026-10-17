@@ -12,7 +12,7 @@ func TestStripped(t *testing.T) {
 		`{"image_url":"data:image/webp;base64,` + big + `"}` + "\n" +
 		`{"source":{"type":"base64","media_type":"application/pdf","data":"` + big + `"}}` + "\n" +
 		`{"url":"data:audio/mpeg;base64,` + big + `"}` + "\n" + `{"text":"short data:image/png;base64,AAAA"}`
-	f, n, err := stripped(strings.NewReader(in), "-")
+	f, n, err := stripped(strings.NewReader(in), "-", "")
 	if err != nil {
 		t.Fatal(err)
 	}

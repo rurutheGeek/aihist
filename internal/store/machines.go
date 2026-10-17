@@ -23,15 +23,16 @@ type Machine struct {
 	Schedule    string // cron の式。空は全体の設定に従う
 	Cleanup     int    // 手元から消す日数。-1 は全体の設定、0 は消さない
 	Attach      string // 送る添付ファイルの種類（"*" は全部、"*,-video" は動画以外、"-" は送らない）
+	Hide        string // 送る前に消す情報の種類（"secret,email"、"-" は消さない）。空は全体の設定に従う
 }
 
-const machineCols = `host, seen_at, version, detected, tools, attachments, schedule, cleanup, attach`
+const machineCols = `host, seen_at, version, detected, tools, attachments, schedule, cleanup, attach, hide`
 
 func scanMachine(sc interface{ Scan(...any) error }) (Machine, error) {
 	var m Machine
 	var seen int64
 	var det string
-	err := sc.Scan(&m.Host, &seen, &m.Version, &det, &m.Tools, &m.Attachments, &m.Schedule, &m.Cleanup, &m.Attach)
+	err := sc.Scan(&m.Host, &seen, &m.Version, &det, &m.Tools, &m.Attachments, &m.Schedule, &m.Cleanup, &m.Attach, &m.Hide)
 	m.SeenAt = fromUnix(seen)
 	json.Unmarshal([]byte(det), &m.Detected)
 	return m, err
@@ -84,9 +85,9 @@ func (s *Store) Report(host, version string, det []Detected, init *Machine) erro
 
 // SetMachine はマシンの設定を変える（画面から）。
 func (s *Store) SetMachine(m Machine) error {
-	_, err := s.db.Exec(`INSERT INTO machines (host, tools, attachments, schedule, cleanup, attach) VALUES (?,?,?,?,?,?)
-	  ON CONFLICT(host) DO UPDATE SET tools=excluded.tools, attachments=excluded.attachments, schedule=excluded.schedule, cleanup=excluded.cleanup, attach=excluded.attach`,
-		m.Host, m.Tools, m.Attachments, m.Schedule, m.Cleanup, m.Attach)
+	_, err := s.db.Exec(`INSERT INTO machines (host, tools, attachments, schedule, cleanup, attach, hide) VALUES (?,?,?,?,?,?,?)
+	  ON CONFLICT(host) DO UPDATE SET tools=excluded.tools, attachments=excluded.attachments, schedule=excluded.schedule, cleanup=excluded.cleanup, attach=excluded.attach, hide=excluded.hide`,
+		m.Host, m.Tools, m.Attachments, m.Schedule, m.Cleanup, m.Attach, m.Hide)
 	return err
 }
 

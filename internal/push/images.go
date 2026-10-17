@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/rurutheGeek/aihist/internal/raw"
+	"github.com/rurutheGeek/aihist/internal/scrub"
 )
 
 // 添付ファイルを送らないときは、会話に埋め込まれたファイル（base64 の画像・PDF・音声など）を
@@ -95,8 +96,9 @@ func stripImages(line []byte, keep string) []byte {
 	})
 }
 
-// stripped は f から、keep に無い種類の添付ファイルを抜いた写しを一時ファイルに作る（大きな会話をメモリに載せないよう行ごとに）。
-func stripped(f io.Reader, keep string) (*os.File, int64, error) {
+// stripped は f から、keep に無い種類の添付ファイルを抜き、hide の種類の情報を消した写しを一時ファイルに作る
+// （大きな会話をメモリに載せないよう行ごとに）。
+func stripped(f io.Reader, keep, hide string) (*os.File, int64, error) {
 	tmp, err := os.CreateTemp("", "aihist-noimg-*")
 	if err != nil {
 		return nil, 0, err
@@ -106,7 +108,7 @@ func stripped(f io.Reader, keep string) (*os.File, int64, error) {
 	for {
 		line, err := r.ReadBytes('\n')
 		if len(line) > 0 {
-			if _, werr := w.Write(stripImages(line, keep)); werr != nil {
+			if _, werr := w.Write(scrub.Line(stripImages(line, keep), hide)); werr != nil {
 				drop(tmp)
 				return nil, 0, werr
 			}
@@ -137,14 +139,18 @@ func drop(f *os.File) {
 	os.Remove(f.Name())
 }
 
-// same はサーバーの原本が手元のファイルと同じか。画像を抜いて送るときは大きさが違うので、更新時刻だけで比べる。
+// rewrites は送る前に中身を書き換えるか（添付ファイルを抜く・情報を消す）。
+func (c *Client) rewrites() bool { return !KeepsAll(c.Attach) || scrub.Any(c.Hide) }
+
+// same はサーバーの原本が手元のファイルと同じか。書き換えて送るときは大きさが違うので、更新時刻だけで比べる。
 func (c *Client) same(h raw.Info, size int64, mtime int64) bool {
-	return h.MTime == mtime && (!KeepsAll(c.Attach) || h.Size == size)
+	return h.MTime == mtime && (c.rewrites() || h.Size == size)
 }
 
-// Strip は r から keep に無い種類の添付ファイルを抜いた写しを返す（アップロードでも使う）。使い終わったら done を呼ぶ。
-func Strip(r io.Reader, keep string) (f *os.File, size int64, done func(), err error) {
-	f, size, err = stripped(r, keep)
+// Strip は r から keep に無い種類の添付ファイルを抜き、hide の種類の情報を消した写しを返す（アップロードでも使う）。
+// 使い終わったら done を呼ぶ。
+func Strip(r io.Reader, keep, hide string) (f *os.File, size int64, done func(), err error) {
+	f, size, err = stripped(r, keep, hide)
 	if err != nil {
 		return nil, 0, func() {}, err
 	}

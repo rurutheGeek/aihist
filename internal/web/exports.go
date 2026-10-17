@@ -249,7 +249,7 @@ func (s *Server) importReady(host, id string) {
 			continue
 		}
 		st, _ := src.Stat()
-		if s.raw.Put(host, claudeai.Tool, "export/"+id+"-"+f.Filename, src, st.ModTime()) == nil {
+		if s.putUpload(host, claudeai.Tool, "export/"+id+"-"+f.Filename, src, st.ModTime()) == nil {
 			n++
 		}
 		src.Close()
@@ -300,7 +300,9 @@ func (s *Server) exportUpload(w http.ResponseWriter, r *http.Request) {
 		}
 		src, err := fh.Open()
 		if err == nil {
-			err = saveZip(src, filepath.Join(dir, name))
+			if err = saveZip(src, filepath.Join(dir, name)); err == nil {
+				err = s.hideUploaded(filepath.Join(dir, name))
+			}
 			src.Close()
 		}
 		if err != nil {

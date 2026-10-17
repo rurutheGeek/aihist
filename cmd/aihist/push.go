@@ -102,7 +102,7 @@ func runPush(home, host string, args []string) {
 		if tools == "*" {
 			tools = ""
 		}
-		c.Attach = sc.Attach
+		c.Attach, c.Hide = sc.Attach, sc.Hide
 		if c.Attach == "" && !sc.Attachments && sc.Schedule != "" {
 			c.Attach = "-" // 種類を分ける前のサーバー
 		}

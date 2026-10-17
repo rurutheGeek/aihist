@@ -32,7 +32,11 @@
         <input type="hidden" name="tz">
       </form>
       <form class="grp" method="post" action="/settings/cleanup" data-auto>
-        <div class="row"><div class="rl">{{t "手元の片付け"}}</div><div class="rc"><select name="days">{{range .CleanupOpts}}<option value="{{.}}"{{if eq . $.Cleanup}} selected{{end}}>{{if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>
+        <div class="row"><div class="rl">{{t "保管したデータのクリーンアップ"}}</div><div class="rc"><select name="days">{{range .CleanupOpts}}<option value="{{.}}"{{if eq . $.Cleanup}} selected{{end}}>{{if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>
+      </form>
+      <div class="gt">{{t "送る前に消す情報"}}</div>
+      <form class="grp" method="post" action="/settings/hide" data-auto>
+        {{range .Hide}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="hide" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
       </form>
 
     </section>
@@ -46,6 +50,10 @@
         <div class="gt">{{t "取り込む添付ファイル"}}</div>
         <div class="grp">
           {{range .UploadAttach}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="attach" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
+        </div>
+        <div class="gt">{{t "取り込む前に消す情報"}}</div>
+        <div class="grp">
+          {{range .UploadHide}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="hide" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
         </div>
       </form>
     </section>
@@ -71,11 +79,16 @@
         <div class="grp">
           {{range .Attach}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="attach" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
         </div>
+        <div class="gt">{{t "送る前に消す情報"}}</div>
+        <div class="grp">
+          <label class="row"><div class="rl">{{t "既定に従う"}}</div><div class="rc"><input class="sw" type="checkbox" name="hide_follow" value="1"{{if .HideFollow}} checked{{end}} data-toggle="ownhide"></div></label>
+          {{$hf := .HideFollow}}{{range .Hide}}<label class="row" data-ownhide{{if $hf}} hidden{{end}}><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="hide" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
+        </div>
         <div class="gt">{{t "送信"}}</div>
         <div class="grp">
           <label class="row"><div class="rl">{{t "送るタイミングは既定に従う"}}</div><div class="rc"><input class="sw" type="checkbox" name="follow" value="1"{{if .Follow}} checked{{end}} data-toggle="own"></div></label>
           <div class="row col" data-own{{if .Follow}} hidden{{end}}><div class="rl">{{t "このマシンの送るタイミング"}}</div><div class="rc">{{template "sched" .Schedule}}</div></div>
-          <div class="row"><div class="rl">{{t "手元の片付け"}}</div><div class="rc"><select name="cleanup">{{$c := .Cleanup}}{{range $.CleanupOpts2}}<option value="{{.}}"{{if eq . $c}} selected{{end}}>{{if eq . -1}}{{t "既定に従う"}}{{else if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>
+          <div class="row"><div class="rl">{{t "保管したデータのクリーンアップ"}}</div><div class="rc"><select name="cleanup">{{$c := .Cleanup}}{{range $.CleanupOpts2}}<option value="{{.}}"{{if eq . $c}} selected{{end}}>{{if eq . -1}}{{t "既定に従う"}}{{else if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>
         </div>
       </form>
       <div class="gt">{{t "情報"}}</div>
@@ -115,6 +128,11 @@
         <div class="row"><div class="rl">{{t "データベース"}}</div><div class="rc mute">{{bytes .Usage.DB}}</div></div>
         <div class="row"><div class="rl">{{t "原本"}}</div><div class="rc mute">{{bytes .Usage.Raw}}</div></div>
       </div>
+      <div class="gt">{{t "集めた履歴から消す"}}</div>
+      <form class="grp" method="post" action="/settings/purge" data-purge data-confirm="{{t "選んだ情報を、集めた履歴とサーバーの原本から消します。消した情報は元に戻せません。消す？"}}">
+        {{range .Hide}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="hide" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
+        <div class="row"><div class="rl"><span class="pg mute"></span></div><div class="rc"><button class="btn red">{{t "履歴から消す"}}</button></div></div>
+      </form>
       <div class="grp">
         <div class="row"><div class="rl">{{t "削除した会話のキャッシュ"}}<small>{{tf "%d 件" .Deleted}}</small></div><div class="rc"><form method="post" action="/settings/deleted/forget" data-confirm="{{t "キャッシュを消すと、削除した会話は次に送られたときにまた取り込まれます。消す？"}}"><button class="btn"{{if not .Deleted}} disabled{{end}}>{{t "キャッシュを削除"}}</button></form></div></div>
       </div>
