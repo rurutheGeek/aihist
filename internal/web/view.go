@@ -151,10 +151,11 @@ var tools = map[string]struct{ Label, Color, Mark string }{
 	"antigravity": {"Antigravity", "#3b82f6", "A"},
 	"chatgpt":     {"ChatGPT", "#74aa9c", "G"},
 	"claude_ai":   {"Claude", "#c96442", "W"},
+	"gemini":      {"Gemini", "#4285f4", "G"},
 }
 
 // restorable は元の AI へ戻せるツールか（Web のチャットの書き出しは戻せない）。
-func restorable(t string) bool { return t != "chatgpt" && t != "claude_ai" }
+func restorable(t string) bool { return t != "chatgpt" && t != "claude_ai" && t != "gemini" }
 
 func toolLabel(t string) string {
 	if v, ok := tools[t]; ok {

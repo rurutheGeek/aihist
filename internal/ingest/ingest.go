@@ -3,6 +3,7 @@ package ingest
 
 import (
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/rurutheGeek/aihist/internal/adapter/claudeai"
 	"github.com/rurutheGeek/aihist/internal/adapter/claudecode"
 	"github.com/rurutheGeek/aihist/internal/adapter/codex"
+	"github.com/rurutheGeek/aihist/internal/adapter/gemini"
 	"github.com/rurutheGeek/aihist/internal/adapter/opencode"
 	"github.com/rurutheGeek/aihist/internal/adapter/webexport"
 	"github.com/rurutheGeek/aihist/internal/model"
@@ -71,6 +73,8 @@ func run(st *store.Store, tool, host, dir string) (Result, error) {
 		return WebExport(st, chatgpt.Tool, host, dir)
 	case claudeai.Tool:
 		return WebExport(st, claudeai.Tool, host, dir)
+	case gemini.Tool:
+		return Gemini(st, host, dir)
 	}
 	return Result{}, fmt.Errorf("知らないツール: %s", tool)
 }
@@ -308,4 +312,34 @@ func put(st *store.Store, host string, c *model.Conversation, stamp string, r *R
 		return r.flush(st)
 	}
 	return nil
+}
+
+// Gemini は Takeout から取り出したマイ アクティビティの HTML を読む。何度上げても、同じ件は1つにまとめる。
+func Gemini(st *store.Store, host, dir string) (Result, error) {
+	var r Result
+	var es []gemini.Entry
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".html") {
+			return err
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		es = append(es, gemini.Entries(string(b))...)
+		return nil
+	})
+	if err != nil {
+		return r, err
+	}
+	for _, c := range gemini.Group(es) {
+		if st.Stamp(gemini.Tool, host, c.ID) == c.Stamp {
+			r.Skipped++
+			continue
+		}
+		if err := put(st, host, gemini.Parse(c), c.Stamp, &r); err != nil {
+			return r, err
+		}
+	}
+	return r, nil
 }

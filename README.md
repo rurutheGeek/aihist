@@ -12,6 +12,7 @@ AI ツールの会話履歴を1か所に集め、検索・閲覧し、別の AI 
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl`、題名は `session_index.jsonl` | 済 |
 | ChatGPT（Web） | 「データをエクスポート」の zip か `conversations.json` を画面から上げる | 済 |
 | claude.ai | 書き出しの zip か `conversations.json` を画面から上げる | 済 |
+| Gemini | Google Takeout の zip（マイ アクティビティの Gemini アプリ） | 済（画面から上げる） |
 | Open WebUI | REST API `/api/v1/chats` | 未 |
 
 ## サーバーを立てる

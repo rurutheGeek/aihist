@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
@@ -21,6 +22,7 @@ import (
 	"github.com/rurutheGeek/aihist/internal/adapter/claudeai"
 	"github.com/rurutheGeek/aihist/internal/adapter/claudecode"
 	"github.com/rurutheGeek/aihist/internal/adapter/codex"
+	"github.com/rurutheGeek/aihist/internal/adapter/gemini"
 	"github.com/rurutheGeek/aihist/internal/adapter/webexport"
 	"github.com/rurutheGeek/aihist/internal/ingest"
 )
@@ -222,6 +224,13 @@ func (s *Server) store(host string, fh *multipart.FileHeader) (tool, rel string,
 	}
 	defer f.Close()
 	name := path.Base(strings.ReplaceAll(fh.Filename, `\`, "/"))
+	// Google Takeout（zip）か、そこから出したマイ アクティビティの HTML なら Gemini の会話だけを置く
+	if ok, err := s.storeGemini(host, name, f, fh.Size); ok || err != nil {
+		return gemini.Tool, "", err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return "", "", err
+	}
 	if strings.HasSuffix(name, ".zip") || strings.HasSuffix(name, ".json") {
 		tool = detectWeb(name, f, fh.Size)
 		rel = "upload/" + time.Now().Format("20060102-150405") + "-" + name
@@ -282,4 +291,55 @@ func detectWeb(name string, f multipart.File, size int64) string {
 		return claudeai.Tool
 	}
 	return ""
+}
+
+// storeGemini は Takeout の zip から Gemini アプリのマイ アクティビティの HTML だけを取り出して置く
+// （zip には写真など他のサービスも入っていて大きいので、丸ごとは置かない）。
+func (s *Server) storeGemini(host, name string, f multipart.File, size int64) (bool, error) {
+	stamp := time.Now().Format("20060102-150405")
+	if strings.HasSuffix(name, ".html") {
+		head := make([]byte, 2<<20)
+		n, _ := io.ReadFull(f, head)
+		if !gemini.Is(head[:n]) {
+			return false, nil
+		}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return true, err
+		}
+		return true, s.raw.Put(host, gemini.Tool, "takeout/"+stamp+"-"+name, f, time.Now())
+	}
+	if !strings.HasSuffix(name, ".zip") {
+		return false, nil
+	}
+	z, err := zip.NewReader(f, size)
+	if err != nil {
+		return false, nil
+	}
+	found := false
+	for i, e := range z.File {
+		if !strings.HasSuffix(e.Name, ".html") || e.UncompressedSize64 < 1024 {
+			continue
+		}
+		r, err := e.Open()
+		if err != nil {
+			continue
+		}
+		head := make([]byte, 2<<20)
+		n, _ := io.ReadFull(r, head)
+		r.Close()
+		if !gemini.Is(head[:n]) {
+			continue
+		}
+		r, err = e.Open()
+		if err != nil {
+			return true, err
+		}
+		err = s.raw.Put(host, gemini.Tool, fmt.Sprintf("takeout/%s-%s-%d.html", stamp, strings.TrimSuffix(name, ".zip"), i), r, e.Modified)
+		r.Close()
+		if err != nil {
+			return true, err
+		}
+		found = true
+	}
+	return found, nil
 }
