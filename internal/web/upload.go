@@ -228,11 +228,13 @@ func (s *Server) store(host string, fh *multipart.FileHeader) (tool, rel string,
 	} else {
 		tool, rel = detect(name, f)
 	}
-	if tool == "" {
-		return "", "", errors.New("会話の記録ではない")
-	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return "", "", err
+	}
+	if tool == "" {
+		// 見分けられないものも捨てずに取っておく（対応するとき実物を見るため）
+		s.raw.Put(host, "unknown", time.Now().Format("20060102-150405")+"-"+name, f, time.Now())
+		return "", "", errors.New("会話の記録ではない")
 	}
 	return tool, rel, s.raw.Put(host, tool, rel, f, time.Now())
 }
