@@ -2,7 +2,6 @@
 package main
 
 import (
-	_ "time/tzdata"
 	"flag"
 	"fmt"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	_ "time/tzdata"
 
 	"github.com/rurutheGeek/aihist/internal/adapter/antigravity"
 	"github.com/rurutheGeek/aihist/internal/adapter/claudecode"

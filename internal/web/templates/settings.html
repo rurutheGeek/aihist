@@ -6,98 +6,115 @@
     <button class="icon-btn menu" onclick="document.querySelector('.app').classList.add('open')" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <div class="title">{{t "設定"}}</div>
   </div>
-  <div class="scroll"><div class="col">
-    <nav class="tabs"><a href="#timing">{{t "送るタイミング"}}</a><a href="#machines">{{t "マシン"}}</a><a href="#cleanup">{{t "手元の片付け"}}</a><a href="#storage">{{t "容量"}}</a><a href="#language">{{t "言語"}}</a></nav>
+  <div class="scroll"><div class="sx">
+    <nav class="snav">{{range .SNav}}<a href="/settings/{{.Key}}"{{if eq .Key $.Section}} class="on"{{end}}>{{t .Label}}</a>{{end}}</nav>
+    <div class="sbody">
 
-    <section class="setup" id="timing">
-      <h2>{{t "送るタイミング"}}</h2>
-      <form method="post" action="/settings/schedule" class="tz-form">
-        {{template "sched" .Schedule}}
+    {{if eq .Sub "general"}}
+      <h1>{{t "一般"}}</h1>
+      <div class="grp">
+        <div class="row"><div class="rl">{{t "言語"}}</div><div class="rc">
+          <div class="seg">
+            <label><input type="radio" name="lang" value=""{{if eq .Lang ""}} checked{{end}}><span>{{t "自動"}}</span></label>
+            <label><input type="radio" name="lang" value="ja"{{if eq .Lang "ja"}} checked{{end}}><span>日本語</span></label>
+            <label><input type="radio" name="lang" value="en"{{if eq .Lang "en"}} checked{{end}}><span>English</span></label>
+          </div>
+        </div></div>
+      </div>
+
+    {{else if eq .Sub "sending"}}
+      <h1>{{t "送信"}}</h1>
+      <div class="gt">{{t "すべてのマシンの既定"}}</div>
+      <form class="grp" method="post" action="/settings/schedule" data-auto>
+        <div class="row col"><div class="rl">{{t "送るタイミング"}}</div><div class="rc">{{template "sched" .Schedule}}</div></div>
         <input type="hidden" name="tz">
-        <button class="btn pri">{{t "保存"}}</button>
       </form>
-    </section>
+      <form class="grp" method="post" action="/settings/cleanup" data-auto>
+        <div class="row"><div class="rl">{{t "手元の片付け"}}</div><div class="rc"><select name="days">{{range .CleanupOpts}}<option value="{{.}}"{{if eq . $.Cleanup}} selected{{end}}>{{if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>
+      </form>
 
-    <section class="setup" id="machines">
-      <h2>{{t "マシン"}}</h2>
-      {{range .Machines}}<form class="mcard" id="m-{{.Host}}" method="post" action="/settings/machines/{{.Host}}">
-        <div class="mh"><b>{{.Host}}</b><span class="mute">{{if .SeenAt.IsZero}}{{t "未接続"}}{{else}}{{t "最後に連絡"}} {{when .SeenAt}}{{end}}{{with .Version}} · {{.}}{{end}}</span>{{with .Next}}<span class="nx">{{t "次に送る"}} {{index . 0}}</span>{{end}}</div>
-        <div class="mrow"><span class="ml">{{t "送る AI"}}</span><div class="chk">
-          {{range .Tools}}<label><input type="checkbox" name="tool" value="{{.Tool}}"{{if .On}} checked{{end}}><i class="dot" style="background:{{toolColor .Tool}}"></i>{{.Label}} <small>{{bytes .Bytes}}</small></label>{{else}}<span class="mute">{{t "まだ報告が無い"}}</span>{{end}}
-          <label><input type="checkbox" name="all_tools" value="1"{{if .AllTools}} checked{{end}}>{{t "あとで見つかった AI も送る"}}</label>
-        </div></div>
-        <div class="mrow"><span class="ml">{{t "添付ファイル"}}</span><div class="chk"><label><input type="checkbox" name="attachments" value="1"{{if .Attachments}} checked{{end}}>{{t "画像・PDF などの添付ファイルも送る"}}</label></div></div>
-        <div class="mrow"><span class="ml">{{t "送るタイミング"}}</span><div>
-          <label class="chk1"><input type="checkbox" name="follow" value="1"{{if .Follow}} checked{{end}} onchange="this.closest('div').querySelector('.sched').classList.toggle('off',this.checked)">{{t "全体の設定に従う"}}</label>
-          <div class="sched-wrap">{{template "sched" .Schedule}}</div>
-        </div></div>
-        <div class="mrow"><span class="ml">{{t "手元の片付け"}}</span><div><select name="cleanup">{{$c := .Cleanup}}{{range $.CleanupOpts2}}<option value="{{.}}"{{if eq . $c}} selected{{end}}>{{if eq . -1}}{{t "全体の設定に従う"}}{{else if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>
-        <div class="mact"><button class="btn pri">{{t "保存"}}</button><button class="btn sm" formaction="/settings/machines/{{.Host}}/delete" onclick="return confirm({{t "このマシンの設定を消す？"}})">{{t "削除"}}</button></div>
-      </form>{{end}}
+    {{else if eq .Sub "machines"}}
+      <h1>{{t "マシン"}}</h1>
+      <div class="grp">
+        {{range .Machines}}<a class="row link" href="/settings/machines/{{.Host}}"><div class="rl"><b>{{.Host}}</b><small>{{if .SeenAt.IsZero}}{{t "未接続"}}{{else}}{{t "最後に連絡"}} {{when .SeenAt}}{{end}}</small></div><div class="rc"><span class="mute">{{with .Next}}{{t "次に送る"}} {{index . 0}}{{end}}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></div></a>
+        {{else}}<div class="row"><div class="rl mute">{{t "まだマシンが無い"}}</div><div class="rc"><a class="btn" href="/settings/tokens">{{t "マシンを追加"}}</a></div></div>{{end}}
+      </div>
 
-      <h3>{{t "マシンを追加"}}</h3>
-      {{if .NewToken}}<div class="newtok">
-        <div class="nt"><b>{{.NewName}}</b><code id="tok">{{.NewToken}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div>
-        <div class="warn">{{t "このトークンは今しか表示されない"}}</div>
-        {{range .NewCmds}}<div class="cmdl"><span>{{.OS}}</span><code>{{.Install}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div>{{end}}
+    {{else if eq .Sub "machine"}}{{with .M}}
+      <a class="back" href="/settings/machines"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg>{{t "マシン"}}</a>
+      <h1>{{.Host}}</h1>
+      <form method="post" action="/settings/machines/{{.Host}}" data-auto>
+        <div class="gt">{{t "送る AI"}}</div>
+        <div class="grp">
+          {{range .Tools}}<label class="row"><div class="rl"><span><i class="dot" style="background:{{toolColor .Tool}}"></i>{{.Label}}</span><small>{{bytes .Bytes}}</small></div><div class="rc"><input class="sw" type="checkbox" name="tool" value="{{.Tool}}"{{if .On}} checked{{end}}></div></label>
+          {{else}}<div class="row"><div class="rl mute">{{t "まだ報告が無い"}}</div></div>{{end}}
+          <label class="row"><div class="rl">{{t "あとで見つかった AI も送る"}}</div><div class="rc"><input class="sw" type="checkbox" name="all_tools" value="1"{{if .AllTools}} checked{{end}}></div></label>
+        </div>
+        <div class="gt">{{t "送信"}}</div>
+        <div class="grp">
+          <label class="row"><div class="rl">{{t "添付ファイル（画像・PDF など）も送る"}}</div><div class="rc"><input class="sw" type="checkbox" name="attachments" value="1"{{if .Attachments}} checked{{end}}></div></label>
+          <label class="row"><div class="rl">{{t "送るタイミングは既定に従う"}}</div><div class="rc"><input class="sw" type="checkbox" name="follow" value="1"{{if .Follow}} checked{{end}} data-toggle="own"></div></label>
+          <div class="row col" data-own{{if .Follow}} hidden{{end}}><div class="rl">{{t "このマシンの送るタイミング"}}</div><div class="rc">{{template "sched" .Schedule}}</div></div>
+          <div class="row"><div class="rl">{{t "手元の片付け"}}</div><div class="rc"><select name="cleanup">{{$c := .Cleanup}}{{range $.CleanupOpts2}}<option value="{{.}}"{{if eq . $c}} selected{{end}}>{{if eq . -1}}{{t "既定に従う"}}{{else if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>
+        </div>
+      </form>
+      <div class="gt">{{t "情報"}}</div>
+      <div class="grp">
+        <div class="row"><div class="rl">{{t "最後に連絡"}}</div><div class="rc mute">{{if .SeenAt.IsZero}}{{t "未接続"}}{{else}}{{when .SeenAt}}{{end}}</div></div>
+        <div class="row"><div class="rl">{{t "版"}}</div><div class="rc mute">{{or .Version "—"}}</div></div>
+        <div class="row"><div class="rl">{{t "次に送る"}}</div><div class="rc mute">{{with .Next}}{{index . 0}}{{else}}—{{end}}</div></div>
+      </div>
+      <form class="grp danger" method="post" action="/settings/machines/{{.Host}}/delete" onsubmit="return confirm({{t "このマシンを一覧から消す？"}})">
+        <div class="row"><div class="rl">{{t "このマシンを一覧から消す"}}</div><div class="rc"><button class="btn red">{{t "削除"}}</button></div></div>
+      </form>
+    {{end}}
+
+    {{else if eq .Sub "tokens"}}
+      <h1>{{t "トークン"}}</h1>
+      {{if .NewToken}}<div class="grp hl">
+        <div class="row"><div class="rl"><b>{{.NewName}}</b><small class="warn">{{t "このトークンは今しか表示されない"}}</small></div><div class="rc"><code class="tk">{{.NewToken}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>
+        {{range .NewCmds}}<div class="row col"><div class="rl">{{.OS}}</div><div class="rc cmdl"><code>{{.Install}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>{{end}}
       </div>{{end}}
-      <form class="addm" method="post" action="/settings/tokens"><input name="name" placeholder="{{t "マシン名"}}" required autocomplete="off"><button class="btn pri">{{t "マシンを追加"}}</button></form>
-      <table class="tbl">
-        <thead><tr><th>{{t "マシン名"}}</th><th>{{t "作成"}}</th><th>{{t "最後に使った"}}</th><th></th></tr></thead>
-        <tbody>
-        {{if .EnvToken}}<tr><td>AIHIST_TOKEN</td><td colspan="3" class="mute">{{t "環境変数"}}</td></tr>{{end}}
-        {{range .Tokens}}<tr><td>{{.Name}}</td><td>{{when .CreatedAt}}</td><td>{{if .UsedAt.IsZero}}<span class="mute">{{t "未使用"}}</span>{{else}}{{when .UsedAt}}{{end}}</td>
-          <td><form method="post" action="/settings/tokens/{{.ID}}/delete"><button class="btn sm">{{t "削除"}}</button></form></td></tr>{{end}}
-        </tbody>
-      </table>
-      <h3>{{t "消す"}}</h3>
-      {{range .Cmds}}<div class="cmdl"><span>{{.OS}}</span><code>{{.Uninstall}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div>{{end}}
-      <div class="dl">{{range .Cmds}}<a class="btn" href="{{.Script}}" download="{{.Name}}">{{.Name}}</a><a class="btn" href="{{.UScript}}" download="{{.UName}}">{{.UName}}</a>{{end}}</div>
-    </section>
-
-    <section class="setup" id="cleanup">
-      <h2>{{t "手元の片付け"}}</h2>
-      <form class="seg" method="post" action="/settings/cleanup">
-        {{range .CleanupOpts}}<label><input type="radio" name="days" value="{{.}}"{{if eq . $.Cleanup}} checked{{end}} onchange="this.form.submit()"><span>{{if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</span></label>{{end}}
+      <form class="grp" method="post" action="/settings/tokens">
+        <div class="row"><div class="rl"><input class="inp" name="name" placeholder="{{t "マシン名"}}" required autocomplete="off"></div><div class="rc"><button class="btn pri">{{t "マシンを追加"}}</button></div></div>
       </form>
-    </section>
-
-    <section class="setup" id="storage">
-      <h2>{{t "容量"}}</h2>
-      <div class="stats left">
-        <div class="stat"><b>{{bytes (add64 .Usage.DB .Usage.Raw)}}</b><span>{{t "合計"}}</span></div>
-        <div class="stat"><b>{{bytes .Usage.DB}}</b><span>{{t "データベース"}}</span></div>
-        <div class="stat"><b>{{bytes .Usage.Raw}}</b><span>{{t "原本"}}</span></div>
+      <div class="grp">
+        {{if .EnvToken}}<div class="row"><div class="rl">AIHIST_TOKEN<small>{{t "環境変数"}}</small></div></div>{{end}}
+        {{range .Tokens}}<div class="row"><div class="rl">{{.Name}}<small>{{t "作成"}} {{when .CreatedAt}} · {{t "最後に使った"}} {{if .UsedAt.IsZero}}{{t "未使用"}}{{else}}{{when .UsedAt}}{{end}}</small></div><div class="rc"><form method="post" action="/settings/tokens/{{.ID}}/delete" onsubmit="return confirm({{t "このトークンを削除する？"}})"><button class="btn red">{{t "削除"}}</button></form></div></div>{{end}}
       </div>
-      <table class="tbl">
-        <thead><tr><th>{{t "マシン"}}</th><th>AI</th><th class="r">{{t "会話"}}</th><th class="r">{{t "原本"}}</th></tr></thead>
-        <tbody>{{range .Usage.Rows}}<tr><td>{{.Host}}</td><td><i class="dot" style="background:{{toolColor .Tool}}"></i>{{.Label}}</td><td class="r">{{.Convs}}</td><td class="r">{{bytes .Bytes}}</td></tr>{{end}}</tbody>
-      </table>
-    </section>
-
-    <section class="setup" id="language">
-      <h2>{{t "言語"}}</h2>
-      <div class="seg">
-        <label><input type="radio" name="lang" value=""{{if eq .Lang ""}} checked{{end}}><span>{{t "自動"}}</span></label>
-        <label><input type="radio" name="lang" value="ja"{{if eq .Lang "ja"}} checked{{end}}><span>日本語</span></label>
-        <label><input type="radio" name="lang" value="en"{{if eq .Lang "en"}} checked{{end}}><span>English</span></label>
+      <div class="gt">{{t "消す"}}</div>
+      <div class="grp">
+        {{range .Cmds}}<div class="row col"><div class="rl">{{.OS}}</div><div class="rc cmdl"><code>{{.Uninstall}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>{{end}}
+        <div class="row"><div class="rl">{{t "スクリプト"}}</div><div class="rc dl">{{range .Cmds}}<a class="btn" href="{{.Script}}" download="{{.Name}}">{{.Name}}</a><a class="btn" href="{{.UScript}}" download="{{.UName}}">{{.UName}}</a>{{end}}</div></div>
       </div>
-    </section>
+
+    {{else if eq .Sub "storage"}}
+      <h1>{{t "容量"}}</h1>
+      <div class="grp">
+        <div class="row"><div class="rl">{{t "合計"}}</div><div class="rc"><b>{{bytes (add64 .Usage.DB .Usage.Raw)}}</b></div></div>
+        <div class="row"><div class="rl">{{t "データベース"}}</div><div class="rc mute">{{bytes .Usage.DB}}</div></div>
+        <div class="row"><div class="rl">{{t "原本"}}</div><div class="rc mute">{{bytes .Usage.Raw}}</div></div>
+      </div>
+      <div class="gt">{{t "マシンと AI ごと"}}</div>
+      <div class="grp">
+        {{range .Usage.Rows}}<div class="row"><div class="rl"><span><i class="dot" style="background:{{toolColor .Tool}}"></i>{{.Label}}</span><small>{{.Host}} · {{tf "%d 件" .Convs}}</small></div><div class="rc mute">{{bytes .Bytes}}</div></div>{{end}}
+      </div>
+    {{end}}
+    </div>
   </div></div>
+  <div class="toast" id="toast">{{t "保存した"}}</div>
 </main>
 </div>
 <script>
 function aihistCopy(b){var t=b.previousElementSibling.textContent;navigator.clipboard.writeText(t).then(function(){var o=b.textContent;b.textContent={{t "コピーした"}};setTimeout(function(){b.textContent=o},1400)})}
-
-// 送るタイミングの組み立て。画面では選ぶだけにし、中では cron の形にして送る
 (function(){
   function pad(n){return (n<10?'0':'')+n}
+  // 送るタイミングの組み立て。画面では選ぶだけにし、中では cron の形にして送る
   document.querySelectorAll('.sched').forEach(function(el){
     var hid=el.querySelector('input[name=schedule]'), k=el.querySelector('.k'), n=el.querySelector('.n'), h=el.querySelector('.h'),
         m=el.querySelector('.m'), d=el.querySelector('.d'), tm=el.querySelector('.tm'), nx=el.querySelector('.next'),
         wd=Array.from(el.querySelectorAll('.wd input'));
     for(var i=1;i<=31;i++){var o=document.createElement('option');o.value=o.textContent=i;d.appendChild(o)}
-    // 今の式を部品に戻す（この画面で作る形だけ）
     var f=(hid.value||'*/10 * * * *').split(/\s+/), kind='min';
     if(f[1]==='*'&&f[2]==='*'&&f[4]==='*'){kind='min'; n.value=f[0]==='*'?'1':f[0].replace('*/','')}
     else if(f[1].indexOf('*/')===0||(f[1]==='*'&&/^\d+$/.test(f[0]))){kind='hour'; h.value=f[1]==='*'?'1':f[1].replace('*/',''); m.value=f[0]}
@@ -105,7 +122,7 @@ function aihistCopy(b){var t=b.previousElementSibling.textContent;navigator.clip
     else if(f[2]!=='*'){kind='month'; d.value=f[2]; tm.value=pad(+f[1])+':'+pad(+f[0])}
     else {kind='day'; tm.value=pad(+f[1])+':'+pad(+f[0])}
     k.value=kind;
-    function build(){
+    el.build=function(){
       var t=(tm.value||'09:00').split(':'), H=+t[0], M=+t[1], c;
       switch(k.value){
         case 'min': c=(n.value==='1'?'*':'*/'+n.value)+' * * * *'; break;
@@ -117,15 +134,34 @@ function aihistCopy(b){var t=b.previousElementSibling.textContent;navigator.clip
       hid.value=c;
       el.querySelectorAll('.p').forEach(function(p){p.style.display=p.classList.contains('p-'+k.value)?'':'none'});
       fetch('/settings/preview?schedule='+encodeURIComponent(c)).then(function(r){return r.json()}).then(function(a){nx.textContent=a&&a.length?{{t "次に送る"}}+' '+a.join('、'):''});
-    }
-    el.addEventListener('change',build); el.addEventListener('input',build); build();
+    };
+    el.build();
   });
+  document.querySelectorAll('input[name=tz]').forEach(function(i){try{i.value=Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){}});
+  // 変えたらその場で保存する
+  var toast=document.getElementById('toast'), tt;
+  document.querySelectorAll('form[data-auto]').forEach(function(f){
+    var timer;
+    function save(){
+      clearTimeout(timer);
+      timer=setTimeout(function(){
+        fetch(f.action,{method:'POST',headers:{'X-Auto':'1'},body:new URLSearchParams(new FormData(f))}).then(function(r){
+          toast.textContent=r.ok?{{t "保存した"}}:{{t "保存できなかった"}};
+          toast.classList.toggle('bad',!r.ok); toast.classList.add('show'); clearTimeout(tt); tt=setTimeout(function(){toast.classList.remove('show')},1400);
+        });
+      },350);
+    }
+    f.addEventListener('change',function(e){
+      var s=e.target.closest('.sched'); if(s)s.build();
+      if(e.target.dataset.toggle==='own'){var o=f.querySelector('[data-own]'); if(o)o.hidden=e.target.checked}
+      save();
+    });
+    f.addEventListener('submit',function(e){e.preventDefault();save()});
+  });
+  document.querySelectorAll('input[name=lang]').forEach(function(i){i.onchange=function(){
+    document.cookie='lang='+i.value+';path=/;max-age='+(i.value?31536000:0)+';samesite=lax'; location.reload();
+  }});
 })();
-document.querySelectorAll('input[name=tz]').forEach(function(i){try{i.value=Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){}});
-document.querySelectorAll('.mcard .sched').forEach(function(el){var f=el.closest('form').querySelector('input[name=follow]');if(f&&f.checked)el.classList.add('off')});
-document.querySelectorAll('input[name=lang]').forEach(function(i){i.onchange=function(){
-  document.cookie='lang='+i.value+';path=/;max-age='+(i.value?31536000:0)+';samesite=lax'; location.reload();
-}});
 </script>
 {{template "foot"}}{{end}}
 

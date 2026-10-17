@@ -95,7 +95,7 @@ func (s *Server) setSchedule(w http.ResponseWriter, r *http.Request) {
 			s.st.SetSetting("tz", tz)
 		}
 	}
-	http.Redirect(w, r, "/settings#timing", http.StatusSeeOther)
+	done(w, r, "/settings/sending")
 }
 
 // setMachine はマシン1台の設定を保存する。
@@ -130,7 +130,7 @@ func (s *Server) setMachine(w http.ResponseWriter, r *http.Request) {
 		m.Cleanup = c
 	}
 	s.st.SetMachine(m)
-	http.Redirect(w, r, "/settings#m-"+m.Host, http.StatusSeeOther)
+	done(w, r, "/settings/machines/"+m.Host)
 }
 
 func (s *Server) deleteMachine(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +139,7 @@ func (s *Server) deleteMachine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.st.DeleteMachine(r.PathValue("host"))
-	http.Redirect(w, r, "/settings#machines", http.StatusSeeOther)
+	http.Redirect(w, r, "/settings/machines", http.StatusSeeOther)
 }
 
 // preview は組み立て中の予定の、次に送る日時（画面がその場で表示する）。

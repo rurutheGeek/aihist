@@ -115,8 +115,22 @@ func humanBytes(n int64) string {
 }
 
 // settings は設定の画面（マシンから送る・容量・言語）。
+// 設定の画面の項目（左の一覧の順）。
+var sections = []struct{ Key, Label string }{
+	{"general", "一般"}, {"sending", "送信"}, {"machines", "マシン"}, {"tokens", "トークン"}, {"storage", "容量"},
+}
+
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 	s.renderSettings(w, r, "", "")
+}
+
+// done は保存のあと。画面がその場で保存したとき（X-Auto）は中身を返さず、そうでなければ元の項目へ戻す。
+func done(w http.ResponseWriter, r *http.Request, back string) {
+	if r.Header.Get("X-Auto") == "1" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
 }
 
 func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName, newTok string) {
@@ -125,6 +139,28 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	sec := r.PathValue("section")
+	if newTok != "" {
+		sec = "tokens"
+	}
+	if sec == "" {
+		sec = "general"
+	}
+	d["SNav"], d["Section"] = sections, sec
+	if host := r.PathValue("host"); host != "" {
+		sec = "machine"
+		d["Section"] = "machines"
+		for _, m := range s.machineViews(lang(r)) {
+			if m.Host == host {
+				d["M"] = m
+			}
+		}
+		if d["M"] == nil {
+			http.NotFound(w, r)
+			return
+		}
+	}
+	d["Sub"] = sec
 	toks, _ := s.st.Tokens()
 	d["Tokens"], d["EnvToken"] = toks, s.token != ""
 	d["NewName"], d["NewToken"] = newName, newTok
@@ -153,7 +189,7 @@ func (s *Server) addToken(w http.ResponseWriter, r *http.Request) {
 	}
 	name := strings.TrimSpace(r.FormValue("name"))
 	if name == "" {
-		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		http.Redirect(w, r, "/settings/tokens", http.StatusSeeOther)
 		return
 	}
 	tok, err := s.st.CreateToken(name)
@@ -172,7 +208,7 @@ func (s *Server) deleteToken(w http.ResponseWriter, r *http.Request) {
 	if id, err := strconv.ParseInt(r.PathValue("id"), 10, 64); err == nil {
 		s.st.DeleteToken(id)
 	}
-	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	http.Redirect(w, r, "/settings/tokens", http.StatusSeeOther)
 }
 
 // DefaultSchedule は送るタイミングの既定（設定の画面で変える）。
@@ -246,5 +282,5 @@ func (s *Server) setCleanup(w http.ResponseWriter, r *http.Request) {
 	if d, err := strconv.Atoi(r.FormValue("days")); err == nil && d >= 0 {
 		s.st.SetSetting("cleanup_days", strconv.Itoa(d))
 	}
-	http.Redirect(w, r, "/settings#cleanup", http.StatusSeeOther)
+	done(w, r, "/settings/sending")
 }

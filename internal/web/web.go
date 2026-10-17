@@ -107,6 +107,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /c/{id}/export.md", s.exportMD)
 	mux.HandleFunc("GET /upload", s.uploadForm)
 	mux.HandleFunc("GET /settings", s.settings)
+	mux.HandleFunc("GET /settings/{section}", s.settings)
+	mux.HandleFunc("GET /settings/machines/{host}", s.settings)
 	mux.HandleFunc("POST /settings/tokens", s.addToken)
 	mux.HandleFunc("POST /settings/cleanup", s.setCleanup)
 	mux.HandleFunc("POST /settings/schedule", s.setSchedule)
