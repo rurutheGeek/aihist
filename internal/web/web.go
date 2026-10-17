@@ -127,7 +127,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /settings/machines/{host}/delete", s.deleteMachine)
 	mux.HandleFunc("GET /settings/preview", s.preview)
 	mux.HandleFunc("GET /exports/{host}/{id}", s.exportPage)
-	mux.HandleFunc("POST /exports/{host}/{id}/import", s.exportImport)
+	mux.HandleFunc("GET /exports/{host}/{id}/state", s.exportStateAPI)
 	mux.HandleFunc("POST /exports/{host}/{id}/files", s.exportUpload)
 	mux.HandleFunc("POST /settings/tokens/{id}/delete", s.deleteToken)
 	mux.Handle("GET /setup", http.RedirectHandler("/settings", http.StatusMovedPermanently))

@@ -49,7 +49,7 @@
       var r; try{r=JSON.parse(x.responseText)[0]}catch(e){r={error:x.status+' '+x.responseText}}
       bar.style.width='100%';
       if(r.error){li.className='err'; st.textContent=r.error;}
-      else if(r.export){location.href=r.href; return}
+      else if(r.export){li.className='ok'; st.textContent=r.label; openExport(r.href);}
       else{li.className='ok'; st.innerHTML='';
         var s=document.createElement('span'); s.textContent=r.label+' · '+T.ok.replace('%d',r.imported)+(r.skipped?' · '+T.same.replace('%d',r.skipped):''); st.appendChild(s);
         var a=document.createElement('a'); a.href=r.href; a.textContent=T.open; st.appendChild(a);}
@@ -62,6 +62,57 @@
   ['dragenter','dragover'].forEach(function(e){d.addEventListener(e,function(ev){ev.preventDefault();d.classList.add('over')})});
   ['dragleave','drop'].forEach(function(e){d.addEventListener(e,function(ev){ev.preventDefault();d.classList.remove('over')})});
   d.addEventListener('drop',function(ev){add(ev.dataTransfer.files)});
+})();
+</script>
+
+<div class="modal" id="exp"><div class="xbox" role="dialog" aria-label="{{t "claude.ai の書き出し"}}">
+  <div class="mtop"><b>{{t "claude.ai の書き出し"}}</b><button class="icon-btn" type="button" data-close aria-label="{{t "閉じる"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="xbody">
+    <div class="grp xl"></div>
+    <label class="drop xdrop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg><b>{{t "落とした zip をここへドロップ"}}</b><input type="file" multiple accept=".zip" hidden></label>
+    <div class="xerr"></div>
+    <div class="xdone" hidden><a class="btn pri" href="/">{{t "会話を見る"}}</a></div>
+  </div>
+</div></div>
+<script>
+(function(){
+  var m=document.getElementById('exp'), base='', list=m.querySelector('.xl'), err=m.querySelector('.xerr'), fin=m.querySelector('.xdone');
+  var X={dl:{{t "ダウンロード"}},wait:{{t "zip を待っている"}},got:{{t "取り込み中"}},imp:{{t "%d 件を取り込んだ"}},up:{{t "送信中"}}};
+  function esc(t){var d=document.createElement('div');d.textContent=t;return d.innerHTML}
+  function draw(st){
+    list.innerHTML='';
+    st.files.forEach(function(f){
+      var row=document.createElement('div'); row.className='row';
+      var right=f.State==='waiting'?'<a class="btn" target="_blank" rel="noreferrer noopener" href="'+esc(f.URL)+'">'+esc(X.dl)+'</a>'
+        :f.State==='imported'?'<span class="ok">✓ '+esc(X.imp.replace('%d',f.Count))+'</span>':'<span class="mute">'+esc(X.got)+'</span>';
+      row.innerHTML='<div class="rl"><span>'+esc(f.Label)+'</span><small>'+esc(f.State==='waiting'?X.wait:f.Filename)+'</small></div><div class="rc">'+right+'</div>';
+      var a=row.querySelector('a.btn'); if(a)a.addEventListener('click',function(){a.classList.add('done')});
+      list.appendChild(row);
+    });
+    fin.hidden=!st.done; if(st.done)fin.querySelector('a').href=st.href;
+    m.querySelector('.xdrop').hidden=st.done;
+  }
+  window.openExport=function(href){
+    base=href; m.classList.add('open'); err.textContent='';
+    fetch(base+'/state').then(function(r){return r.json()}).then(draw);
+    history.replaceState(null,'','/upload#export='+href.replace('/exports/',''));
+  };
+  function close(){m.classList.remove('open'); history.replaceState(null,'','/upload')}
+  m.addEventListener('click',function(e){if(e.target===m||e.target.closest('[data-close]'))close()});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&m.classList.contains('open'))close()});
+  function send(files){
+    var fd=new FormData(); Array.from(files).forEach(function(x){fd.append('files',x)}); err.textContent=X.up;
+    fetch(base+'/files',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(a){
+      err.textContent=a.results.filter(function(x){return x.error}).map(function(x){return x.name+': '+x.error}).join('\n');
+      draw(a.state);
+    });
+  }
+  var box=m.querySelector('.xbox'), inp=m.querySelector('.xdrop input');
+  inp.onchange=function(){send(inp.files);inp.value=''};
+  ['dragenter','dragover'].forEach(function(e){box.addEventListener(e,function(ev){ev.preventDefault();box.classList.add('over')})});
+  ['dragleave','drop'].forEach(function(e){box.addEventListener(e,function(ev){ev.preventDefault();if(e==='drop'||!box.contains(ev.relatedTarget))box.classList.remove('over')})});
+  box.addEventListener('drop',function(ev){send(ev.dataTransfer.files)});
+  var h=location.hash.match(/^#export=(.+)$/); if(h)openExport('/exports/'+h[1]);
 })();
 </script>
 {{template "foot" .}}{{end}}

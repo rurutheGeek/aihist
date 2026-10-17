@@ -97,7 +97,7 @@ var categories = map[string]struct {
 	"light_metadata":    {"メタデータ", false},
 }
 
-type exportFile struct {
+type exportFile struct { // 窓の行
 	Category, Label, Filename string
 	Readable                  bool
 	URL                       string
@@ -161,54 +161,63 @@ func (s *Server) exportFiles(host, id string) ([]exportFile, error) {
 	return out, nil
 }
 
-// exportPage は落とした書き出しの中身を並べ、取り込むものを選ばせる。
+// exportPage は書き出しを開く。アップロードの画面に窓を開いて続きをさせる。
 func (s *Server) exportPage(w http.ResponseWriter, r *http.Request) {
 	host, id := r.PathValue("host"), r.PathValue("id")
-	files, err := s.exportFiles(host, id)
-	if err != nil {
+	if _, err := s.exportFiles(host, id); err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	d, err := s.side(r, nil)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	waiting := 0
-	for _, f := range files {
-		if f.State == "waiting" {
-			waiting++
-		}
-	}
-	d["Files"], d["Waiting"], d["ExportHost"], d["ExportID"], d["Page"] = files, waiting, host, id, "upload"
-	s.render(w, r, "export.html", d)
+	http.Redirect(w, r, "/upload#export="+url.PathEscape(host)+"/"+id, http.StatusSeeOther)
 }
 
-// exportImport は選んだ zip を取り込む。
-func (s *Server) exportImport(w http.ResponseWriter, r *http.Request) {
-	if !sameOrigin(r) {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+// exportState は窓に出す状態。取り込めるもの（未対応でないもの）だけを並べる。
+type exportStateJSON struct {
+	Files []exportFile `json:"files"`
+	Done  bool         `json:"done"` // 全部取り込んだ
+	Href  string       `json:"href"` // 取り込んだ会話の一覧
+}
+
+func (s *Server) exportStatus(l, host, id string) (exportStateJSON, error) {
+	files, err := s.exportFiles(host, id)
+	if err != nil {
+		return exportStateJSON{}, err
 	}
-	host, id := r.PathValue("host"), r.PathValue("id")
-	dir, err := s.exportDir(host, id)
+	st := exportStateJSON{Files: []exportFile{}, Done: true, Href: "/?" + url.Values{"tool": {claudeai.Tool}, "host": {host}}.Encode()}
+	for _, f := range files {
+		if !categories[f.Category].Readable {
+			continue
+		}
+		f.Label = tr(l, f.Label)
+		st.Files = append(st.Files, f)
+		st.Done = st.Done && f.State == "imported"
+	}
+	return st, nil
+}
+
+func (s *Server) exportStateAPI(w http.ResponseWriter, r *http.Request) {
+	st, err := s.exportStatus(lang(r), r.PathValue("host"), r.PathValue("id"))
 	if err != nil {
 		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(st)
+}
+
+// importReady は届いていて、まだ取り込んでいない zip を取り込む。
+func (s *Server) importReady(host, id string) {
+	dir, err := s.exportDir(host, id)
+	if err != nil {
 		return
 	}
 	files, err := s.exportFiles(host, id)
 	if err != nil {
-		http.NotFound(w, r)
 		return
-	}
-	r.ParseForm()
-	want := map[string]bool{}
-	for _, f := range r.Form["file"] {
-		want[f] = true
 	}
 	n := 0
 	for _, f := range files {
-		if !want[f.Filename] || !f.Readable || f.State != "done" {
+		if !f.Readable || f.State != "done" {
 			continue
 		}
 		src, err := os.Open(filepath.Join(dir, f.Filename))
@@ -216,16 +225,14 @@ func (s *Server) exportImport(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		st, _ := src.Stat()
-		err = s.raw.Put(host, claudeai.Tool, "export/"+id+"-"+f.Filename, src, st.ModTime())
-		src.Close()
-		if err == nil {
+		if s.raw.Put(host, claudeai.Tool, "export/"+id+"-"+f.Filename, src, st.ModTime()) == nil {
 			n++
 		}
+		src.Close()
 	}
 	if n > 0 {
 		s.ingest(host, claudeai.Tool)
 	}
-	http.Redirect(w, r, "/exports/"+url.PathEscape(host)+"/"+id, http.StatusSeeOther)
 }
 
 // exportUpload は、ブラウザで落とした zip を受け取り、書き出しの一覧と名前が合うものを置く。
@@ -278,8 +285,10 @@ func (s *Server) exportUpload(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, res{Name: fh.Filename})
 	}
+	s.importReady(host, id)
+	st, _ := s.exportStatus(l, host, id)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(out)
+	json.NewEncoder(w).Encode(map[string]any{"results": out, "state": st})
 }
 
 var dup = regexp.MustCompile(`^(.*?)(?: \(\d+\))(\.zip)$`)
