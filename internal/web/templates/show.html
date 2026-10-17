@@ -7,6 +7,7 @@
   <div class="bar">
     <button class="icon-btn menu" onclick="aihistMenu()" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <div class="title">{{if .C.Title}}{{oneline .C.Title}}{{else}}{{.C.ExternalID}}{{end}}</div>
+    {{if .AI}}<button class="icon-btn" type="button" onclick="aihistAI([{{.C.ID}}],true)" title="{{t "AI で整理"}}" aria-label="{{t "AI で整理"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></button>{{end}}
     <a class="icon-btn" href="/c/{{.C.ID}}/export.md?dl=1" title="{{t "Markdown を保存"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></a>
   </div>
   <div class="scroll" id="scroll">
@@ -18,6 +19,10 @@
         {{if .C.GitBranch}}<span>{{.C.GitBranch}}</span>{{end}}
         {{if .C.Model}}<span>{{.C.Model}}</span>{{end}}
         <span>{{when .C.StartedAt}} – {{when .C.UpdatedAt}}</span>
+      </div>
+      <div class="aisum" data-aisum>
+        <div class="ctags" data-id="{{.C.ID}}">{{range .C.Tags}}<span class="ctag" data-tag="{{.}}">{{.}}<button type="button" aria-label="{{t "外す"}}">×</button></span>{{end}}{{if .TagList}}<select class="addtag" aria-label="{{t "タグを付ける"}}"><option value="">＋ {{t "タグ"}}</option>{{range .TagList}}<option>{{.Name}}</option>{{end}}</select>{{end}}</div>
+        {{if .C.Summary}}<p>{{.C.Summary}}</p><small class="mute">{{.AIUsed}} · {{when .AIAt}}</small>{{end}}
       </div>
       {{if .C.ParentID}}<div class="rel"><b>{{t "親の会話"}}</b><a href="/find/{{.C.Tool}}/{{.C.Host}}/{{.C.ParentID}}">{{short .C.ParentID 12}}</a></div>{{end}}
       {{if gt (len .Branches) 1}}<div class="rel"><b>{{t "版"}}</b>{{range $i, $b := .Branches}}<a class="{{if eq $b.ID $.C.ID}}on{{end}}" href="/c/{{$b.ID}}" title="{{$b.Host}} {{when $b.StartedAt}} – {{when $b.UpdatedAt}}">{{if $.ManyHosts}}{{$b.Host}} · {{end}}{{if $b.ContinuesFrom}}{{t "続き"}} · {{end}}{{clock $b.UpdatedAt}} · {{$b.MessageCount}}</a>{{end}}</div>{{end}}

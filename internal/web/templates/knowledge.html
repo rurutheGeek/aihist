@@ -1,0 +1,73 @@
+{{define "knowledge.html"}}{{template "head" (t "ナレッジ")}}
+<div class="app">
+{{template "side" .}}
+<main class="main">
+  <div class="bar">
+    <button class="icon-btn menu" onclick="aihistMenu()" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="title">{{t "ナレッジ"}}</div>
+  </div>
+  <div class="scroll"><div class="col">
+    <div class="ktabs">
+      <a href="/knowledge?status=draft"{{if eq .KStatus "draft"}} class="on"{{end}}>{{t "下書き"}} <small>{{.Drafts}}</small></a>
+      <a href="/knowledge?status=registered"{{if eq .KStatus "registered"}} class="on"{{end}}>{{t "登録済み"}} <small>{{.Registered}}</small></a>
+      <form class="ksearch" action="/knowledge"><input type="hidden" name="status" value="{{.KStatus}}"><input name="q" value="{{.KQ}}" placeholder="{{t "ナレッジを検索"}}" autocomplete="off"></form>
+    </div>
+    <div class="klist">
+      {{range .K}}<a class="kitem" href="/knowledge/{{.ID}}"><b>{{.Title}}</b><small>{{rel .UpdatedAt}}{{if .Warn}} · <span class="warn">{{tf "個人の情報らしき語 %d 件" (len .Warn)}}</span>{{end}}</small></a>
+      {{else}}<div class="empty mute">{{if eq .KStatus "draft"}}{{t "下書きは無い"}}{{else}}{{t "登録したナレッジは無い"}}{{end}}</div>{{end}}
+    </div>
+  </div></div>
+</main>
+</div>
+{{template "foot" .}}{{end}}
+
+{{define "kshow.html"}}{{template "head" .Item.Title}}
+<div class="app">
+{{template "side" .}}
+<main class="main">
+  <div class="bar">
+    <button class="icon-btn menu" onclick="aihistMenu()" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <a class="icon-btn" href="/knowledge?status={{.Item.Status}}" aria-label="{{t "ナレッジ"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></a>
+    <div class="title">{{if eq .Item.Status "draft"}}{{t "下書き"}}{{else}}{{t "登録済み"}}{{end}}</div>
+    <a class="icon-btn" href="/knowledge/{{.Item.ID}}/md?dl=1" title="{{t "Markdown を保存"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></a>
+  </div>
+  <div class="scroll"><div class="col">
+    {{with .Item.Warn}}<div class="kwarn"><b>{{t "個人の情報らしき語"}}</b>{{range .}}<code>{{.}}</code>{{end}}</div>{{end}}
+    <div class="kview">
+      <h1>{{.Item.Title}}</h1>
+      <div class="md" data-md>{{.Item.Body}}</div>
+    </div>
+    <form class="kedit" method="post" action="/knowledge/{{.Item.ID}}" hidden>
+      <input class="ktitle" name="title" value="{{.Item.Title}}" required>
+      <textarea name="body" rows="22">{{.Item.Body}}</textarea>
+      <input type="hidden" name="status" value="{{.Item.Status}}">
+      <div class="kbtns"><button class="btn" type="button" data-kcancel>{{t "キャンセル"}}</button><button class="btn pri">{{t "保存"}}</button></div>
+    </form>
+    <div class="kbtns kmain">
+      <form method="post" action="/knowledge/{{.Item.ID}}/delete" onsubmit="return confirm({{t "このナレッジを削除する？"}})"><button class="btn red">{{t "削除"}}</button></form>
+      <button class="btn" type="button" data-kedit>{{t "編集"}}</button>
+      <form method="post" action="/knowledge/{{.Item.ID}}">{{if eq .Item.Status "draft"}}<input type="hidden" name="status" value="registered"><button class="btn pri">{{t "登録"}}</button>{{else}}<input type="hidden" name="status" value="draft"><button class="btn">{{t "下書きに戻す"}}</button>{{end}}</form>
+    </div>
+    <div class="kmeta grp">
+      <div class="row"><div class="rl">{{t "元の会話"}}</div><div class="rc">{{if .ConvID}}<a href="/c/{{.ConvID}}">{{or .Item.ConvTitle .Item.ExtID}}</a>{{else}}<span class="mute">{{or .Item.ConvTitle "—"}}</span>{{end}}</div></div>
+      <div class="row"><div class="rl">{{t "マシン"}}</div><div class="rc mute">{{.Item.Host}} · {{toolLabel .Item.Tool}}</div></div>
+      {{if .Item.Struggle}}<div class="row"><div class="rl">{{t "苦労したこと"}}</div><div class="rc mute kst">{{.Item.Struggle}}</div></div>{{end}}
+      <div class="row"><div class="rl">{{t "作ったモデル"}}</div><div class="rc mute">{{or .Item.Model "—"}} · {{when .Item.CreatedAt}}</div></div>
+    </div>
+  </div></div>
+</main>
+</div>
+<script src="/static/marked.min.js"></script>
+<script src="/static/purify.min.js"></script>
+<script>
+(function(){
+  if (window.marked && window.DOMPurify) {
+    marked.setOptions({gfm:true, breaks:true});
+    document.querySelectorAll('[data-md]').forEach(function(el){ el.innerHTML = DOMPurify.sanitize(marked.parse(el.textContent)); });
+  }
+  var v=document.querySelector('.kview'), e=document.querySelector('.kedit'), m=document.querySelector('.kmain');
+  document.querySelector('[data-kedit]').onclick=function(){v.hidden=true;m.hidden=true;e.hidden=false;e.querySelector('textarea').focus()};
+  document.querySelector('[data-kcancel]').onclick=function(){v.hidden=false;m.hidden=false;e.hidden=true};
+})();
+</script>
+{{template "foot" .}}{{end}}

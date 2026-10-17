@@ -46,17 +46,17 @@ var (
 )
 
 var dimLabels = map[string]string{
-	store.DimTool: "AI", store.DimModel: "モデル", store.DimHost: "マシン", store.DimProject: "プロジェクト",
+	store.DimTool: "AI", store.DimTag: "タグ", store.DimModel: "モデル", store.DimHost: "マシン", store.DimProject: "プロジェクト",
 }
 
 // keys は絞り込みのクエリに使う名前（会話を開いても保つ）。
-var keys = []string{"q", "tool", "model", "host", "project", "since", "status", "by", "sort"}
+var keys = []string{"q", "tool", "tag", "model", "host", "project", "since", "status", "by", "sort"}
 
 // side は左の会話一覧と絞り込み（どの画面にも出す）。
 func (s *Server) side(r *http.Request, q url.Values) (map[string]any, error) {
 	l := lang(r)
 	f := store.Filter{
-		Query: q.Get("q"), Tools: q["tool"], Hosts: q["host"], Models: q["model"], Projects: q["project"],
+		Query: q.Get("q"), Tools: q["tool"], Hosts: q["host"], Models: q["model"], Projects: q["project"], Tags: q["tag"],
 		Status: q.Get("status"), Sort: q.Get("sort"), Limit: 300,
 	}
 	period := q.Get("since")
@@ -165,6 +165,7 @@ func (s *Server) side(r *http.Request, q url.Values) (map[string]any, error) {
 		groups[i].Rows = append(groups[i].Rows, c)
 	}
 
+	drafts, _ := s.st.KnowledgeCounts()
 	keep := query(q, "", "")
 	clear := url.Values{}
 	if v := q.Get("q"); v != "" {
@@ -173,6 +174,7 @@ func (s *Server) side(r *http.Request, q url.Values) (map[string]any, error) {
 	return map[string]any{
 		"Filter": f, "Rows": rows, "Pinned": pinned, "Groups": groups, "Menu": menu, "Pills": pills,
 		"Tools": facets[store.DimTool], "Keep": keep, "Clear": "?" + clear.Encode(),
+		"AI": s.aiConfig().Ready(), "AIModel": s.aiConfig().Model, "KDrafts": drafts,
 	}, nil
 }
 

@@ -119,7 +119,7 @@ func humanBytes(n int64) string {
 // settings は設定の画面（マシンから送る・容量・言語）。
 // 設定の画面の項目（左の一覧の順）。
 var sections = []struct{ Key, Label string }{
-	{"general", "一般"}, {"sending", "送信"}, {"upload", "アップロード"}, {"machines", "マシン"}, {"tokens", "トークン"}, {"storage", "容量"},
+	{"general", "一般"}, {"sending", "送信"}, {"upload", "アップロード"}, {"machines", "マシン"}, {"tokens", "トークン"}, {"ai", "AI"}, {"tags", "タグ"}, {"storage", "容量"},
 }
 
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
@@ -170,6 +170,11 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	}
 	d["UploadTools"], d["UploadAttach"], d["UploadHide"] = ut, attachOpts(s.uploadAttach()), hideOpts(s.uploadHide())
 	d["Hide"] = hideOpts(s.hideDefault())
+	ac := s.aiConfig()
+	d["AIBase"], d["AIModelSet"], d["AIHasKey"] = ac.BaseURL, ac.Model, ac.Key != ""
+	d["TagList"], _ = s.st.Tags()
+	d["MCPURL"] = s.origin(r) + "/api/mcp"
+	d["MCPAdd"] = `claude mcp add --transport http aihist ` + s.origin(r) + `/api/mcp --header "Authorization: Bearer <` + tr(lang(r), "トークン") + `>"`
 	d["Schedule"] = s.st.Setting("schedule", DefaultSchedule)
 	d["Next"] = s.nextRuns(lang(r), d["Schedule"].(string), 3)
 	d["CleanupOpts2"] = []int{-1, 0, 7, 14, 30, 90}

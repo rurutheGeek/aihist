@@ -169,6 +169,7 @@ func main() {
 		fs.Parse(args[1:])
 		log.Printf("listening on %s", *addr)
 		srv := web.New(st, raw.Store{Dir: *rawDir}, *token)
+		srv.Version = version
 		srv.SetBin(*bin)
 		err = http.ListenAndServe(*addr, srv.Handler())
 	case "search":

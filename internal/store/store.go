@@ -23,6 +23,34 @@ CREATE TABLE IF NOT EXISTS conv_meta (
   archived INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (tool, host, external_id)
 );
+CREATE TABLE IF NOT EXISTS tags (
+  name TEXT PRIMARY KEY,
+  description TEXT NOT NULL DEFAULT '',
+  sort INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS conv_tags (
+  tool TEXT NOT NULL,
+  host TEXT NOT NULL,
+  external_id TEXT NOT NULL,
+  tag TEXT NOT NULL,
+  PRIMARY KEY (tool, host, external_id, tag)
+);
+CREATE TABLE IF NOT EXISTS knowledge (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft',
+  tool TEXT NOT NULL DEFAULT '',
+  host TEXT NOT NULL DEFAULT '',
+  external_id TEXT NOT NULL DEFAULT '',
+  conv_title TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  struggle TEXT NOT NULL DEFAULT '',
+  score INTEGER NOT NULL DEFAULT 0,
+  warn TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS deleted (
   tool TEXT NOT NULL,
   host TEXT NOT NULL,
@@ -143,6 +171,14 @@ func migrate(db *sql.DB) error {
 	}
 	if err := migrateModels(db); err != nil {
 		return err
+	}
+	// AI でまとめた要約と、どのモデルでいつ・どの版の会話をまとめたか
+	for _, c := range []string{"summary TEXT NOT NULL DEFAULT ''", "ai_model TEXT NOT NULL DEFAULT ''", "ai_at INTEGER NOT NULL DEFAULT 0", "ai_stamp TEXT NOT NULL DEFAULT ''"} {
+		if !hasColumnIn(db, "conv_meta", strings.Fields(c)[0]) {
+			if _, err := db.Exec(`ALTER TABLE conv_meta ADD COLUMN ` + c); err != nil {
+				return err
+			}
+		}
 	}
 	if !hasColumnIn(db, "machines", "hide") {
 		if _, err := db.Exec(`ALTER TABLE machines ADD COLUMN hide TEXT NOT NULL DEFAULT ''`); err != nil {
@@ -373,6 +409,8 @@ type ConvRow struct {
 	Branches      int    // 一覧でまとめた数（自分を含む）
 	Pinned        bool   // ピン留め（まとめた会話のどれかに付いていれば）
 	Archived      bool   // アーカイブ（まとめた会話のどれかに付いていれば）
+	Tags          []string
+	Summary       string // AI でまとめた要約
 	orphan        bool   // 親の会話が取り込まれていないサブエージェント
 }
 
@@ -382,6 +420,7 @@ type Filter struct {
 	Hosts    []string
 	Models   []string
 	Projects []string // 作業ディレクトリ
+	Tags     []string
 	Since    time.Time
 	Status   string // "" と active はアーカイブしていないもの、archived はアーカイブしたもの、all は全部
 	Sort     string // "" は最終更新の新しい順、started は始めた日の新しい順
@@ -401,9 +440,10 @@ const (
 	DimModel   = "model"
 	DimHost    = "host"
 	DimProject = "project"
+	DimTag     = "tag"
 )
 
-var Dims = []string{DimTool, DimModel, DimHost, DimProject}
+var Dims = []string{DimTool, DimTag, DimModel, DimHost, DimProject}
 
 func keys(r ConvRow, dim string) []string {
 	switch dim {
@@ -418,6 +458,8 @@ func keys(r ConvRow, dim string) []string {
 			return nil
 		}
 		return []string{r.Cwd}
+	case DimTag:
+		return r.Tags
 	}
 	return nil
 }
@@ -432,6 +474,8 @@ func (f Filter) Values(dim string) []string {
 		return f.Models
 	case DimProject:
 		return f.Projects
+	case DimTag:
+		return f.Tags
 	}
 	return nil
 }
@@ -484,6 +528,12 @@ func (s *Store) Browse(f Filter) ([]ConvRow, map[string][]Facet, error) {
 		for _, r := range all {
 			if _, ok := hits[r.ID]; !ok && strings.Contains(strings.ToLower(r.Title), strings.ToLower(q)) {
 				hits[r.ID] = ""
+			}
+			// AI でまとめた要約も探す
+			if sn, ok := hits[r.ID]; (!ok || sn == "") && r.Summary != "" {
+				if i := strings.Index(strings.ToLower(r.Summary), strings.ToLower(q)); i >= 0 {
+					hits[r.ID] = r.Summary[:i] + "\x02" + r.Summary[i:i+len(q)] + "\x03" + r.Summary[i+len(q):]
+				}
 			}
 		}
 	}

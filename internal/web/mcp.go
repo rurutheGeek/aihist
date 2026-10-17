@@ -1,0 +1,257 @@
+package web
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
+	"github.com/rurutheGeek/aihist/internal/ai"
+	"github.com/rurutheGeek/aihist/internal/store"
+)
+
+// MCP サーバー（Streamable HTTP の POST だけ。返事は1つの JSON）。
+// 利用者の AI が aihist の会話を読み、タグ・要約・ナレッジを書き戻す。トークンはマシンと同じものを使う。
+
+type rpcReq struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
+type rpcErr struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+type mcpTool struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
+}
+
+func obj(props map[string]any, req ...string) map[string]any {
+	m := map[string]any{"type": "object", "properties": props}
+	if len(req) > 0 {
+		m["required"] = req
+	}
+	return m
+}
+
+var (
+	str  = map[string]any{"type": "string"}
+	num  = map[string]any{"type": "integer"}
+	strs = map[string]any{"type": "array", "items": str}
+)
+
+var mcpTools = []mcpTool{
+	{"search", "会話を探す。query は本文・題名・要約から探す。tag・tool で絞れる。", obj(map[string]any{"query": str, "tag": str, "tool": str, "limit": num})},
+	{"list_unorganized", "まだ整理していない（タグ・要約・ナレッジを付けていない）会話を新しい順に返す。", obj(map[string]any{"limit": num})},
+	{"read_conversation", "会話を読む。長い会話は区切り（page は 1 から）ごとに返すので、pages まで順に読む。", obj(map[string]any{"id": num, "page": num}, "id")},
+	{"organize_instructions", "会話を整理するときの決まり（タグの一覧・要約・ナレッジの基準と形）。save_organized の前に読む。", obj(map[string]any{})},
+	{"save_organized", "会話を整理した結果を保存する。tags はタグの一覧にある名前だけ。knowledge は下書きに入る（利用者が登録する）。evidence は会話からそのまま写した文で、記録に無ければ捨てられる。",
+		obj(map[string]any{"id": num, "model": str, "tags": strs, "summary": str, "knowledge": map[string]any{"type": "array", "items": obj(map[string]any{
+			"title": str, "conclusion": str, "environment": str, "symptom": str, "cause": str, "solution": str, "failed": str, "struggle": str, "evidence": strs, "fixed": strs, "score": num,
+		}, "title", "conclusion", "solution", "evidence", "fixed", "score")}}, "id", "summary")},
+	{"search_knowledge", "登録したナレッジ（苦労して解決した問題の記事）を探す。", obj(map[string]any{"query": str})},
+}
+
+func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req rpcReq
+	if err := json.NewDecoder(io.LimitReader(r.Body, 8<<20)).Decode(&req); err != nil {
+		writeRPC(w, nil, nil, &rpcErr{-32700, "parse error"})
+		return
+	}
+	if len(req.ID) == 0 { // 知らせ（返事は要らない）
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	switch req.Method {
+	case "initialize":
+		var p struct {
+			ProtocolVersion string `json:"protocolVersion"`
+		}
+		json.Unmarshal(req.Params, &p)
+		v := p.ProtocolVersion
+		if v == "" {
+			v = "2025-06-18"
+		}
+		writeRPC(w, req.ID, map[string]any{
+			"protocolVersion": v,
+			"capabilities":    map[string]any{"tools": map[string]any{}},
+			"serverInfo":      map[string]any{"name": "aihist", "version": s.Version},
+			"instructions":    "aihist は AI との会話の履歴。会話を探して読み、organize_instructions の決まりで整理して save_organized で保存できる。長い会話は1件ずつ別のサブエージェントで読むと、文脈を圧迫しない。",
+		}, nil)
+	case "ping":
+		writeRPC(w, req.ID, map[string]any{}, nil)
+	case "tools/list":
+		writeRPC(w, req.ID, map[string]any{"tools": mcpTools}, nil)
+	case "tools/call":
+		var p struct {
+			Name      string          `json:"name"`
+			Arguments json.RawMessage `json:"arguments"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			writeRPC(w, req.ID, nil, &rpcErr{-32602, "invalid params"})
+			return
+		}
+		out, err := s.mcpCall(r, p.Name, p.Arguments)
+		res := map[string]any{"content": []map[string]any{{"type": "text", "text": out}}}
+		if err != nil {
+			res = map[string]any{"content": []map[string]any{{"type": "text", "text": err.Error()}}, "isError": true}
+		}
+		writeRPC(w, req.ID, res, nil)
+	default:
+		writeRPC(w, req.ID, nil, &rpcErr{-32601, "method not found"})
+	}
+}
+
+func writeRPC(w http.ResponseWriter, id json.RawMessage, result any, e *rpcErr) {
+	w.Header().Set("Content-Type", "application/json")
+	m := map[string]any{"jsonrpc": "2.0", "id": id}
+	if e != nil {
+		m["error"] = e
+	} else {
+		m["result"] = result
+	}
+	json.NewEncoder(w).Encode(m)
+}
+
+func jsonText(v any) string {
+	b, _ := json.MarshalIndent(v, "", " ")
+	return string(b)
+}
+
+type convBrief struct {
+	ID      int64    `json:"id"`
+	Title   string   `json:"title"`
+	Tool    string   `json:"tool"`
+	Updated string   `json:"updated"`
+	Tags    []string `json:"tags,omitempty"`
+	Summary string   `json:"summary,omitempty"`
+	Snippet string   `json:"snippet,omitempty"`
+}
+
+func brief(rows []store.ConvRow) []convBrief {
+	out := []convBrief{}
+	for _, c := range rows {
+		out = append(out, convBrief{ID: c.ID, Title: strings.Join(strings.Fields(c.Title), " "), Tool: c.Tool, Updated: c.UpdatedAt.Format("2006-01-02 15:04"),
+			Tags: c.Tags, Summary: c.Summary, Snippet: strings.NewReplacer("\x02", "", "\x03", "").Replace(c.Snippet)})
+	}
+	return out
+}
+
+func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (string, error) {
+	var a struct {
+		Query     string         `json:"query"`
+		Tag       string         `json:"tag"`
+		Tool      string         `json:"tool"`
+		Limit     int            `json:"limit"`
+		ID        int64          `json:"id"`
+		Page      int            `json:"page"`
+		Model     string         `json:"model"`
+		Tags      []string       `json:"tags"`
+		Summary   string         `json:"summary"`
+		Knowledge []ai.Knowledge `json:"knowledge"`
+	}
+	if len(args) > 0 {
+		if err := json.Unmarshal(args, &a); err != nil {
+			return "", fmt.Errorf("引数を読めない: %v", err)
+		}
+	}
+	if a.Limit <= 0 || a.Limit > 100 {
+		a.Limit = 20
+	}
+	switch name {
+	case "search":
+		f := store.Filter{Query: a.Query, Status: "all", Limit: a.Limit}
+		if a.Tag != "" {
+			f.Tags = []string{a.Tag}
+		}
+		if a.Tool != "" {
+			f.Tools = []string{a.Tool}
+		}
+		rows, _, err := s.st.Browse(f)
+		if err != nil {
+			return "", err
+		}
+		return jsonText(brief(rows)), nil
+	case "list_unorganized":
+		rows, _, err := s.st.Browse(store.Filter{Status: "all", Limit: 100000})
+		if err != nil {
+			return "", err
+		}
+		var out []store.ConvRow
+		for _, c := range rows {
+			if c.Summary == "" {
+				out = append(out, c)
+				if len(out) == a.Limit {
+					break
+				}
+			}
+		}
+		return jsonText(brief(out)), nil
+	case "read_conversation":
+		c, msgs, err := s.st.Get(a.ID)
+		if err != nil {
+			return "", fmt.Errorf("会話 %d が無い", a.ID)
+		}
+		pages := ai.Pages(msgs, ai.PageSize)
+		if a.Page < 1 {
+			a.Page = 1
+		}
+		if a.Page > len(pages) {
+			return "", fmt.Errorf("区切りは %d まで", len(pages))
+		}
+		return fmt.Sprintf("# %s\n(id %d · %s · 区切り %d / %d)\n\n%s", c.Title, c.ID, toolLabel(c.Tool), a.Page, len(pages), pages[a.Page-1]), nil
+	case "organize_instructions":
+		return ai.Instructions(s.aiTags(), "") + "\n\n結果は save_organized に渡す（JSON の各項目をそのまま引数にする）。", nil
+	case "save_organized":
+		c, msgs, err := s.st.Get(a.ID)
+		if err != nil {
+			return "", fmt.Errorf("会話 %d が無い", a.ID)
+		}
+		pages := ai.Pages(msgs, ai.PageSize)
+		res := ai.Result{Tags: a.Tags, Summary: a.Summary, Knowledge: a.Knowledge}.Clean(s.aiTags(), strings.Join(pages, "\n"))
+		model := "mcp"
+		if a.Model != "" {
+			model = "mcp: " + a.Model
+		}
+		n, err := s.saveResult(c, pages, res, model, ai.LangOf(a.Summary))
+		if err != nil {
+			return "", err
+		}
+		dropped := len(a.Knowledge) - n
+		msg := fmt.Sprintf("保存した（タグ %d・ナレッジの下書き %d）", len(res.Tags), n)
+		if dropped > 0 {
+			msg += fmt.Sprintf("。ナレッジ %d 件は決まり（score %d 以上・evidence と fixed が会話にそのままあること・conclusion と solution）に合わず捨てた", dropped, ai.MinScore)
+		}
+		return msg, nil
+	case "search_knowledge":
+		ks, err := s.st.KnowledgeList("registered", a.Query)
+		if err != nil {
+			return "", err
+		}
+		type kb struct {
+			ID    int64  `json:"id"`
+			Title string `json:"title"`
+			Body  string `json:"body"`
+		}
+		out := []kb{}
+		for _, k := range ks {
+			out = append(out, kb{k.ID, k.Title, k.Body})
+			if len(out) == a.Limit {
+				break
+			}
+		}
+		return jsonText(out), nil
+	}
+	return "", fmt.Errorf("知らない道具 %s", name)
+}

@@ -47,6 +47,15 @@ irm https://<server>/api/uninstall.ps1 | iex     # Windows
 
 You can also drop files on the **Upload** page: Claude Code `.jsonl`, Codex `rollout-*.jsonl`, Antigravity `.db`, and the ChatGPT / claude.ai export `.zip`.
 
+## Organize with AI (tags, summaries, knowledge)
+
+Adds tags and a summary to chats, and drafts "knowledge" — short write-ups of problems that took real effort to solve. Nothing runs automatically.
+
+- **API**: enter an OpenAI-compatible endpoint, key, and model in **Settings → AI**. It's called only when you press ✦ on a chat, "Organize with AI" on selected chats, or the option on the upload page.
+- **MCP**: connect your own AI (Claude Code and others) to `<server>/api/mcp` with a token (**Settings → AI → MCP** shows the command and an example prompt). Your AI reads the chats and writes the results back.
+- Tags are yours (**Settings → Tags**, with templates). Each chat is read in its own requests; long chats are read in pages with running notes.
+- Knowledge is kept only when the AI's quoted evidence of the struggle appears verbatim in the chat and its score is 4 or more. Drafts warn about machine names, folder names, URLs, and IPs; you decide what to register.
+
 ## Continue in the original AI
 
 ```bash

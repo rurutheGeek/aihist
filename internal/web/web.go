@@ -43,6 +43,8 @@ type Server struct {
 	sums  map[string]string
 	tmpl  map[string]*template.Template // 言語ごと
 	mu    sync.Mutex                    // 取り込みは1つずつ
+	// Version は MCP で名乗る版。
+	Version string
 }
 
 // New は画面と API を作る。token が空でなければ /api に要る。画面（/upload を含む）は
@@ -129,6 +131,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /settings/upload", s.setUpload)
 	mux.HandleFunc("POST /settings/hide", s.setHide)
 	mux.HandleFunc("POST /settings/purge", s.purge)
+	mux.HandleFunc("POST /settings/ai", s.setAI)
+	mux.HandleFunc("GET /ai/models", s.aiModels)
+	mux.HandleFunc("POST /ai/run", s.aiRun)
+	mux.HandleFunc("POST /settings/tags", s.addTag)
+	mux.HandleFunc("POST /settings/tags/remove", s.deleteTag)
+	mux.HandleFunc("POST /c/{id}/tags", s.setConvTags)
+	mux.HandleFunc("GET /knowledge", s.knowledgeList)
+	mux.HandleFunc("GET /knowledge/{id}", s.knowledgeShow)
+	mux.HandleFunc("GET /knowledge/{id}/md", s.knowledgeMD)
+	mux.HandleFunc("POST /knowledge/{id}", s.knowledgeSave)
+	mux.HandleFunc("POST /knowledge/{id}/delete", s.knowledgeDelete)
 	mux.HandleFunc("POST /settings/deleted/forget", s.forgetDeleted)
 	mux.HandleFunc("POST /settings/machines/{host}", s.setMachine)
 	mux.HandleFunc("POST /settings/machines/{host}/delete", s.deleteMachine)
@@ -152,6 +165,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/find", s.auth(s.apiFind))
 	mux.HandleFunc("GET /api/client", s.auth(s.apiClient))
 	mux.HandleFunc("POST /api/machine", s.auth(s.apiMachine))
+	mux.HandleFunc("/api/mcp", s.auth(s.mcp))
 	return mux
 }
 
@@ -202,6 +216,8 @@ func (s *Server) show(w http.ResponseWriter, r *http.Request) {
 		hosts[b.Host] = true
 	}
 	d["Branches"], d["Children"], d["Group"], d["ManyHosts"] = branches, children, in, len(hosts) > 1
+	d["AIUsed"], d["AIAt"] = s.st.AIInfo(c.ID)
+	d["TagList"], _ = s.st.Tags()
 	s.render(w, r, "show.html", d)
 }
 

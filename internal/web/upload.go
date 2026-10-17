@@ -219,7 +219,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			u.Error = tr(l, err.Error())
 		} else {
 			// 取り込みは裏で進める（大きなものは数分かかる）。画面は進み具合を見に来る
-			u.Tool, u.Label, u.Job = tool, toolLabel(tool), s.startJob(host, tool)
+			u.Tool, u.Label, u.Job = tool, toolLabel(tool), s.startJob(host, tool, r.FormValue("ai") == "1", lang(r))
 			u.Href = "/?" + url.Values{"tool": {tool}, "host": {host}}.Encode()
 		}
 		out = append(out, u)
@@ -393,6 +393,7 @@ type job struct {
 	Imported int    `json:"imported"`
 	Skipped  int    `json:"skipped"`
 	Error    string `json:"error,omitempty"`
+	AI       string `json:"ai,omitempty"` // 取り込んだあと AI で整理している仕事
 }
 
 var jobs = struct {
@@ -406,7 +407,7 @@ func newJobID() string {
 	return hex.EncodeToString(b)
 }
 
-func (s *Server) startJob(host, tool string) string {
+func (s *Server) startJob(host, tool string, organize bool, l string) string {
 	id := newJobID()
 	j := &job{State: "waiting"}
 	jobs.Lock()
@@ -418,8 +419,21 @@ func (s *Server) startJob(host, tool string) string {
 			j.State, j.Done, j.Total = "running", done, total
 			jobs.Unlock()
 		})
+		// 選んだときだけ、取り込んだ会話を AI で整理する
+		var aiJob string
+		if c := s.aiConfig(); organize && err == nil && c.Ready() && len(res.Keys) > 0 {
+			var ids []int64
+			for _, k := range res.Keys {
+				if id := s.st.LookupExt(k[0], host, k[1]); id != 0 {
+					ids = append(ids, id)
+				}
+			}
+			if len(ids) > 0 {
+				aiJob = s.startOrganize(ids, c, l, false)
+			}
+		}
 		jobs.Lock()
-		j.Imported, j.Skipped, j.State = res.Imported, res.Skipped, "done"
+		j.Imported, j.Skipped, j.State, j.AI = res.Imported, res.Skipped, "done", aiJob
 		if err != nil {
 			j.State, j.Error = "error", err.Error()
 		}

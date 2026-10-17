@@ -121,6 +121,34 @@
       </div>
 
     </section>
+    <section data-sec="ai">
+      <h1>AI</h1>
+      <form class="grp" method="post" action="/settings/ai" data-auto autocomplete="off">
+        <div class="row"><div class="rl">{{t "接続先"}}</div><div class="rc"><input class="inp wide" name="base_url" value="{{.AIBase}}" placeholder="https://api.openai.com/v1" spellcheck="false"></div></div>
+        <div class="row"><div class="rl">{{t "API キー"}}</div><div class="rc"><input class="inp wide" type="password" name="key" placeholder="{{if .AIHasKey}}{{t "保存済み"}}{{end}}" autocomplete="new-password"></div></div>
+        <div class="row"><div class="rl">{{t "モデル"}}</div><div class="rc"><input class="inp wide" name="model" value="{{.AIModelSet}}" list="aimodels" spellcheck="false"><datalist id="aimodels"></datalist></div></div>
+        <div class="row"><div class="rl"><span class="aitest mute"></span></div><div class="rc"><button class="btn" type="button" data-aitest>{{t "接続を確かめる"}}</button></div></div>
+      </form>
+      <div class="gt">MCP</div>
+      <div class="grp">
+        <div class="row col"><div class="rl">Claude Code</div><div class="rc cmdl"><code>{{.MCPAdd}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>
+        <div class="row col"><div class="rl">{{t "そのほかの AI"}}</div><div class="rc cmdl"><code>{{.MCPURL}}  Authorization: Bearer &lt;{{t "トークン"}}&gt;</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>
+        <div class="row col"><div class="rl">{{t "頼み方の例"}}</div><div class="rc cmdl"><code>{{t "aihist の MCP で、まだ整理していない会話を 10 件選び、1 件ずつサブエージェントで最後の区切りまで読んで、organize_instructions の決まりで整理し、save_organized で保存して"}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>
+      </div>
+    </section>
+    <section data-sec="tags">
+      <h1>{{t "タグ"}}</h1>
+      <form class="grp" method="post" action="/settings/tags">
+        <div class="row"><div class="rl"><input class="inp" name="name" placeholder="{{t "タグ名"}}" required autocomplete="off"></div><div class="rc"><input class="inp" name="description" placeholder="{{t "説明"}}" autocomplete="off"><button class="btn pri">{{t "追加"}}</button></div></div>
+      </form>
+      {{if .TagList}}<div class="grp">
+        {{range .TagList}}<div class="row"><div class="rl">{{.Name}}<small>{{if .Description}}{{.Description}} · {{end}}{{tf "%d 件" .Count}}</small></div><div class="rc"><form method="post" action="/settings/tags/remove" data-confirm="{{t "このタグを削除する？"}}"><input type="hidden" name="name" value="{{.Name}}"><button class="btn red">{{t "削除"}}</button></form></div></div>{{end}}
+      </div>{{end}}
+      <form class="grp" method="post" action="/settings/tags">
+        <input type="hidden" name="template" value="1">
+        <div class="row"><div class="rl">{{t "テンプレート"}}<small>{{t "開発・調査・設計・学習・文章・相談・雑談"}}</small></div><div class="rc"><button class="btn">{{t "追加"}}</button></div></div>
+      </form>
+    </section>
     <section data-sec="storage">
       <h1>{{t "容量"}}</h1>
       <div class="grp">

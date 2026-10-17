@@ -24,6 +24,8 @@ import (
 // Result は取り込んだ件数と、変わっていなかった件数。
 type Result struct {
 	Imported, Skipped int
+	// Keys は取り込んだ会話（ツールと会話 ID）。取り込んだあと AI で整理するときに使う
+	Keys [][2]string
 
 	// まだ書き込んでいない会話。HDD の上では確定のたびに待つので、まとめて書く
 	pending []*model.Conversation
@@ -351,6 +353,7 @@ func put(st *store.Store, host string, c *model.Conversation, stamp string, r *R
 		}
 	}
 	r.Imported++
+	r.Keys = append(r.Keys, [2]string{c.Tool, c.ExternalID})
 	if len(r.pending) >= batchItems || r.size >= batchBytes {
 		return r.flush(st)
 	}

@@ -5,12 +5,14 @@ package store
 type meta struct {
 	title            string
 	pinned, archived bool
+	summary          string
+	tags             []string
 }
 
 func metaKey(tool, host, ext string) string { return tool + "\x00" + host + "\x00" + ext }
 
 func (s *Store) applyMeta(rows []ConvRow) error {
-	q, err := s.db.Query(`SELECT tool, host, external_id, title, pinned, archived FROM conv_meta`)
+	q, err := s.db.Query(`SELECT tool, host, external_id, title, pinned, archived, summary FROM conv_meta`)
 	if err != nil {
 		return err
 	}
@@ -19,13 +21,29 @@ func (s *Store) applyMeta(rows []ConvRow) error {
 	for q.Next() {
 		var t, h, e string
 		var v meta
-		if err := q.Scan(&t, &h, &e, &v.title, &v.pinned, &v.archived); err != nil {
+		if err := q.Scan(&t, &h, &e, &v.title, &v.pinned, &v.archived, &v.summary); err != nil {
 			return err
 		}
 		m[metaKey(t, h, e)] = v
 	}
+	q.Close()
+	tq, err := s.db.Query(`SELECT c.tool, c.host, c.external_id, c.tag FROM conv_tags c LEFT JOIN tags t ON t.name=c.tag ORDER BY t.sort, c.tag`)
+	if err != nil {
+		return err
+	}
+	defer tq.Close()
+	for tq.Next() {
+		var t, h, e, tag string
+		if err := tq.Scan(&t, &h, &e, &tag); err != nil {
+			return err
+		}
+		k := metaKey(t, h, e)
+		v := m[k]
+		v.tags = append(v.tags, tag)
+		m[k] = v
+	}
 	if len(m) == 0 {
-		return q.Err()
+		return tq.Err()
 	}
 	for i := range rows {
 		if v, ok := m[metaKey(rows[i].Tool, rows[i].Host, rows[i].ExternalID)]; ok {
@@ -33,9 +51,10 @@ func (s *Store) applyMeta(rows []ConvRow) error {
 				rows[i].Title = v.title
 			}
 			rows[i].Pinned, rows[i].Archived = v.pinned, v.archived
+			rows[i].Summary, rows[i].Tags = v.summary, v.tags
 		}
 	}
-	return q.Err()
+	return tq.Err()
 }
 
 // SetMeta は会話 id に名前（空なら元の題名）・ピン留め・アーカイブを付ける。nil の項目は変えない。

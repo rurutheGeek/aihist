@@ -38,6 +38,9 @@ func (s *Store) Delete(ids ...int64) (int, error) {
 		if _, err := tx.Exec(`DELETE FROM conv_meta WHERE tool=? AND host=? AND external_id=?`, r.Tool, r.Host, r.ExternalID); err != nil {
 			return 0, err
 		}
+		if _, err := tx.Exec(`DELETE FROM conv_tags WHERE tool=? AND host=? AND external_id=?`, r.Tool, r.Host, r.ExternalID); err != nil {
+			return 0, err
+		}
 	}
 	return len(targets), tx.Commit()
 }

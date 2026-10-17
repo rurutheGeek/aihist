@@ -64,6 +64,30 @@ func (s *Store) Rewrite(fn func(string) string, progress func(done, total int)) 
 			progress(done, total)
 		}
 	}
+	// 要約とナレッジも書き換える
+	for _, c := range [][3]string{{"conv_meta", "rowid", "summary"}, {"knowledge", "id", "title"}, {"knowledge", "id", "body"}} {
+		rows, err := s.db.Query(`SELECT ` + c[1] + `, ` + c[2] + ` FROM ` + c[0])
+		if err != nil {
+			return changed, err
+		}
+		type upd struct {
+			id int64
+			t  string
+		}
+		var ups []upd
+		for rows.Next() {
+			var id int64
+			var t string
+			rows.Scan(&id, &t)
+			if nt := fn(t); nt != t {
+				ups = append(ups, upd{id, nt})
+			}
+		}
+		rows.Close()
+		for _, u := range ups {
+			s.db.Exec(`UPDATE `+c[0]+` SET `+c[2]+`=? WHERE `+c[1]+`=?`, u.t, u.id)
+		}
+	}
 	for _, q := range []string{`SELECT id, title FROM conversations`, `SELECT rowid, title FROM conv_meta`} {
 		rows, err := s.db.Query(q)
 		if err != nil {

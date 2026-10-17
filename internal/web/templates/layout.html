@@ -329,6 +329,45 @@ body.resizing{cursor:col-resize;user-select:none}
 .qt small{display:block;color:var(--mute);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qt small b{color:var(--fg)}
 .qw{font-size:12px;color:var(--faint);flex:none}
+.ktabs{display:flex;align-items:center;gap:6px;margin:0 0 14px;flex-wrap:wrap}
+.ktabs>a{padding:6px 12px;border-radius:999px;font-size:14px;color:var(--mute)}
+.ktabs>a.on{background:var(--active);color:var(--fg)}
+.ktabs small{font-size:12px;margin-left:2px}
+.ksearch{margin-left:auto;flex:1;max-width:260px}
+.ksearch input{width:100%;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13.5px;background:var(--bg);color:var(--fg)}
+.klist{border-top:1px solid var(--line)}
+.kitem{display:flex;flex-direction:column;gap:3px;padding:12px 4px;border-bottom:1px solid var(--line)}
+.kitem:hover{background:var(--hover)}
+.kitem b{font-weight:500;font-size:15px}
+.kitem small{font-size:12px;color:var(--mute)}
+.warn{color:#b8590b}
+.kwarn{border:1px solid #f0c48a;background:rgba(240,160,40,.08);border-radius:10px;padding:10px 12px;margin:0 0 16px;font-size:13px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.kwarn b{font-weight:600;margin-right:4px}
+.kview h1{font-size:22px;line-height:1.4;margin:4px 0 18px}
+.kedit{display:flex;flex-direction:column;gap:10px}
+.kedit[hidden],.kview[hidden],.kmain[hidden]{display:none}
+.ktitle{font-size:18px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--bg);color:var(--fg)}
+.kedit textarea{font:13.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bg);color:var(--fg);resize:vertical}
+.kbtns{display:flex;justify-content:flex-end;gap:8px;margin:18px 0}
+.kbtns form{display:contents}
+.kmeta{margin-top:8px}
+.kst{white-space:normal;text-align:right;max-width:60%}
+.aisum{margin:0 0 18px}
+.aisum p{margin:8px 0 2px;line-height:1.7;font-size:14.5px}
+.ctags{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ctag{display:inline-flex;align-items:center;gap:2px;font-size:12px;padding:1px 4px 1px 9px;border-radius:999px;background:var(--hover);border:1px solid var(--line)}
+.ctag button{border:0;background:transparent;color:var(--mute);cursor:pointer;font-size:13px;padding:0 4px}
+.addtag{font-size:12px;border:1px dashed var(--line);border-radius:999px;padding:1px 6px;background:transparent;color:var(--mute)}
+.inp.wide{border:1px solid var(--line);border-radius:8px;padding:6px 10px;width:min(340px,52vw);background:var(--bg)}
+.abox .kl{padding:4px 20px 6px}
+.abox .kr{border:0;gap:12px}
+.abox .kr input{flex:1;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:14px;background:var(--bg);color:var(--fg);min-width:0}
+.abar{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin:8px 0 4px}
+.abar i{display:block;height:100%;width:0;background:var(--fg);transition:width .3s}
+.amsg{font-size:13px;color:var(--mute);min-height:18px}
+.amsg a{color:var(--fg);text-decoration:underline}
+.abtns{display:flex;justify-content:flex-end;gap:8px;padding:8px 20px 4px}
+.snav-main .badge{margin-left:auto;font-size:11px;color:var(--mute);border:1px solid var(--line);border-radius:999px;padding:0 7px;line-height:18px}
 .kbox{background:var(--bg);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:min(460px,100%);max-height:80vh;overflow-y:auto;padding-bottom:12px}
 .kl{padding:0 20px}
 .kg{font-size:12px;color:var(--faint);font-weight:600;margin:14px 0 4px}
@@ -472,10 +511,11 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
     </div>
     <button class="sbox" type="button" data-search><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>{{t "検索"}}</span></button>
     <nav class="snav-main">
+      <a href="/knowledge"{{if eq .Page "knowledge"}} class="on"{{end}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M8 7h6M8 11h6"/></svg>{{t "ナレッジ"}}{{if .KDrafts}}<span class="badge">{{.KDrafts}}</span>{{end}}</a>
       <a href="/upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>{{t "アップロード"}}</a>
     </nav>
   </div>
-  <div class="selbar"><b></b><button type="button" data-sel="all">{{t "すべて選択"}}</button><button type="button" data-sel="arch">{{t "アーカイブ"}}</button><button type="button" class="red" data-sel="del">{{t "削除"}}</button><button type="button" data-sel="off">{{t "キャンセル"}}</button></div>
+  <div class="selbar"><b></b><button type="button" data-sel="all">{{t "すべて選択"}}</button>{{if .AI}}<button type="button" data-sel="ai">{{t "AI で整理"}}</button>{{end}}<button type="button" data-sel="arch">{{t "アーカイブ"}}</button><button type="button" class="red" data-sel="del">{{t "削除"}}</button><button type="button" data-sel="off">{{t "キャンセル"}}</button></div>
   <div class="convs" id="sidelist" data-cur="{{with .C}}{{.ID}}{{end}}">{{template "sidelist" .}}</div>
   <div class="side-foot">
     <a href="/settings" data-settings><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>{{t "設定"}}</a>
@@ -538,6 +578,16 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
     <div class="kr"><span>{{t "次の発言"}}</span><span><kbd>J</kbd></span></div>
   </div>
 </div></div>
+{{if .AI}}<div class="modal" id="aimodal"><div class="kbox abox" role="dialog" aria-label="{{t "AI で整理"}}">
+  <div class="mtop"><b>{{t "AI で整理"}}</b><button class="icon-btn" type="button" data-close aria-label="{{t "閉じる"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="kl">
+    <div class="kr"><span>{{t "対象"}}</span><span class="acount"></span></div>
+    <div class="kr"><span>{{t "モデル"}}</span><input class="amodel" list="aimodelsm" value="{{.AIModel}}" spellcheck="false"><datalist id="aimodelsm"></datalist></div>
+    <div class="abar" hidden><i></i></div>
+    <div class="amsg"></div>
+  </div>
+  <div class="abtns"><button class="btn pri" type="button" data-airun>{{t "実行"}}</button></div>
+</div></div>{{end}}
 <div class="rmenu" id="rmenu" role="menu" hidden></div>
 <div class="tip" id="tip" hidden></div>
 <script>
@@ -760,7 +810,7 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
   function markSel(){
     if(!list)return;
     list.querySelectorAll('.conv').forEach(function(c){var on=chosen.has(c.dataset.id); c.querySelector('.sk').checked=on; c.classList.toggle('on',on)});
-    if(bar){bar.querySelector('b').textContent=T.seln.replace('%d',chosen.size); bar.querySelectorAll('[data-sel=arch],[data-sel=del]').forEach(function(b){b.disabled=!chosen.size})}
+    if(bar){bar.querySelector('b').textContent=T.seln.replace('%d',chosen.size); bar.querySelectorAll('[data-sel=arch],[data-sel=del],[data-sel=ai]').forEach(function(b){b.disabled=!chosen.size})}
   }
   function pick(id,on){if(on)chosen.add(id);else chosen.delete(id); markSel()}
   function selOn(){side.classList.add('sel'); markSel()}
@@ -777,12 +827,69 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
     var ids=Array.from(chosen);
     switch(b.dataset.sel){
       case 'all': list.querySelectorAll('.conv').forEach(function(c){chosen.add(c.dataset.id)}); markSel(); break;
+      case 'ai': if(ids.length)window.aihistAI(ids); break;
       case 'arch': var p=new URLSearchParams({archived:'1'}); ids.forEach(function(i){p.append('id',i)}); fetch('/c/archive',{method:'POST',body:p}).then(function(){selOff();refresh()}); break;
       case 'del': if(confirm(T.delsq.replace('%d',ids.length)))del(ids); break;
       case 'off': selOff();
     }
   });
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&side&&side.classList.contains('sel')&&rm.hidden)selOff()});
+
+  // 会話のタグを手で変える
+  document.querySelectorAll('.ctags').forEach(function(box){
+    function save(){var p=new URLSearchParams(); box.querySelectorAll('.ctag').forEach(function(c){p.append('tag',c.dataset.tag)}); fetch('/c/'+box.dataset.id+'/tags',{method:'POST',body:p}).then(function(r){say(r.ok)})}
+    box.addEventListener('click',function(e){var b=e.target.closest('.ctag button'); if(b){b.parentNode.remove(); save()}});
+    var sel=box.querySelector('.addtag');
+    if(sel)sel.addEventListener('change',function(){
+      var v=sel.value; sel.value=''; if(!v||box.querySelector('.ctag[data-tag="'+CSS.escape(v)+'"]'))return;
+      var c=document.createElement('span'); c.className='ctag'; c.dataset.tag=v; c.textContent=v; var x=document.createElement('button'); x.type='button'; x.textContent='×'; c.appendChild(x);
+      box.insertBefore(c,sel); save();
+    });
+  });
+  // AI で整理（タグ・要約・ナレッジ）。押したときだけ動く
+  var am=document.getElementById('aimodal'), aids=[], aforce=false;
+  function models(dl){fetch('/ai/models').then(function(r){return r.json()}).then(function(o){if(!o.models)return; dl.innerHTML=''; o.models.forEach(function(m){var x=document.createElement('option');x.value=m;dl.appendChild(x)})}).catch(function(){})}
+  window.aihistAI=function(ids,force){
+    if(!am)return; aids=ids; aforce=!!force;
+    am.querySelector('.acount').textContent={{t "%d 件の会話"}}.replace('%d',ids.length);
+    am.querySelector('.amsg').textContent=''; am.querySelector('.abar').hidden=true; am.querySelector('[data-airun]').disabled=false;
+    am.classList.add('open'); models(document.getElementById('aimodelsm'));
+  };
+  if(am){
+    am.addEventListener('click',function(e){if(e.target===am||e.target.closest('[data-close]'))am.classList.remove('open')});
+    am.querySelector('[data-airun]').addEventListener('click',function(){
+      var b=this, msg=am.querySelector('.amsg'), bar=am.querySelector('.abar'), fill=bar.firstChild;
+      var p=new URLSearchParams({model:am.querySelector('.amodel').value}); aids.forEach(function(i){p.append('id',i)}); if(aforce)p.set('force','1');
+      b.disabled=true; bar.hidden=false; fill.style.width='0'; msg.textContent={{t "整理しています"}};
+      fetch('/ai/run',{method:'POST',body:p}).then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error(t)});return r.json()}).then(function(o){
+        (function poll(){fetch('/upload/jobs/'+o.id).then(function(r){return r.json()}).then(function(j){
+          fill.style.width=(j.total?j.done*100/j.total:0)+'%';
+          if(j.state==='done'||j.state==='error'){
+            var t=j.state==='error'?j.error:{{t "%d 件を整理した"}}.replace('%d',j.done-j.skipped)+(j.skipped?' · '+{{t "%d 件は整理済み"}}.replace('%d',j.skipped):'')+(j.error?' · '+j.error:'');
+            msg.textContent=t;
+            if(j.imported){var a=document.createElement('a');a.href='/knowledge';a.textContent={{t "ナレッジの下書き %d 件"}}.replace('%d',j.imported);msg.appendChild(document.createTextNode(' · '));msg.appendChild(a)}
+            b.disabled=false; if(typeof refresh==='function')refresh();
+            if(document.querySelector('[data-aisum]'))setTimeout(function(){location.reload()},1500);
+            return;
+          }
+          msg.textContent={{t "整理しています"}}+' '+j.done+' / '+j.total;
+          setTimeout(poll,1500);
+        })})();
+      }).catch(function(e){msg.textContent=e.message; b.disabled=false});
+    });
+  }
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-aitest]'); if(!t)return;
+    var f=t.closest('form'), out=f.querySelector('.aitest');
+    fetch(f.action,{method:'POST',headers:{'X-Auto':'1'},body:new URLSearchParams(new FormData(f))}).then(function(){
+      out.textContent={{t "確かめています"}};
+      return fetch('/ai/models').then(function(r){return r.json()});
+    }).then(function(o){
+      if(o.error){out.textContent=o.error;return}
+      out.textContent={{t "つながった（モデル %d 個）"}}.replace('%d',o.models.length);
+      var dl=f.querySelector('datalist'); dl.innerHTML=''; o.models.forEach(function(m){var x=document.createElement('option');x.value=m;dl.appendChild(x)});
+    });
+  });
 
   // 吹き出し（行の題名といつの会話か・ボタンのショートカット）
   var tip=document.getElementById('tip'), tt2;
