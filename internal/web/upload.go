@@ -263,8 +263,8 @@ func (s *Server) store(host string, fh *multipart.FileHeader) (tool, rel string,
 	}
 	var body io.Reader = f
 	// 添付ファイルを取り込まない設定なら、埋め込まれた画像などを抜いてから置く（形のある記録だけ）
-	if s.st.Setting("upload_attachments", "1") == "0" && (tool == claudecode.Tool || tool == codex.Tool) {
-		t, _, done, err := push.Strip(f)
+	if keep := s.uploadAttach(); !push.KeepsAll(keep) && (tool == claudecode.Tool || tool == codex.Tool) {
+		t, _, done, err := push.Strip(f, keep)
 		if err != nil {
 			return "", "", err
 		}

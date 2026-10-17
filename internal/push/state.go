@@ -17,6 +17,7 @@ type ServerConfig struct {
 	CleanupDays int    `json:"cleanup_days"`
 	Tools       string `json:"tools"` // "*" は全部
 	Attachments bool   `json:"attachments"`
+	Attach      string `json:"attach"` // 送る添付ファイルの種類（無ければ Attachments に従う）
 }
 
 // Init は初めて報告するときに渡す、導入で選んだ設定。

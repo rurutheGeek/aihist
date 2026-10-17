@@ -23,7 +23,7 @@ type machineView struct {
 	SeenAt        time.Time
 	Tools         []toolOpt
 	AllTools      bool
-	Attachments   bool
+	Attach        []attachOpt
 	Follow        bool // 送るタイミングは全体の設定に従う
 	Schedule      string
 	Cleanup       int
@@ -66,7 +66,7 @@ func (s *Server) machineViews(l string) []machineView {
 	var out []machineView
 	for _, m := range ms {
 		v := machineView{Host: m.Host, Version: m.Version, SeenAt: m.SeenAt, AllTools: strings.HasPrefix(m.Tools, "*"),
-			Attachments: m.Attachments, Follow: m.Schedule == "", Schedule: m.Schedule, Cleanup: m.Cleanup}
+			Attach: attachOpts(m.Attach), Follow: m.Schedule == "", Schedule: m.Schedule, Cleanup: m.Cleanup}
 		chosen := strings.Split(m.Tools, ",")
 		for _, d := range m.Detected {
 			v.Tools = append(v.Tools, toolOpt{Tool: d.Tool, Label: toolLabel(d.Tool), Files: d.Files, Bytes: d.Bytes,
@@ -119,7 +119,8 @@ func (s *Server) setMachine(w http.ResponseWriter, r *http.Request) {
 	} else if m.Tools = strings.Join(on, ","); m.Tools == "" {
 		m.Tools = "-" // 何も送らない
 	}
-	m.Attachments = r.FormValue("attachments") == "1"
+	m.Attach = attachList(r.Form["attach"])
+	m.Attachments = m.Attach != "-"
 	m.Schedule = ""
 	if r.FormValue("follow") != "1" {
 		if _, err := sched.Parse(r.FormValue("schedule")); err == nil {

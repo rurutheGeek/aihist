@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS machines (
   tools TEXT NOT NULL DEFAULT '*',
   attachments INTEGER NOT NULL DEFAULT 1,
   schedule TEXT NOT NULL DEFAULT '',
-  cleanup INTEGER NOT NULL DEFAULT -1
+  cleanup INTEGER NOT NULL DEFAULT -1,
+  attach TEXT NOT NULL DEFAULT '*'
 );
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
@@ -132,7 +133,19 @@ func migrate(db *sql.DB) error {
 	if err := migrateContinues(db); err != nil {
 		return err
 	}
-	return migrateModels(db)
+	if err := migrateModels(db); err != nil {
+		return err
+	}
+	// マシンの添付ファイルを種類ごとに選ぶ（"*" は全部。前の「送らない」は "-" にする）
+	var n int
+	db.QueryRow(`SELECT count(*) FROM pragma_table_info('machines') WHERE name='attach'`).Scan(&n)
+	if n == 0 {
+		if _, err := db.Exec(`ALTER TABLE machines ADD COLUMN attach TEXT NOT NULL DEFAULT '*';
+		  UPDATE machines SET attach='-' WHERE attachments=0`); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // migrateModels は models（会話の中で使ったモデル、改行区切り）を足し、メッセージから埋める。

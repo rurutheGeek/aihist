@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rurutheGeek/aihist/internal/push"
 	"github.com/rurutheGeek/aihist/internal/store"
 )
 
@@ -167,7 +168,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	for _, t := range uploadTools {
 		ut = append(ut, toolOpt{Tool: t, Label: toolLabel(t), On: s.uploadAllowed(t)})
 	}
-	d["UploadTools"], d["UploadAttach"] = ut, s.st.Setting("upload_attachments", "1") != "0"
+	d["UploadTools"], d["UploadAttach"] = ut, attachOpts(s.uploadAttach())
 	d["Schedule"] = s.st.Setting("schedule", DefaultSchedule)
 	d["Next"] = s.nextRuns(lang(r), d["Schedule"].(string), 3)
 	d["CleanupOpts2"] = []int{-1, 0, 7, 14, 30, 90}
@@ -221,12 +222,13 @@ type clientConfig struct {
 	TZ          string `json:"tz"`
 	CleanupDays int    `json:"cleanup_days"`
 	Tools       string `json:"tools"`
-	Attachments bool   `json:"attachments"`
+	Attachments bool   `json:"attachments"` // 種類を分ける前の版のマシン向け
+	Attach      string `json:"attach"`
 }
 
 func (s *Server) clientConfig(host string) clientConfig {
 	m, _ := s.st.Machine(host)
-	cf := clientConfig{Schedule: m.Schedule, TZ: s.st.Setting("tz", ""), Tools: m.Tools, Attachments: m.Attachments, CleanupDays: m.Cleanup}
+	cf := clientConfig{Schedule: m.Schedule, TZ: s.st.Setting("tz", ""), Tools: m.Tools, Attach: m.Attach, Attachments: m.Attach != "-", CleanupDays: m.Cleanup}
 	if cf.Schedule == "" {
 		cf.Schedule = s.st.Setting("schedule", DefaultSchedule)
 	}
@@ -303,10 +305,46 @@ func (s *Server) setUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.st.SetSetting("upload_tools", strings.Join(l, ","))
-	a := "0"
-	if r.FormValue("attachments") == "1" {
-		a = "1"
-	}
-	s.st.SetSetting("upload_attachments", a)
+	s.st.SetSetting("upload_attach", attachList(r.Form["attach"]))
 	done(w, r, "/settings/upload")
+}
+
+type attachOpt struct {
+	Kind, Label string
+	On          bool
+}
+
+var attachLabels = map[string]string{"image": "画像", "pdf": "PDF", "doc": "文書（Word・Excel・テキストなど）", "audio": "音声", "video": "動画", "other": "その他"}
+
+func attachOpts(list string) []attachOpt {
+	var out []attachOpt
+	for _, k := range push.AttachKinds {
+		out = append(out, attachOpt{Kind: k, Label: attachLabels[k], On: push.Selected(list, k)})
+	}
+	return out
+}
+
+// attachList は選んだ種類を並びにする（全部なら "*"、何も無ければ "-"、ほかは外したものを書く）。
+func attachList(on []string) string {
+	l := []string{"*"}
+	for _, k := range push.AttachKinds {
+		if !slices.Contains(on, k) {
+			l = append(l, "-"+k)
+		}
+	}
+	if len(l) == len(push.AttachKinds)+1 {
+		return "-"
+	}
+	return strings.Join(l, ",")
+}
+
+// uploadAttach はアップロードで取り込む添付ファイルの種類。
+func (s *Server) uploadAttach() string {
+	if v := s.st.Setting("upload_attach", ""); v != "" {
+		return v
+	}
+	if s.st.Setting("upload_attachments", "1") == "0" {
+		return "-"
+	}
+	return "*"
 }

@@ -22,15 +22,16 @@ type Machine struct {
 	Attachments bool   // 添付ファイル（画像など）も送る
 	Schedule    string // cron の式。空は全体の設定に従う
 	Cleanup     int    // 手元から消す日数。-1 は全体の設定、0 は消さない
+	Attach      string // 送る添付ファイルの種類（"*" は全部、"*,-video" は動画以外、"-" は送らない）
 }
 
-const machineCols = `host, seen_at, version, detected, tools, attachments, schedule, cleanup`
+const machineCols = `host, seen_at, version, detected, tools, attachments, schedule, cleanup, attach`
 
 func scanMachine(sc interface{ Scan(...any) error }) (Machine, error) {
 	var m Machine
 	var seen int64
 	var det string
-	err := sc.Scan(&m.Host, &seen, &m.Version, &det, &m.Tools, &m.Attachments, &m.Schedule, &m.Cleanup)
+	err := sc.Scan(&m.Host, &seen, &m.Version, &det, &m.Tools, &m.Attachments, &m.Schedule, &m.Cleanup, &m.Attach)
 	m.SeenAt = fromUnix(seen)
 	json.Unmarshal([]byte(det), &m.Detected)
 	return m, err
@@ -40,7 +41,7 @@ func scanMachine(sc interface{ Scan(...any) error }) (Machine, error) {
 func (s *Store) Machine(host string) (Machine, bool) {
 	m, err := scanMachine(s.db.QueryRow(`SELECT `+machineCols+` FROM machines WHERE host=?`, host))
 	if err != nil {
-		return Machine{Host: host, Tools: "*", Attachments: true, Cleanup: -1}, false
+		return Machine{Host: host, Tools: "*", Attachments: true, Cleanup: -1, Attach: "*"}, false
 	}
 	return m, true
 }
@@ -65,21 +66,27 @@ func (s *Store) Machines() ([]Machine, error) {
 // Report はマシンからの報告（見つけた AI・版）を残す。初めてのマシンは init の設定で作る。
 func (s *Store) Report(host, version string, det []Detected, init *Machine) error {
 	b, _ := json.Marshal(det)
-	m := Machine{Tools: "*", Attachments: true, Cleanup: -1}
+	m := Machine{Tools: "*", Attachments: true, Cleanup: -1, Attach: "*"}
 	if init != nil {
 		m = *init
 	}
-	_, err := s.db.Exec(`INSERT INTO machines (host, seen_at, version, detected, tools, attachments, schedule, cleanup) VALUES (?,?,?,?,?,?,?,?)
+	if m.Attach == "" {
+		m.Attach = "*"
+		if !m.Attachments {
+			m.Attach = "-"
+		}
+	}
+	_, err := s.db.Exec(`INSERT INTO machines (host, seen_at, version, detected, tools, attachments, schedule, cleanup, attach) VALUES (?,?,?,?,?,?,?,?,?)
 	  ON CONFLICT(host) DO UPDATE SET seen_at=excluded.seen_at, version=excluded.version, detected=excluded.detected`,
-		host, time.Now().Unix(), version, string(b), m.Tools, m.Attachments, m.Schedule, m.Cleanup)
+		host, time.Now().Unix(), version, string(b), m.Tools, m.Attachments, m.Schedule, m.Cleanup, m.Attach)
 	return err
 }
 
 // SetMachine はマシンの設定を変える（画面から）。
 func (s *Store) SetMachine(m Machine) error {
-	_, err := s.db.Exec(`INSERT INTO machines (host, tools, attachments, schedule, cleanup) VALUES (?,?,?,?,?)
-	  ON CONFLICT(host) DO UPDATE SET tools=excluded.tools, attachments=excluded.attachments, schedule=excluded.schedule, cleanup=excluded.cleanup`,
-		m.Host, m.Tools, m.Attachments, m.Schedule, m.Cleanup)
+	_, err := s.db.Exec(`INSERT INTO machines (host, tools, attachments, schedule, cleanup, attach) VALUES (?,?,?,?,?,?)
+	  ON CONFLICT(host) DO UPDATE SET tools=excluded.tools, attachments=excluded.attachments, schedule=excluded.schedule, cleanup=excluded.cleanup, attach=excluded.attach`,
+		m.Host, m.Tools, m.Attachments, m.Schedule, m.Cleanup, m.Attach)
 	return err
 }
 

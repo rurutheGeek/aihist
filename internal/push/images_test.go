@@ -12,7 +12,7 @@ func TestStripped(t *testing.T) {
 		`{"image_url":"data:image/webp;base64,` + big + `"}` + "\n" +
 		`{"source":{"type":"base64","media_type":"application/pdf","data":"` + big + `"}}` + "\n" +
 		`{"url":"data:audio/mpeg;base64,` + big + `"}` + "\n" + `{"text":"short data:image/png;base64,AAAA"}`
-	f, n, err := stripped(strings.NewReader(in))
+	f, n, err := stripped(strings.NewReader(in), "-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,5 +35,20 @@ func TestSelected(t *testing.T) {
 		if Selected(c.list, c.tool) != c.want {
 			t.Errorf("%+v", c)
 		}
+	}
+}
+
+func TestKeepKinds(t *testing.T) {
+	big := strings.Repeat("A", 500)
+	in := `{"a":"data:image/png;base64,` + big + `","b":"data:audio/mpeg;base64,` + big + `"}`
+	out := string(stripImages([]byte(in), "*,-audio"))
+	if !strings.Contains(out, "data:image/png;base64,"+big) || strings.Contains(out, "audio/mpeg;base64,"+big) {
+		t.Fatal(out)
+	}
+	if Kind("application/vnd.openxmlformats-officedocument.wordprocessingml.document") != "doc" || Kind("application/zip") != "other" {
+		t.Fatal("kind")
+	}
+	if !KeepsAll("*") || !KeepsAll("") || KeepsAll("*,-pdf") || KeepsAll("-") {
+		t.Fatal("keepsall")
 	}
 }

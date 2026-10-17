@@ -43,8 +43,9 @@
         <div class="grp">
           {{range .UploadTools}}<label class="row"><div class="rl"><span><i class="dot" style="background:{{toolColor .Tool}}"></i>{{.Label}}</span></div><div class="rc"><input class="sw" type="checkbox" name="tool" value="{{.Tool}}"{{if .On}} checked{{end}}></div></label>{{end}}
         </div>
+        <div class="gt">{{t "取り込む添付ファイル"}}</div>
         <div class="grp">
-          <label class="row"><div class="rl">{{t "添付ファイル（画像・PDF など）も取り込む"}}</div><div class="rc"><input class="sw" type="checkbox" name="attachments" value="1"{{if .UploadAttach}} checked{{end}}></div></label>
+          {{range .UploadAttach}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="attach" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
         </div>
       </form>
     </section>
@@ -66,9 +67,12 @@
           {{else}}<div class="row"><div class="rl mute">{{t "まだ報告が無い"}}</div></div>{{end}}
           <label class="row"><div class="rl">{{t "あとで見つかった AI も送る"}}</div><div class="rc"><input class="sw" type="checkbox" name="all_tools" value="1"{{if .AllTools}} checked{{end}}></div></label>
         </div>
+        <div class="gt">{{t "送る添付ファイル"}}</div>
+        <div class="grp">
+          {{range .Attach}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="attach" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
+        </div>
         <div class="gt">{{t "送信"}}</div>
         <div class="grp">
-          <label class="row"><div class="rl">{{t "添付ファイル（画像・PDF など）も送る"}}</div><div class="rc"><input class="sw" type="checkbox" name="attachments" value="1"{{if .Attachments}} checked{{end}}></div></label>
           <label class="row"><div class="rl">{{t "送るタイミングは既定に従う"}}</div><div class="rc"><input class="sw" type="checkbox" name="follow" value="1"{{if .Follow}} checked{{end}} data-toggle="own"></div></label>
           <div class="row col" data-own{{if .Follow}} hidden{{end}}><div class="rl">{{t "このマシンの送るタイミング"}}</div><div class="rc">{{template "sched" .Schedule}}</div></div>
           <div class="row"><div class="rl">{{t "手元の片付け"}}</div><div class="rc"><select name="cleanup">{{$c := .Cleanup}}{{range $.CleanupOpts2}}<option value="{{.}}"{{if eq . $c}} selected{{end}}>{{if eq . -1}}{{t "既定に従う"}}{{else if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>

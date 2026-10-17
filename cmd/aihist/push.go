@@ -102,10 +102,13 @@ func runPush(home, host string, args []string) {
 		if tools == "*" {
 			tools = ""
 		}
-		c.NoImages = !sc.Attachments && sc.Schedule != ""
+		c.Attach = sc.Attach
+		if c.Attach == "" && !sc.Attachments && sc.Schedule != "" {
+			c.Attach = "-" // 種類を分ける前のサーバー
+		}
 		// 手元で 0 にしたときだけ、サーバーの設定によらず添付ファイルを抜く
 		if cf["AIHIST_ATTACHMENTS"] == "0" || cf["AIHIST_IMAGES"] == "0" {
-			c.NoImages = true
+			c.Attach = "-"
 		}
 		days := sc.CleanupDays
 		if v, err := strconv.Atoi(cf["AIHIST_CLEANUP"]); err == nil {

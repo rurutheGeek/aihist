@@ -50,8 +50,9 @@ type Client struct {
 	Token  string
 	Host   string
 	HTTP   *http.Client
-	// NoImages は埋め込まれた画像を抜いて送る（AIHIST_IMAGES=0）
-	NoImages bool
+	// Attach は送る添付ファイルの種類（"*" は全部、"*,-video" は動画以外、"-" は送らない）。
+	// 送らない種類は、埋め込まれた中身を抜いて送る
+	Attach string
 }
 
 // upload は body を1ファイルとして原本の置き場所へ送る。
@@ -146,8 +147,8 @@ func (c *Client) Push(src Source) (int, string, error) {
 		q := url.Values{"host": {c.Host}, "tool": {src.Tool}, "path": {rel}}
 		up := &upload{f, st.Size(), st.ModTime()}
 		// Antigravity の DB は形を変えられないので、そのまま送る
-		if c.NoImages && src.Tool != antigravity.Tool {
-			t, size, err := stripped(f)
+		if !KeepsAll(c.Attach) && src.Tool != antigravity.Tool {
+			t, size, err := stripped(f, c.Attach)
 			if err != nil {
 				return err
 			}
@@ -225,8 +226,8 @@ func (c *Client) sendOpenCode(db *opencode.DB, id, rel string, mt time.Time) err
 		return err
 	}
 	var body io.Reader = f
-	if c.NoImages {
-		t, n, err := stripped(f)
+	if !KeepsAll(c.Attach) {
+		t, n, err := stripped(f, c.Attach)
 		if err != nil {
 			return err
 		}
