@@ -468,8 +468,8 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
 {{define "sidelist"}}
   {{if .Pinned}}<div class="sh">{{t "ピン留め済み"}}</div>
   {{range .Pinned}}{{template "row" (dict "c" . "root" $)}}{{end}}{{end}}
-  <div class="sh rec"><span>{{t "最近の項目"}}</span>
-    <button class="icon-btn fbtn{{if .Pills}} on{{end}}" type="button" data-fmenu aria-label="{{t "最近の項目を絞り込んでグループ化"}}" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+  <div class="sh rec"><span>{{t "会話"}}</span>
+    <button class="icon-btn fbtn{{if .Pills}} on{{end}}" type="button" data-fmenu aria-label="{{t "会話を絞り込んでグループ化"}}" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
     <div class="fmenu" role="menu" hidden>
       {{range .Menu}}<div class="fi" role="menuitem" aria-haspopup="menu" tabindex="-1"><span>{{t .Label}}</span><small>{{.Value}}</small><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>
         <div class="fsub" role="menu">{{$multi := .Multi}}{{range .Items}}<a role="menuitem{{if $multi}}checkbox{{else}}radio{{end}}" aria-checked="{{.On}}" href="{{.Href}}" data-q{{with .Title}} title="{{.}}"{{end}}><span class="ck">{{if .On}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>{{end}}</span>{{with .Color}}<i style="background:{{.}}"></i>{{end}}<span class="fl">{{.Label}}</span>{{if $multi}}<small>{{.Count}}</small>{{end}}</a>{{end}}</div>
