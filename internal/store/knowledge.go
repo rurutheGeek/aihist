@@ -117,6 +117,17 @@ func (s *Store) Organized(id int64, model string) bool {
 	return m == model && st == stamp && st != ""
 }
 
+// Stale は会話 id にタグ・要約を付けたあと、続きが足されたか（会話の版が変わったか）。
+func (s *Store) Stale(id int64) bool {
+	t, h, e, stamp, err := s.key(id)
+	if err != nil {
+		return false
+	}
+	var st string
+	s.db.QueryRow(`SELECT ai_stamp FROM conv_meta WHERE tool=? AND host=? AND external_id=?`, t, h, e).Scan(&st)
+	return st != "" && st != stamp
+}
+
 // AIInfo は会話 id をまとめたモデルと日時（まとめていなければ空）。
 func (s *Store) AIInfo(id int64) (model string, at time.Time) {
 	t, h, e, _, err := s.key(id)

@@ -57,7 +57,7 @@ You can also drop files on the **Upload** page: Claude Code `.jsonl`, Codex `rol
 Adds tags and a summary to chats, and drafts "knowledge" — short write-ups of problems that took real effort to solve. Nothing runs automatically.
 
 - **API**: enter an OpenAI-compatible endpoint, key, and model in **Settings → AI**. It's called only when you press ✦ on a chat, "Organize with AI" on selected chats, or the option on the upload page.
-- **MCP**: connect your own AI (Claude Code and others) to `<server>/api/mcp` with a token (**Settings → AI → MCP** shows the command and an example prompt). Your AI reads the chats and writes the results back.
+- **MCP**: connect your own AI (Claude Code and others) to `<server>/api/mcp` with a token (**Settings → AI → MCP** shows the command and an example prompt). Your AI reads the chats and writes the results back. It can also delete, archive, pin, rename, and retag chats when you ask.
 - Tags are yours (**Settings → Tags**, with templates). Each chat is read in its own requests; long chats are read in pages with running notes.
 - Knowledge is kept only when the AI's quoted evidence of the struggle appears verbatim in the chat and its score is 4 or more. Drafts warn about machine names, folder names, URLs, and IPs; you decide what to register.
 - **Profile**: turn on "Add to it when organizing with AI" to keep adding one-line notes about who you are, taken from what you plainly say about yourself (not drafts, hypotheticals, other people, or one-off requests). Write what not to extract in "Instructions for the AI". Edit any line, copy it as Markdown for other AIs, or read it over MCP with `get_profile`.
