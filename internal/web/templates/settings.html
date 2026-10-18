@@ -59,15 +59,23 @@
     </section>
     <section data-sec="machines">
       <h1>{{t "マシン"}}</h1>
+      <form class="grp" method="post" action="/settings/machines">
+        <div class="row"><div class="rl"><input class="inp" name="name" placeholder="{{t "マシン名"}}" required autocomplete="off" pattern="[A-Za-z0-9._\-]+"></div><div class="rc"><button class="btn pri">{{t "マシンを追加"}}</button></div></div>
+      </form>
       <div class="grp">
-        {{range .Machines}}<a class="row link" href="/settings/machines/{{.Host}}" data-go="m:{{.Host}}"><div class="rl"><b>{{.Host}}</b><small>{{if .SeenAt.IsZero}}{{t "未接続"}}{{else}}{{t "最後に連絡"}} {{when .SeenAt}}{{end}}</small></div><div class="rc"><span class="mute">{{with .Next}}{{t "次に送る"}} {{index . 0}}{{end}}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></div></a>
-        {{else}}<div class="row"><div class="rl mute">{{t "まだマシンが無い"}}</div><div class="rc"><a class="btn" href="/settings/tokens" data-go="tokens">{{t "マシンを追加"}}</a></div></div>{{end}}
+        {{range .Machines}}<a class="row link" href="/settings/machines/{{.Host}}" data-go="m:{{.Host}}"><div class="rl"><b>{{.Host}}</b><small>{{if .SeenAt.IsZero}}{{t "未接続"}}{{else}}{{t "最終接続"}} {{when .SeenAt}}{{end}}</small></div><div class="rc"><span class="mute">{{with .Next}}{{t "次に送る"}} {{index . 0}}{{end}}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></div></a>
+        {{else}}<div class="row"><div class="rl mute">{{t "まだマシンが無い"}}</div></div>{{end}}
       </div>
 
     </section>
     {{range .Machines}}<section data-sec="m:{{.Host}}" data-parent="machines">
       <a class="back" href="/settings/machines" data-go="machines"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg>{{t "マシン"}}</a>
       <h1>{{.Host}}</h1>
+      {{if eq $.NewHost .Host}}<div class="gt">{{t "インストール"}}</div>
+      <div class="grp hl">
+        {{range $.NewCmds}}<div class="row col"><div class="rl">{{.OS}}</div><div class="rc cmdl"><code>{{.Install}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>{{end}}
+        <div class="row"><div class="rl"><small class="warn">{{t "このコマンドは今しか表示されない"}}</small></div></div>
+      </div>{{end}}
       <form method="post" action="/settings/machines/{{.Host}}" data-auto>
         <div class="gt">{{t "送る AI"}}</div>
         <div class="grp">
@@ -93,33 +101,34 @@
       </form>
       <div class="gt">{{t "情報"}}</div>
       <div class="grp">
-        <div class="row"><div class="rl">{{t "最後に連絡"}}</div><div class="rc mute">{{if .SeenAt.IsZero}}{{t "未接続"}}{{else}}{{when .SeenAt}}{{end}}</div></div>
+        <div class="row"><div class="rl">{{t "最終接続"}}</div><div class="rc mute">{{if .SeenAt.IsZero}}{{t "未接続"}}{{else}}{{when .SeenAt}}{{end}}</div></div>
         <div class="row"><div class="rl">{{t "版"}}</div><div class="rc mute">{{or .Version "—"}}</div></div>
         <div class="row"><div class="rl">{{t "次に送る"}}</div><div class="rc mute">{{with .Next}}{{index . 0}}{{else}}—{{end}}</div></div>
+      </div>
+      <div class="gt">{{t "インストール"}}</div>
+      <form class="grp" method="post" action="/settings/machines/{{.Host}}/token" data-confirm="{{t "作り直すと前のコマンドは使えなくなる。このマシンでインストールし直す必要がある。作り直す？"}}">
+        <div class="row"><div class="rl">{{t "インストールのコマンド"}}</div><div class="rc"><button class="btn">{{t "作り直す"}}</button></div></div>
+      </form>
+      <div class="gt">{{t "アンインストール"}}</div>
+      <div class="grp">
+        {{range $.Cmds}}<div class="row col"><div class="rl">{{.OS}}</div><div class="rc cmdl"><code>{{.Uninstall}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>{{end}}
       </div>
       <form class="grp danger" method="post" action="/settings/machines/{{.Host}}/delete" data-confirm="{{t "このマシンを一覧から消す？"}}">
         <div class="row"><div class="rl">{{t "このマシンを一覧から消す"}}</div><div class="rc"><button class="btn red">{{t "削除"}}</button></div></div>
       </form>
     </section>{{end}}
     <section data-sec="tokens">
-      <h1>{{t "トークン"}}</h1>
-      {{if .NewToken}}<div class="grp hl">
+      <h1>{{t "API トークン"}}</h1>
+      {{if and .NewToken (not .NewHost)}}<div class="grp hl">
         <div class="row"><div class="rl"><b>{{.NewName}}</b><small class="warn">{{t "このトークンは今しか表示されない"}}</small></div><div class="rc"><code class="tk">{{.NewToken}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>
-        {{range .NewCmds}}<div class="row col"><div class="rl">{{.OS}}</div><div class="rc cmdl"><code>{{.Install}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>{{end}}
       </div>{{end}}
       <form class="grp" method="post" action="/settings/tokens">
-        <div class="row"><div class="rl"><input class="inp" name="name" placeholder="{{t "マシン名"}}" required autocomplete="off"></div><div class="rc"><button class="btn pri">{{t "マシンを追加"}}</button></div></div>
+        <div class="row"><div class="rl"><input class="inp" name="name" placeholder="{{t "名前（Antigravity など）"}}" required autocomplete="off"></div><div class="rc"><button class="btn pri">{{t "作成"}}</button></div></div>
       </form>
       <div class="grp">
         {{if .EnvToken}}<div class="row"><div class="rl">AIHIST_TOKEN<small>{{t "環境変数"}}</small></div></div>{{end}}
-        {{range .Tokens}}<div class="row"><div class="rl">{{.Name}}<small>{{t "作成"}} {{when .CreatedAt}} · {{t "最後に使った"}} {{if .UsedAt.IsZero}}{{t "未使用"}}{{else}}{{when .UsedAt}}{{end}}</small></div><div class="rc"><form method="post" action="/settings/tokens/{{.ID}}/delete" data-confirm="{{t "このトークンを削除する？"}}"><button class="btn red">{{t "削除"}}</button></form></div></div>{{end}}
+        {{range .Tokens}}{{if not .Machine}}<div class="row"><div class="rl">{{.Name}}<small>{{t "作成日"}} {{when .CreatedAt}} · {{if .UsedAt.IsZero}}{{t "未使用"}}{{else}}{{t "最終利用"}} {{when .UsedAt}}{{end}}</small></div><div class="rc"><form method="post" action="/settings/tokens/{{.ID}}/delete" data-confirm="{{t "このトークンを削除する？"}}"><button class="btn red">{{t "削除"}}</button></form></div></div>{{end}}{{end}}
       </div>
-      <div class="gt">{{t "消す"}}</div>
-      <div class="grp">
-        {{range .Cmds}}<div class="row col"><div class="rl">{{.OS}}</div><div class="rc cmdl"><code>{{.Uninstall}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>{{end}}
-        <div class="row"><div class="rl">{{t "スクリプト"}}</div><div class="rc dl">{{range .Cmds}}<a class="btn" href="{{.Script}}" download="{{.Name}}">{{.Name}}</a><a class="btn" href="{{.UScript}}" download="{{.UName}}">{{.UName}}</a>{{end}}</div></div>
-      </div>
-
     </section>
     <section data-sec="ai">
       <h1>AI</h1>

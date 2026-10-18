@@ -15,12 +15,17 @@ The image is `ghcr.io/ruruthegeek/aihist` (linux/amd64, arm64). Data lives in `/
 
 ## Send from each machine
 
-Open **Settings** (bottom left), enter a machine name and press **Add machine**. You get a token (shown once) and a one-line command:
+In **Settings → Machines**, enter a machine name and press **Add machine** to get a one-line install command (shown once; use **Regenerate** on the machine's page if you need it again — the old command stops working). It sends once right away, then on the schedule from Settings. Messages are in Japanese on Japanese systems and English otherwise.
 
 ```bash
-curl -fsSL https://<server>/api/install.sh | AIHIST_TOKEN=<token> sh      # Linux, macOS, WSL
-$env:AIHIST_TOKEN="<token>"; irm https://<server>/api/install.ps1 | iex  # Windows
+curl -fsSL https://<server>/api/install.sh | AIHIST_TOKEN=<token> AIHIST_HOST=<name> sh   # Linux, macOS, WSL
 ```
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://<server>/api/install.ps1 | iex; Install-Aihist -Token <token> -Name <name>"
+```
+
+The Windows line works in both Command Prompt and PowerShell. Tokens for AIs (MCP) are made in **Settings → API tokens**.
 
 Nothing stays resident. The OS timer (systemd user timer or cron, launchd, Task Scheduler) wakes `aihist push -tick` every minute; it exits right away unless it is time to send. When to send, which AIs, attachments, what to remove before sending, and stored data cleanup are chosen in **Settings** (bottom left), globally and per machine; machines pick up changes within a few minutes. Only changed files are sent; a typical run takes a few seconds and ~10 MB of memory. Before sending, the client compares itself with the binary the server distributes and updates itself, so supporting a new tool only needs a server update.
 
@@ -42,7 +47,7 @@ Uninstall removes the binary, the config and the timer (conversations stay on th
 
 ```bash
 curl -fsSL https://<server>/api/uninstall.sh | sh
-irm https://<server>/api/uninstall.ps1 | iex     # Windows
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://<server>/api/uninstall.ps1 | iex"   # Windows
 ```
 
 You can also drop files on the **Upload** page: Claude Code `.jsonl`, Codex `rollout-*.jsonl`, Antigravity `.db`, and the ChatGPT / claude.ai export `.zip`.

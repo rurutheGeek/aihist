@@ -6,8 +6,12 @@ case "$(uname -s)" in
   Darwin) conf="$HOME/Library/Application Support/aihist" ;;
   *) conf="${XDG_CONFIG_HOME:-$HOME/.config}/aihist" ;;
 esac
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in ja*) lang=ja ;; *) lang=en ;; esac
 list="$conf/installed"
-[ -f "$list" ] || { echo "入っていない（$list が無い）"; exit 0; }
+if [ ! -f "$list" ]; then
+  if [ "$lang" = ja ]; then echo "aihist は入っていない（$list が無い）"; else echo "aihist isn't installed ($list not found)"; fi
+  exit 0
+fi
 while read -r kind path; do
   case "$kind" in
     launchd)
@@ -26,4 +30,4 @@ while read -r kind path; do
 done < "$list"
 systemctl --user daemon-reload 2>/dev/null
 rm -rf "$conf"
-echo "aihist を消した"
+if [ "$lang" = ja ]; then echo "aihist をアンインストールした。送った会話はサーバーに残っている。"; else echo "Uninstalled aihist. Chats already sent stay on the server."; fi

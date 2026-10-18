@@ -2,6 +2,7 @@
 # aihist を入れて、このマシンの会話を送る。常駐はせず、タイマーが1分ごとに起こし、
 # サーバーの設定の画面で決めた時刻のときだけ送る（それ以外はすぐ終わる）。
 #   curl -fsSL {{SERVER}}/api/install.sh | AIHIST_TOKEN=<トークン> sh
+# メッセージは LANG が ja なら日本語、それ以外は英語
 # AIHIST_EVERY  0 なら今1回送るだけで、タイマーを置かない
 # AIHIST_HOST   このマシンの名前（既定はホスト名。WSL では -wsl を付ける）
 # AIHIST_BIN_DIR 実行ファイルの置き場所（既定 ~/.local/bin）
@@ -11,16 +12,19 @@
 # 消すとき: curl -fsSL {{SERVER}}/api/uninstall.sh | sh （手元の ~/.config/aihist/uninstall.sh でもよい）
 set -eu
 server='{{SERVER}}'
-: "${AIHIST_TOKEN:?AIHIST_TOKEN が要る}"
+# メッセージは英語で、日本語の環境では日本語で
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in ja*) lang=ja ;; *) lang=en ;; esac
+m() { if [ "$lang" = ja ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+[ -n "${AIHIST_TOKEN:-}" ] || { m 'AIHIST_TOKEN is required' 'AIHIST_TOKEN が要る' >&2; echo >&2; exit 1; }
 case "$(uname -s)" in
   Linux) os=linux; conf="${XDG_CONFIG_HOME:-$HOME/.config}/aihist" ;;
   Darwin) os=darwin; conf="$HOME/Library/Application Support/aihist" ;;
-  *) echo "対応していない OS: $(uname -s)" >&2; exit 1 ;;
+  *) echo "$(m 'unsupported OS' '対応していない OS'): $(uname -s)" >&2; exit 1 ;;
 esac
 case "$(uname -m)" in
   x86_64 | amd64) arch=amd64 ;;
   aarch64 | arm64) arch=arm64 ;;
-  *) echo "対応していない CPU: $(uname -m)" >&2; exit 1 ;;
+  *) echo "$(m 'unsupported CPU' '対応していない CPU'): $(uname -m)" >&2; exit 1 ;;
 esac
 timer=1
 [ "${AIHIST_EVERY:-}" = 0 ] && timer=0
@@ -32,6 +36,7 @@ if grep -qi microsoft /proc/version 2>/dev/null && [ -z "${AIHIST_HOST:-}" ]; th
 fi
 
 mkdir -p "$bindir" "$conf"
+m 'Downloading aihist...' 'aihist をダウンロード中...'; echo
 tmp="$bindir/.aihist.$$"
 curl -fsSL -H "Authorization: Bearer $AIHIST_TOKEN" -o "$tmp" "$server/api/bin/aihist-$os-$arch"
 chmod +x "$tmp"
@@ -39,14 +44,14 @@ mv "$tmp" "$bin"
 # 送る AI を選ぶ（端末があるときだけ聞く。Enter は見つかったもの全部）
 tools="${AIHIST_TOOLS-}"
 if [ -z "${AIHIST_TOOLS+x}" ] && [ -r /dev/tty ] && found=$("$bin" detect) && [ -n "$found" ]; then
-  echo "このマシンにある AI の記録:"
-  echo "$found" | awk -F'\t' '{
+  m 'AI histories on this machine:' 'このマシンにある AI の記録:'; echo
+  echo "$found" | awk -F'\t' -v files="$(m files ファイル)" '{
     l = $1
     if (l == "claude_code") l = "Claude Code"; else if (l == "codex") l = "Codex"; else if (l == "antigravity") l = "Antigravity"; else if (l == "opencode") l = "OpenCode"
     b = $3; split("B KB MB GB TB", u, " "); i = 1; while (b >= 1024 && i < 5) { b /= 1024; i++ }
-    printf "  %d) %-12s %6d ファイル %8.1f %s\n", NR, l, $2, b, u[i]
+    printf "  %d) %-12s %6d %s %8.1f %s\n", NR, l, $2, files, b, u[i]
   }'
-  printf '送る番号（例 1,3。Enter で全部）: '
+  printf '%s: ' "$(m 'Which to send (e.g. 1,3; Enter for all)' '送る番号（例 1,3。Enter で全部）')"
   read -r ans < /dev/tty || ans=""
   if [ -n "$ans" ]; then
     tools=$(echo "$found" | awk -F'\t' -v pick=",$(echo "$ans" | tr -d ' ')," 'index(pick, "," NR ",") { printf "%s%s", sep, $1; sep = "," }')
@@ -55,13 +60,13 @@ fi
 # 添付ファイル（画像など）も送るか（Enter は送る）
 attach="${AIHIST_ATTACHMENTS:-1}"
 if [ -z "${AIHIST_ATTACHMENTS+x}" ] && [ -r /dev/tty ]; then
-  printf '添付ファイル（画像など）も送る？ [Y/n]: '
+  printf '%s: ' "$(m 'Send attachments (images, etc.) too? [Y/n]' '添付ファイル（画像など）も送る？ [Y/n]')"
   read -r ans < /dev/tty || ans=""
   case "$ans" in n* | N*) attach=0 ;; esac
 fi
 (
   umask 077
-  printf 'AIHIST_SERVER=%s\nAIHIST_TOKEN=%s\nAIHIST_HOST=%s\n' "$server" "$AIHIST_TOKEN" "$host" > "$conf/config"
+  printf 'AIHIST_SERVER=%s\nAIHIST_TOKEN=%s\nAIHIST_HOST=%s\nAIHIST_LANG=%s\n' "$server" "$AIHIST_TOKEN" "$host" "$lang" > "$conf/config"
 )
 curl -fsSL -o "$conf/uninstall.sh" "$server/api/uninstall.sh"
 chmod +x "$conf/uninstall.sh"
@@ -89,7 +94,6 @@ PLIST
     launchctl bootout "gui/$(id -u)/aihist.push" 2>/dev/null || true
     launchctl bootstrap "gui/$(id -u)" "$plist"
     echo "launchd $plist" >> "$conf/installed"
-    echo "launchd に置いた（送る時刻はサーバーの設定の画面で決める）"
   elif systemctl --user show-environment >/dev/null 2>&1; then
     units="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
     mkdir -p "$units"
@@ -121,16 +125,21 @@ UNIT
     if command -v loginctl >/dev/null 2>&1 && [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)" = no ]; then
       loginctl enable-linger 2>/dev/null && echo "linger" >> "$conf/installed" || true
     fi
-    echo "systemd のタイマーに置いた（送る時刻はサーバーの設定の画面で決める）"
   elif command -v crontab >/dev/null 2>&1; then
     sched="* * * * *"
     cmd="$bin push -tick"
     command -v flock >/dev/null 2>&1 && cmd="flock -n '$conf/lock' $cmd"
     { crontab -l 2>/dev/null | grep -v '# aihist-push$' || true; echo "$sched $cmd >/dev/null 2>&1 # aihist-push"; } | crontab -
     echo "cron" >> "$conf/installed"
-    echo "cron に置いた（送る時刻はサーバーの設定の画面で決める）"
   else
-    echo "タイマーを置けない（systemd --user も cron も無い）。今1回だけ送る" >&2
+    m "Can't set up a timer (no systemd --user or cron). Sending once now." 'タイマーを設定できない（systemd --user も cron も無い）。今1回だけ送る。' >&2; echo >&2
+    timer=0
   fi
 fi
-"$bin" push -init-tools "${tools:-*}" -init-attachments "$attach"
+m "Installed as $host. Sending now..." "$host としてインストールした。今から送る..."; echo
+AIHIST_LANG=$lang "$bin" push -init-tools "${tools:-*}" -init-attachments "$attach"
+if [ "$timer" = 1 ]; then
+  m 'Done. aihist will keep sending on the schedule set in Settings on the server.' '完了。この後はサーバーの設定の送信タイミングで自動的に送る。'; echo
+else
+  m 'Done.' '完了。'; echo
+fi

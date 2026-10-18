@@ -113,7 +113,7 @@ func (s *Server) apiImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"Result": res.String()})
+	json.NewEncoder(w).Encode(map[string]any{"Result": res.String(), "Imported": res.Imported, "Skipped": res.Skipped})
 }
 
 func (s *Server) ingest(host, tool string) (ingest.Result, error) {

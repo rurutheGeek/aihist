@@ -39,7 +39,7 @@ func (c *Client) Restore(home, id string, force bool) ([]string, string, error) 
 		}
 	}
 	if len(picked) == 0 {
-		return nil, "", fmt.Errorf("%s の原本がサーバーに無い（%s/%s）", ext, conv.Host, conv.Tool)
+		return nil, "", fmt.Errorf(T("%s: the original isn't on the server (%s/%s)", "%s の原本がサーバーに無い（%s/%s）"), ext, conv.Host, conv.Tool)
 	}
 	var done []string
 	switch conv.Tool {
@@ -105,7 +105,7 @@ func (c *Client) Restore(home, id string, force bool) ([]string, string, error) 
 		}
 		return []string{db}, fmt.Sprintf("cd %s && opencode --session %s", conv.Cwd, ext), nil
 	}
-	return nil, "", fmt.Errorf("%s は戻せない", conv.Tool)
+	return nil, "", fmt.Errorf(T("%s can't be restored", "%s は戻せない"), conv.Tool)
 }
 
 func belongs(tool, ext, rel string) bool {
@@ -167,7 +167,7 @@ func (c *Client) fetch(conv store.ConvRow, rel, dst string, force bool) error {
 		if st.Size() == res.ContentLength {
 			return nil
 		}
-		return fmt.Errorf("%s が手元にあり中身が違う（上書きするなら -force）", dst)
+		return fmt.Errorf(T("%s already exists and differs (use -force to overwrite)", "%s が手元にあり中身が違う（上書きするなら -force）"), dst)
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
 		return err

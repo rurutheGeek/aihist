@@ -12,6 +12,7 @@ import (
 type Token struct {
 	ID        int64
 	Name      string
+	Machine   string // マシンのトークンならそのマシン名（空は AI などからつなぐトークン）
 	CreatedAt time.Time
 	UsedAt    time.Time
 }
@@ -22,18 +23,31 @@ func tokenHash(plain string) string {
 }
 
 // CreateToken は新しい合言葉を作り、平文を返す（平文はこのときしか分からない）。
-func (s *Store) CreateToken(name string) (string, error) {
+func (s *Store) CreateToken(name string) (string, error) { return s.createToken(name, "") }
+
+// MachineToken はマシン host のトークンを作り直す（前のトークンは使えなくなる）。マシンが無ければ一覧に足す。
+func (s *Store) MachineToken(host string) (string, error) {
+	if _, err := s.db.Exec(`INSERT OR IGNORE INTO machines (host) VALUES (?)`, host); err != nil {
+		return "", err
+	}
+	if _, err := s.db.Exec(`DELETE FROM tokens WHERE machine=?`, host); err != nil {
+		return "", err
+	}
+	return s.createToken(host, host)
+}
+
+func (s *Store) createToken(name, machine string) (string, error) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
 	plain := "aih_" + base64.RawURLEncoding.EncodeToString(b)
-	_, err := s.db.Exec(`INSERT INTO tokens (name, hash, created_at) VALUES (?,?,?)`, name, tokenHash(plain), time.Now().Unix())
+	_, err := s.db.Exec(`INSERT INTO tokens (name, machine, hash, created_at) VALUES (?,?,?,?)`, name, machine, tokenHash(plain), time.Now().Unix())
 	return plain, err
 }
 
 func (s *Store) Tokens() ([]Token, error) {
-	rows, err := s.db.Query(`SELECT id, name, created_at, used_at FROM tokens ORDER BY id`)
+	rows, err := s.db.Query(`SELECT id, name, machine, created_at, used_at FROM tokens ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +56,7 @@ func (s *Store) Tokens() ([]Token, error) {
 	for rows.Next() {
 		var t Token
 		var c, u int64
-		if err := rows.Scan(&t.ID, &t.Name, &c, &u); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.Machine, &c, &u); err != nil {
 			return nil, err
 		}
 		t.CreatedAt, t.UsedAt = fromUnix(c), fromUnix(u)

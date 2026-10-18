@@ -737,7 +737,7 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
         if(f.dataset.confirm&&!confirm(f.dataset.confirm))return;
         var sub=root.querySelector('.sx').dataset.sub;
         fetch(f.action,{method:'POST',headers:{'X-Panel':'1'},body:new URLSearchParams(new FormData(f))}).then(function(r){return r.text()}).then(function(t){
-          load(f.action.indexOf('/tokens')>=0?'tokens':(f.action.indexOf('/delete')>=0?'machines':sub),t);
+          var ms=t.match(/data-sub="([^"]*)"/); load(ms?ms[1]:sub,t);
         });
       });
     });

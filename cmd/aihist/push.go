@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"flag"
 	"log"
 	"os"
@@ -30,6 +31,10 @@ func runPush(home, host string, args []string) {
 	initTools := fs.String("init-tools", "", "初めての報告で、送る AI（カンマ区切り）")
 	initAttach := fs.String("init-attachments", "", "初めての報告で、添付ファイルも送るか（1・0）")
 	fs.Parse(args)
+	// 手で動かしたときは日時を付けない（タイマーからは付ける）
+	if !*tick {
+		log.SetFlags(0)
+	}
 	if *server == "" {
 		usage()
 	}
@@ -49,7 +54,7 @@ func runPush(home, host string, args []string) {
 			}
 		}
 		if got, err := c.Report(home, version, init); err != nil {
-			log.Printf("設定を受け取れない: %v", err)
+			log.Printf(m("can't get settings from the server: %v", "サーバーの設定を取れない: %v"), err)
 		} else {
 			st.Config, st.FetchedAt = got, now
 		}
@@ -66,7 +71,7 @@ func runPush(home, host string, args []string) {
 	if os.Getenv("AIHIST_UPDATED") == "" {
 		if unlock = push.Lock(confDir); unlock == nil {
 			if !*tick {
-				log.Printf("ほかの aihist が送っている途中")
+				log.Print(m("another aihist is already sending", "別の aihist が送信中"))
 			}
 			return
 		}
@@ -76,10 +81,10 @@ func runPush(home, host string, args []string) {
 	// サーバーが配る実行ファイルに合わせて自分を新しくし、新しい方で送り直す（AIHIST_AUTO_UPDATE=0 で止める）
 	if cf["AIHIST_AUTO_UPDATE"] != "0" && os.Getenv("AIHIST_UPDATED") == "" {
 		if exe, err := c.Update(); err != nil {
-			log.Printf("更新: %v", err)
+			log.Printf(m("update failed: %v", "更新に失敗: %v"), err)
 		} else if exe != "" {
 			st.Save(confDir)
-			log.Printf("新しい aihist に入れ替えた")
+			log.Print(m("updated aihist", "aihist を更新した"))
 			cmd := exec.Command(exe, os.Args[1:]...)
 			cmd.Stdout, cmd.Stderr, cmd.Env = os.Stdout, os.Stderr, append(os.Environ(), "AIHIST_UPDATED=1")
 			if err := cmd.Run(); err != nil {
@@ -110,6 +115,7 @@ func runPush(home, host string, args []string) {
 		if cf["AIHIST_ATTACHMENTS"] == "0" || cf["AIHIST_IMAGES"] == "0" {
 			c.Attach = "-"
 		}
+		sentAny := false
 		days := sc.CleanupDays
 		if v, err := strconv.Atoi(cf["AIHIST_CLEANUP"]); err == nil {
 			days = v
@@ -124,20 +130,25 @@ func runPush(home, host string, args []string) {
 				log.Printf("%s: %v", src.Tool, err)
 				continue
 			case n > 0:
-				log.Printf("%s: %d ファイル送信、%s", src.Tool, n, res)
+				log.Printf(m("%s: sent %d files (%s)", "%s: %d ファイル送信（%s）"), src.Tool, n, imported(res))
+				sentAny = true
 			}
 			if n, size, err := c.Cleanup(src, days); err != nil {
-				log.Printf("%s: 片付け: %v", src.Tool, err)
+				log.Printf(m("%s: cleanup failed: %v", "%s: クリーンアップに失敗: %v"), src.Tool, err)
 			} else if n > 0 {
-				log.Printf("%s: %d 日より前の %d ファイル（%.1f MB）を手元から消した", src.Tool, days, n, float64(size)/(1<<20))
+				log.Printf(m("%s: deleted %d local files older than %d days (%.1f MB)", "%s: %[3]d 日より前の %[2]d ファイルを削除（%.1f MB）"), src.Tool, n, days, float64(size)/(1<<20))
 			}
 		}
 		if push.Selected(tools, "opencode") {
 			if n, res, err := c.PushOpenCode(push.OpenCodeDB(home)); err != nil {
 				log.Printf("opencode: %v", err)
 			} else if n > 0 {
-				log.Printf("opencode: %d 会話送信、%s", n, res)
+				log.Printf(m("opencode: sent %d chats (%s)", "opencode: %d 会話送信（%s）"), n, imported(res))
+				sentAny = true
 			}
+		}
+		if !*tick && !sentAny {
+			log.Print(m("nothing new to send", "送るものは無い"))
 		}
 		st.LastRun = time.Now()
 		st.Save(confDir)
@@ -148,11 +159,19 @@ func runPush(home, host string, args []string) {
 	}
 }
 
+// imported は取り込みの結果（サーバーが返す件数）を端末の言語で。
+func imported(r push.Imported) string {
+	if r.Imported < 0 {
+		return r.Text // 件数を返さない古いサーバー
+	}
+	return fmt.Sprintf(m("%d imported, %d unchanged", "取り込み %d 件、変更なし %d 件"), r.Imported, r.Skipped)
+}
+
 // due は予定の時刻が来たか。予定が読めないときは送らない。
 func due(st push.State, now time.Time) bool {
 	spec, err := sched.Parse(st.Config.Schedule)
 	if err != nil {
-		log.Printf("予定が読めない: %v", err)
+		log.Printf(m("can't read the schedule: %v", "送信予定を読めない: %v"), err)
 		return false
 	}
 	loc := time.Local

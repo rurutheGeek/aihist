@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -23,16 +25,16 @@ type cmdSet struct {
 	OS, Install, Uninstall, Script, Name, UScript, UName string
 }
 
-// commands は入れる・消すコマンド。tok が空なら入れるコマンドは出さない。
-func commands(origin, tok string) []cmdSet {
+// commands は入れる・消すコマンド。host はマシン名（サーバーでの名前）。
+func commands(origin, tok, host string) []cmdSet {
 	return []cmdSet{
 		{OS: "Linux・macOS・WSL",
-			Install:   "curl -fsSL " + origin + "/api/install.sh | AIHIST_TOKEN=" + tok + " sh",
+			Install:   "curl -fsSL " + origin + "/api/install.sh | AIHIST_TOKEN=" + tok + " AIHIST_HOST=" + host + " sh",
 			Uninstall: "curl -fsSL " + origin + "/api/uninstall.sh | sh",
 			Script:    "/api/install.sh", Name: "install.sh", UScript: "/api/uninstall.sh", UName: "uninstall.sh"},
 		{OS: "Windows",
-			Install:   `$env:AIHIST_TOKEN="` + tok + `"; irm ` + origin + "/api/install.ps1 | iex",
-			Uninstall: "irm " + origin + "/api/uninstall.ps1 | iex",
+			Install:   `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm ` + origin + `/api/install.ps1 | iex; Install-Aihist -Token ` + tok + ` -Name ` + host + `"`,
+			Uninstall: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm ` + origin + `/api/uninstall.ps1 | iex"`,
 			Script:    "/api/install.ps1", Name: "install.ps1", UScript: "/api/uninstall.ps1", UName: "uninstall.ps1"},
 	}
 }
@@ -119,7 +121,7 @@ func humanBytes(n int64) string {
 // settings は設定の画面（マシンから送る・容量・言語）。
 // 設定の画面の項目（左の一覧の順）。
 var sections = []struct{ Key, Label string }{
-	{"general", "一般"}, {"sending", "送信"}, {"upload", "アップロード"}, {"machines", "マシン"}, {"tokens", "トークン"}, {"ai", "AI"}, {"tags", "タグ"}, {"storage", "容量"},
+	{"general", "一般"}, {"sending", "送信"}, {"upload", "アップロード"}, {"machines", "マシン"}, {"tokens", "API トークン"}, {"ai", "AI"}, {"tags", "タグ"}, {"storage", "容量"},
 }
 
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +144,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 		return
 	}
 	sec := r.PathValue("section")
-	if newTok != "" {
+	if newTok != "" && r.Context().Value(newMachineKey{}) == nil {
 		sec = "tokens"
 	}
 	if sec == "" {
@@ -152,14 +154,20 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	if host := r.PathValue("host"); host != "" {
 		sec = "m:" + host
 	}
+	if h, ok := r.Context().Value(newMachineKey{}).(string); ok {
+		sec = "m:" + h
+		d["NewHost"], d["NewCmds"] = h, commands(s.origin(r), newTok, h)
+	}
 	d["Sub"] = sec
 	toks, _ := s.st.Tokens()
 	d["Tokens"], d["EnvToken"] = toks, s.token != ""
 	d["NewName"], d["NewToken"] = newName, newTok
 	if newTok != "" {
-		d["NewCmds"] = commands(s.origin(r), newTok)
+		if d["NewHost"] == nil {
+			d["NewCmds"] = commands(s.origin(r), newTok, "")
+		}
 	}
-	d["Cmds"] = commands(s.origin(r), "")
+	d["Cmds"] = commands(s.origin(r), "", "")
 	d["Usage"], d["Page"], d["Deleted"] = s.usage(), "settings", s.st.Deleted()
 	days, _ := strconv.Atoi(s.st.Setting("cleanup_days", "0"))
 	d["Cleanup"], d["CleanupOpts"] = days, []int{0, 7, 14, 30, 90}
@@ -366,3 +374,30 @@ func (s *Server) forgetDeleted(w http.ResponseWriter, r *http.Request) {
 	s.st.ForgetDeleted()
 	done(w, r, "/settings/storage")
 }
+
+type newMachineKey struct{}
+
+// addMachine はマシンを一覧に足してトークンを作り、入れるコマンドを出す（コマンドはこのときだけ見える）。
+func (s *Server) addMachine(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	host := r.PathValue("host")
+	if host == "" {
+		host = strings.ToLower(strings.TrimSpace(r.FormValue("name")))
+	}
+	if !machineName.MatchString(host) {
+		http.Error(w, tr(lang(r), "マシン名は英数字と . _ - で"), 400)
+		return
+	}
+	tok, err := s.st.MachineToken(host)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	r = r.WithContext(context.WithValue(r.Context(), newMachineKey{}, host))
+	s.renderSettings(w, r, host, tok)
+}
+
+var machineName = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)

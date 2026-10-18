@@ -103,25 +103,38 @@ func (c *Client) getJSON(p string, q url.Values, v any) error {
 	return json.NewDecoder(res.Body).Decode(v)
 }
 
-func (c *Client) importNow(tool string) (string, error) {
+// Imported はサーバーの取り込みの結果。古いサーバーは件数を返さない（Imported が -1 で Text だけ）。
+type Imported struct {
+	Imported, Skipped int
+	Text              string
+}
+
+func (c *Client) importNow(tool string) (Imported, error) {
 	res, err := c.req("POST", "/api/import", url.Values{"host": {c.Host}, "tool": {tool}}, nil)
 	if err != nil {
-		return "", err
+		return Imported{}, err
 	}
 	defer res.Body.Close()
-	var out struct{ Result string }
+	out := struct {
+		Result            string
+		Imported, Skipped *int
+	}{}
 	json.NewDecoder(res.Body).Decode(&out)
-	return out.Result, nil
+	r := Imported{Imported: -1, Text: out.Result}
+	if out.Imported != nil && out.Skipped != nil {
+		r.Imported, r.Skipped = *out.Imported, *out.Skipped
+	}
+	return r, nil
 }
 
 // Push は src のうち変わったファイルを送り、サーバーに取り込ませる。送ったファイル数と取り込み結果を返す。
-func (c *Client) Push(src Source) (int, string, error) {
+func (c *Client) Push(src Source) (int, Imported, error) {
 	if _, err := os.Stat(src.Dir); err != nil {
-		return 0, "", nil
+		return 0, Imported{}, nil
 	}
 	var have map[string]raw.Info
 	if err := c.getJSON("/api/files", url.Values{"host": {c.Host}, "tool": {src.Tool}}, &have); err != nil {
-		return 0, "", err
+		return 0, Imported{}, err
 	}
 	sent := 0
 	err := filepath.WalkDir(src.Dir, func(p string, d fs.DirEntry, err error) error {
@@ -166,29 +179,29 @@ func (c *Client) Push(src Source) (int, string, error) {
 		return nil
 	})
 	if err != nil || sent == 0 {
-		return sent, "", err
+		return sent, Imported{}, err
 	}
 	out, err := c.importNow(src.Tool)
 	return sent, out, err
 }
 
 // PushOpenCode は OpenCode の DB から、変わった会話の原本（行そのまま）を書き出して送る。
-func (c *Client) PushOpenCode(path string) (int, string, error) {
+func (c *Client) PushOpenCode(path string) (int, Imported, error) {
 	if _, err := os.Stat(path); err != nil {
-		return 0, "", nil
+		return 0, Imported{}, nil
 	}
 	db, err := opencode.Open(path)
 	if err != nil {
-		return 0, "", err
+		return 0, Imported{}, err
 	}
 	defer db.Close()
 	var have map[string]raw.Info
 	if err := c.getJSON("/api/files", url.Values{"host": {c.Host}, "tool": {opencode.Tool}}, &have); err != nil {
-		return 0, "", err
+		return 0, Imported{}, err
 	}
 	sessions, err := db.Sessions()
 	if err != nil {
-		return 0, "", err
+		return 0, Imported{}, err
 	}
 	sent := 0
 	for _, s := range sessions {
@@ -198,12 +211,12 @@ func (c *Client) PushOpenCode(path string) (int, string, error) {
 			continue
 		}
 		if err := c.sendOpenCode(db, s.ID, rel, mt); err != nil {
-			return sent, "", fmt.Errorf("%s: %w", s.ID, err)
+			return sent, Imported{}, fmt.Errorf("%s: %w", s.ID, err)
 		}
 		sent++
 	}
 	if sent == 0 {
-		return 0, "", nil
+		return 0, Imported{}, nil
 	}
 	out, err := c.importNow(opencode.Tool)
 	return sent, out, err

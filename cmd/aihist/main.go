@@ -60,22 +60,37 @@ func or(a, b string) string {
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `usage:
-  aihist [-db path] import claude [dir]       既定 ~/.claude/projects
-  aihist [-db path] import codex [dir]        既定 ~/.codex
-  aihist [-db path] import antigravity [dir]  既定 ~/.gemini/antigravity-ide/conversations
-  aihist [-db path] import opencode [db]      既定 ~/.local/share/opencode/opencode.db
-  aihist [-db path] import chatgpt|claude.ai <書き出しの zip を置いたフォルダ>
+	fmt.Fprint(os.Stderr, m(`usage:
+  aihist [-db path] import claude [dir]       default ~/.claude/projects
+  aihist [-db path] import codex [dir]        default ~/.codex
+  aihist [-db path] import antigravity [dir]  default ~/.gemini/antigravity-ide/conversations
+  aihist [-db path] import opencode [db]      default ~/.local/share/opencode/opencode.db
+  aihist [-db path] import chatgpt|claude.ai <folder with the export zip>
   aihist [-db path] serve [-addr :8080] [-raw dir] [-token T] [-bin dir]
-  aihist push -server URL [-token T] [-host 名前] [-every 10m]
-  aihist detect                                このマシンにある AI の記録
-  aihist restore -server URL [-token T] [-force] <会話IDの先頭>   元の AI へ戻す
-  aihist [-db path] search <語>
-  aihist [-db path] export [-thinking] [-no-tools] [-max N] <会話IDの先頭>
+  aihist push -server URL [-token T] [-host name] [-every 10m]
+  aihist detect                                list AI histories on this machine
+  aihist restore -server URL [-token T] [-force] <chat ID prefix>   put a chat back into its AI
+  aihist [-db path] search <words>
+  aihist [-db path] export [-thinking] [-no-tools] [-max N] <chat ID prefix>
 
-push と restore の既定値は環境変数 AIHIST_SERVER・AIHIST_TOKEN・AIHIST_HOST、
-無ければ設定ファイル（導入スクリプトが書く。Linux は ~/.config/aihist/config）から読む。
-`)
+push and restore read AIHIST_SERVER, AIHIST_TOKEN and AIHIST_HOST from the environment,
+or from the config file the installer writes (~/.config/aihist/config on Linux).
+`, `使い方:
+  aihist [-db パス] import claude [フォルダ]       既定 ~/.claude/projects
+  aihist [-db パス] import codex [フォルダ]        既定 ~/.codex
+  aihist [-db パス] import antigravity [フォルダ]  既定 ~/.gemini/antigravity-ide/conversations
+  aihist [-db パス] import opencode [db]           既定 ~/.local/share/opencode/opencode.db
+  aihist [-db パス] import chatgpt|claude.ai <書き出しの zip を置いたフォルダ>
+  aihist [-db パス] serve [-addr :8080] [-raw フォルダ] [-token T] [-bin フォルダ]
+  aihist push -server URL [-token T] [-host 名前] [-every 10m]
+  aihist detect                                     このマシンにある AI の記録を出す
+  aihist restore -server URL [-token T] [-force] <会話IDの先頭>   会話を元の AI へ戻す
+  aihist [-db パス] search <語>
+  aihist [-db パス] export [-thinking] [-no-tools] [-max N] <会話IDの先頭>
+
+push と restore は、環境変数 AIHIST_SERVER・AIHIST_TOKEN・AIHIST_HOST か、
+導入スクリプトが書く設定ファイル（Linux は ~/.config/aihist/config）を読む。
+`))
 	os.Exit(2)
 }
 
@@ -85,6 +100,7 @@ func main() {
 	dbPath := flag.String("db", filepath.Join(data, "aihist.db"), "SQLite のパス")
 	flag.Usage = usage
 	flag.Parse()
+	push.JA = ja
 	args := flag.Args()
 	if len(args) == 0 {
 		usage()
@@ -110,19 +126,19 @@ func main() {
 		cf := clientConfig()
 		server := fs.String("server", cf["AIHIST_SERVER"], "サーバー http://host:port")
 		token := fs.String("token", cf["AIHIST_TOKEN"], "トークン")
-		force := fs.Bool("force", false, "手元の同じ会話を上書きする")
+		force := fs.Bool("force", false, m("overwrite the local copy", "手元の同じ会話を上書きする"))
 		fs.Parse(args[1:])
 		if *server == "" || fs.NArg() != 1 {
 			usage()
 		}
 		done, next, err := push.NewClient(*server, *token, host).Restore(home, fs.Arg(0), *force)
 		for _, d := range done {
-			fmt.Println("戻した:", d)
+			fmt.Println(m("restored:", "戻した:"), d)
 		}
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Println("続ける:", next)
+		fmt.Println(m("continue with:", "続けるには:"), next)
 		return
 	}
 

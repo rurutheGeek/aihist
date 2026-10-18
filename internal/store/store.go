@@ -180,6 +180,13 @@ func migrate(db *sql.DB) error {
 			}
 		}
 	}
+	// トークンをマシンに結び付ける（前の版で、名前がマシン名と同じトークンはそのマシンのもの）
+	if !hasColumnIn(db, "tokens", "machine") {
+		if _, err := db.Exec(`ALTER TABLE tokens ADD COLUMN machine TEXT NOT NULL DEFAULT '';
+		  UPDATE tokens SET machine=name WHERE name IN (SELECT host FROM machines)`); err != nil {
+			return err
+		}
+	}
 	if !hasColumnIn(db, "machines", "hide") {
 		if _, err := db.Exec(`ALTER TABLE machines ADD COLUMN hide TEXT NOT NULL DEFAULT ''`); err != nil {
 			return err

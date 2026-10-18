@@ -146,6 +146,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /knowledge/{id}", s.knowledgeSave)
 	mux.HandleFunc("POST /knowledge/{id}/delete", s.knowledgeDelete)
 	mux.HandleFunc("POST /settings/deleted/forget", s.forgetDeleted)
+	mux.HandleFunc("POST /settings/machines", s.addMachine)
+	mux.HandleFunc("POST /settings/machines/{host}/token", s.addMachine)
 	mux.HandleFunc("POST /settings/machines/{host}", s.setMachine)
 	mux.HandleFunc("POST /settings/machines/{host}/delete", s.deleteMachine)
 	mux.HandleFunc("GET /settings/preview", s.preview)

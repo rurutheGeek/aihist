@@ -36,12 +36,17 @@ bin/aihist serve -addr :8080 -bin <配る実行ファイルの置き場所>
 
 ## 各マシンから送る
 
-画面左下の「設定」で、マシン名を入れて「マシンを追加」を押すと、トークンを埋めたコマンドが出る（トークンはこのときしか表示されない。要らなくなったら同じ画面で削除する）。`serve` に `AIHIST_TOKEN` を渡すと、それも使える。
+「設定 → マシン」でマシン名を入れて「マシンを追加」を押すと、そのマシンに入れるコマンドが出る（このときしか表示されない。あとで要るときはマシンの画面で「作り直す」。前のコマンドは使えなくなる）。入れるとすぐ1回送り、そのあとは設定の送信タイミングで送る。メッセージは日本語の環境では日本語、それ以外は英語。
 
 ```bash
-curl -fsSL https://<サーバー>/api/install.sh | AIHIST_TOKEN=<トークン> sh      # Linux・macOS・WSL
-$env:AIHIST_TOKEN="<トークン>"; irm https://<サーバー>/api/install.ps1 | iex  # Windows
+curl -fsSL https://<サーバー>/api/install.sh | AIHIST_TOKEN=<トークン> AIHIST_HOST=<マシン名> sh   # Linux・macOS・WSL
 ```
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://<サーバー>/api/install.ps1 | iex; Install-Aihist -Token <トークン> -Name <マシン名>"
+```
+
+Windows の行は、コマンド プロンプトでも PowerShell でも動く。AI からつなぐ（MCP）トークンは「設定 → API トークン」で作る。`serve` に `AIHIST_TOKEN` を渡すと、それも使える。
 
 常駐はしない。OS のタイマー（systemd のユーザータイマー、無ければ cron、macOS は launchd、Windows はタスク スケジューラ）が1分ごとに `aihist push -tick` を起こし、送る時刻でなければすぐ終わる。送る時刻・送る AI・添付ファイル・送る前に消す情報・保管したデータのクリーンアップは、画面左下の「設定」で全体とマシンごとに決める（各マシンは数分のうちに受け取る）。2回目からは変わったファイルだけを送るので、1回は数秒・メモリ 10 MB ほどで終わる。
 
@@ -67,7 +72,7 @@ $env:AIHIST_TOKEN="<トークン>"; irm https://<サーバー>/api/install.ps1 |
 
 ```bash
 curl -fsSL https://<サーバー>/api/uninstall.sh | sh     # ~/.config/aihist/uninstall.sh でもよい
-irm https://<サーバー>/api/uninstall.ps1 | iex          # Windows
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://<サーバー>/api/uninstall.ps1 | iex"   # Windows
 ```
 
 ## そのほかの使い方

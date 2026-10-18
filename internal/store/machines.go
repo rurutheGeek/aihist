@@ -91,7 +91,11 @@ func (s *Store) SetMachine(m Machine) error {
 	return err
 }
 
+// DeleteMachine はマシンを一覧から消し、そのマシンのトークンも使えなくする。
 func (s *Store) DeleteMachine(host string) error {
+	if _, err := s.db.Exec(`DELETE FROM tokens WHERE machine=?`, host); err != nil {
+		return err
+	}
 	_, err := s.db.Exec(`DELETE FROM machines WHERE host=?`, host)
 	return err
 }
