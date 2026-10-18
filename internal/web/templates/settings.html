@@ -32,9 +32,9 @@
         <input type="hidden" name="tz">
       </form>
       <form class="grp" method="post" action="/settings/cleanup" data-auto>
-        <div class="row"><div class="rl">{{t "保管したデータのクリーンアップ"}}</div><div class="rc"><select name="days">{{range .CleanupOpts}}<option value="{{.}}"{{if eq . $.Cleanup}} selected{{end}}>{{if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>
+        <div class="row"><div class="rl">{{t "マシンに残す期間"}}</div><div class="rc"><select name="days">{{range .CleanupOpts}}<option value="{{.}}"{{if eq . $.Cleanup}} selected{{end}}>{{if eq . 0}}{{t "ずっと"}}{{else}}{{tf "%d 日" .}}{{end}}</option>{{end}}</select></div></div>
       </form>
-      <div class="gt">{{t "送る前に消す情報"}}</div>
+      <div class="gt">{{t "伏せる情報"}}</div>
       <form class="grp" method="post" action="/settings/hide" data-auto>
         {{range .Hide}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="hide" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
       </form>
@@ -51,7 +51,7 @@
         <div class="grp">
           {{range .UploadAttach}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="attach" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
         </div>
-        <div class="gt">{{t "取り込む前に消す情報"}}</div>
+        <div class="gt">{{t "伏せる情報"}}</div>
         <div class="grp">
           {{range .UploadHide}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="hide" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
         </div>
@@ -87,7 +87,7 @@
         <div class="grp">
           {{range .Attach}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="attach" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
         </div>
-        <div class="gt">{{t "送る前に消す情報"}}</div>
+        <div class="gt">{{t "伏せる情報"}}</div>
         <div class="grp">
           <label class="row"><div class="rl">{{t "既定に従う"}}</div><div class="rc"><input class="sw" type="checkbox" name="hide_follow" value="1"{{if .HideFollow}} checked{{end}} data-toggle="ownhide"></div></label>
           {{$hf := .HideFollow}}{{range .Hide}}<label class="row" data-ownhide{{if $hf}} hidden{{end}}><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="hide" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
@@ -96,7 +96,7 @@
         <div class="grp">
           <label class="row"><div class="rl">{{t "送るタイミングは既定に従う"}}</div><div class="rc"><input class="sw" type="checkbox" name="follow" value="1"{{if .Follow}} checked{{end}} data-toggle="own"></div></label>
           <div class="row col" data-own{{if .Follow}} hidden{{end}}><div class="rl">{{t "このマシンの送るタイミング"}}</div><div class="rc">{{template "sched" .Schedule}}</div></div>
-          <div class="row"><div class="rl">{{t "保管したデータのクリーンアップ"}}</div><div class="rc"><select name="cleanup">{{$c := .Cleanup}}{{range $.CleanupOpts2}}<option value="{{.}}"{{if eq . $c}} selected{{end}}>{{if eq . -1}}{{t "既定に従う"}}{{else if eq . 0}}{{t "消さない"}}{{else}}{{tf "%d 日より前を消す" .}}{{end}}</option>{{end}}</select></div></div>
+          <div class="row"><div class="rl">{{t "マシンに残す期間"}}</div><div class="rc"><select name="cleanup">{{$c := .Cleanup}}{{range $.CleanupOpts2}}<option value="{{.}}"{{if eq . $c}} selected{{end}}>{{if eq . -1}}{{t "既定に従う"}}{{else if eq . 0}}{{t "ずっと"}}{{else}}{{tf "%d 日" .}}{{end}}</option>{{end}}</select></div></div>
         </div>
       </form>
       <div class="gt">{{t "情報"}}</div>
@@ -117,19 +117,6 @@
         <div class="row"><div class="rl">{{t "このマシンを一覧から消す"}}</div><div class="rc"><button class="btn red">{{t "削除"}}</button></div></div>
       </form>
     </section>{{end}}
-    <section data-sec="tokens">
-      <h1>{{t "API トークン"}}</h1>
-      {{if and .NewToken (not .NewHost)}}<div class="grp hl">
-        <div class="row"><div class="rl"><b>{{.NewName}}</b><small class="warn">{{t "このトークンは今しか表示されない"}}</small></div><div class="rc"><code class="tk">{{.NewToken}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>
-      </div>{{end}}
-      <form class="grp" method="post" action="/settings/tokens">
-        <div class="row"><div class="rl"><input class="inp" name="name" placeholder="{{t "名前（Antigravity など）"}}" required autocomplete="off"></div><div class="rc"><button class="btn pri">{{t "作成"}}</button></div></div>
-      </form>
-      <div class="grp">
-        {{if .EnvToken}}<div class="row"><div class="rl">AIHIST_TOKEN<small>{{t "環境変数"}}</small></div></div>{{end}}
-        {{range .Tokens}}{{if not .Machine}}<div class="row"><div class="rl">{{.Name}}<small>{{t "作成日"}} {{when .CreatedAt}} · {{if .UsedAt.IsZero}}{{t "未使用"}}{{else}}{{t "最終利用"}} {{when .UsedAt}}{{end}}</small></div><div class="rc"><form method="post" action="/settings/tokens/{{.ID}}/delete" data-confirm="{{t "このトークンを削除する？"}}"><button class="btn red">{{t "削除"}}</button></form></div></div>{{end}}{{end}}
-      </div>
-    </section>
     <section data-sec="ai">
       <h1>AI</h1>
       <form class="grp" method="post" action="/settings/ai" data-auto autocomplete="off">
@@ -138,12 +125,23 @@
         <div class="row"><div class="rl">{{t "モデル"}}</div><div class="rc"><input class="inp wide" name="model" value="{{.AIModelSet}}" list="aimodels" spellcheck="false"><datalist id="aimodels"></datalist></div></div>
         <div class="row"><div class="rl"><span class="aitest mute"></span></div><div class="rc"><button class="btn" type="button" data-aitest>{{t "接続を確かめる"}}</button></div></div>
       </form>
-      <div class="gt">MCP</div>
+    </section>
+    <section data-sec="apps">
+      <h1>{{t "連携"}}</h1>
+      {{with .NewApp}}<div class="grp hl">
+        <div class="row"><div class="rl"><b>{{tf "%s に接続" .Name}}</b><small class="warn">{{t "トークンは今しか表示されない"}}</small></div></div>
+        <div class="row col">{{if gt (len .Steps) 1}}<ol class="steps">{{range .Steps}}<li>{{.}}</li>{{end}}</ol>{{else}}<p class="steps">{{index .Steps 0}}</p>{{end}}
+          {{range .Codes}}<div class="rc cmdl">{{with .Label}}<span>{{.}}</span>{{end}}<code class="pre">{{.Text}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div>{{end}}
+        </div>
+      </div>{{end}}
       <div class="grp">
-        <div class="row col"><div class="rl">Claude Code</div><div class="rc cmdl"><code>{{.MCPAdd}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>
-        <div class="row col"><div class="rl">{{t "そのほかの AI"}}</div><div class="rc cmdl"><code>{{.MCPURL}}  Authorization: Bearer &lt;{{t "トークン"}}&gt;</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>
-        <div class="row col"><div class="rl">{{t "頼み方の例"}}</div><div class="rc cmdl"><code>{{t "aihist の MCP で、まだ整理していない会話を 10 件選び、1 件ずつサブエージェントで最後の区切りまで読んで、organize_instructions の決まりで整理し、save_organized で保存して"}}</code><button class="btn" type="button" onclick="aihistCopy(this)">{{t "コピー"}}</button></div></div>
+        {{range .Apps}}<form class="row" method="post" action="/settings/apps"><input type="hidden" name="app" value="{{.Key}}"><div class="rl">{{.Name}}</div><div class="rc">{{if eq .Key "other"}}<input class="inp" name="name" placeholder="{{t "アプリの名前"}}" autocomplete="off">{{end}}<button class="btn">{{t "接続"}}</button></div></form>{{end}}
       </div>
+      {{if or .EnvToken .AppTokens}}<div class="gt">{{t "接続中のアプリ"}}</div>
+      <div class="grp">
+        {{if .EnvToken}}<div class="row"><div class="rl">AIHIST_TOKEN<small>{{t "環境変数"}}</small></div></div>{{end}}
+        {{range .AppTokens}}<div class="row"><div class="rl">{{.Name}}<small>{{if .UsedAt.IsZero}}{{t "未使用"}}{{else}}{{t "最終利用"}} {{when .UsedAt}}{{end}}</small></div><div class="rc"><form method="post" action="/settings/apps/{{.ID}}/delete" data-confirm="{{tf "%s の接続を解除する？" .Name}}"><button class="btn">{{t "解除"}}</button></form></div></div>{{end}}
+      </div>{{end}}
     </section>
     <section data-sec="tags">
       <h1>{{t "タグ"}}</h1>
@@ -165,10 +163,10 @@
         <div class="row"><div class="rl">{{t "データベース"}}</div><div class="rc mute">{{bytes .Usage.DB}}</div></div>
         <div class="row"><div class="rl">{{t "原本"}}</div><div class="rc mute">{{bytes .Usage.Raw}}</div></div>
       </div>
-      <div class="gt">{{t "集めた履歴から消す"}}</div>
-      <form class="grp" method="post" action="/settings/purge" data-purge data-confirm="{{t "選んだ情報を、集めた履歴とサーバーの原本から消します。消した情報は元に戻せません。消す？"}}">
+      <div class="gt">{{t "保存済みの会話でも伏せる"}}</div>
+      <form class="grp" method="post" action="/settings/purge" data-purge data-confirm="{{t "保存済みの会話とサーバーの原本で、選んだ情報を伏せる。元には戻せない。伏せる？"}}">
         {{range .Hide}}<label class="row"><div class="rl">{{t .Label}}</div><div class="rc"><input class="sw" type="checkbox" name="hide" value="{{.Kind}}"{{if .On}} checked{{end}}></div></label>{{end}}
-        <div class="row"><div class="rl"><span class="pg mute"></span></div><div class="rc"><button class="btn red">{{t "履歴から消す"}}</button></div></div>
+        <div class="row"><div class="rl"><span class="pg mute"></span></div><div class="rc"><button class="btn red">{{t "伏せる"}}</button></div></div>
       </form>
       <div class="grp">
         <div class="row"><div class="rl">{{t "削除した会話のキャッシュ"}}<small>{{tf "%d 件" .Deleted}}</small></div><div class="rc"><form method="post" action="/settings/deleted/forget" data-confirm="{{t "キャッシュを消すと、削除した会話は次に送られたときにまた取り込まれます。消す？"}}"><button class="btn"{{if not .Deleted}} disabled{{end}}>{{t "キャッシュを削除"}}</button></form></div></div>

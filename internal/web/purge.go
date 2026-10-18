@@ -199,7 +199,7 @@ func scrubZip(f *os.File, w io.Writer, list string) (bool, error) {
 	return ch, zw.Close()
 }
 
-// putUpload は画面から上げた原本を置き、設定の「取り込む前に消す情報」を消す。
+// putUpload は画面から上げた原本を置き、設定の「伏せる情報」を伏せる。
 func (s *Server) putUpload(host, tool, rel string, r io.Reader, mtime time.Time) error {
 	if err := s.raw.Put(host, tool, rel, r, mtime); err != nil {
 		return err

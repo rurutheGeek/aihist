@@ -212,6 +212,11 @@ input.sw:focus-visible{outline:2px solid var(--faint);outline-offset:2px}
 .tk{font:12.5px ui-monospace,Menlo,monospace;max-width:280px;overflow-x:auto;white-space:nowrap}
 .row .cmdl{border:0;padding:0;margin:0;background:none;display:flex;gap:8px;align-items:center}
 .row .cmdl code{flex:1;min-width:0;background:var(--code);border:1px solid var(--codeline);border-radius:8px;padding:7px 10px;font:12.5px ui-monospace,Menlo,monospace;white-space:nowrap;overflow-x:auto}
+.row .cmdl code.pre{white-space:pre}
+.row .cmdl:has(code.pre){align-items:flex-start}
+.row .cmdl+.cmdl{margin-top:8px}
+.steps{margin:0 0 10px;font-size:13.5px;line-height:1.7}
+ol.steps{padding-left:1.4em;font-size:13.5px;line-height:1.7}
 .row .rc.dl{flex-wrap:wrap;justify-content:flex-end}
 .grp .sched{margin:0}
 .grp .next{margin-top:8px}
@@ -713,19 +718,19 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
       f.addEventListener('submit',function(e){e.preventDefault();save()});
     });
     // 追加・削除は送ったあと窓の中身を差し替える
-    // 集めた履歴から消す: 裏で進め、進み具合を出す
+    // 保存済みの会話でも伏せる: 裏で進め、進み具合を出す
     root.querySelectorAll('form[data-purge]').forEach(function(f){
       f.addEventListener('submit',function(e){
         e.preventDefault();
         var pg=f.querySelector('.pg'), b=f.querySelector('button');
-        if(!f.querySelector('input:checked')){pg.textContent={{t "消す情報を選んでください"}};return}
+        if(!f.querySelector('input:checked')){pg.textContent={{t "伏せる情報を選んでください"}};return}
         if(!confirm(f.dataset.confirm))return;
-        b.disabled=true; pg.textContent={{t "消しています"}};
+        b.disabled=true; pg.textContent={{t "伏せています"}};
         fetch(f.action,{method:'POST',headers:{'X-Auto':'1'},body:new URLSearchParams(new FormData(f))}).then(function(r){return r.json()}).then(function(o){
           (function poll(){fetch('/upload/jobs/'+o.id).then(function(r){return r.json()}).then(function(j){
-            if(j.state==='done'){pg.textContent={{t "%d か所を消した"}}.replace('%d',j.imported); b.disabled=false; return}
+            if(j.state==='done'){pg.textContent={{t "%d か所を伏せた"}}.replace('%d',j.imported); b.disabled=false; return}
             if(j.state==='error'){pg.textContent=j.error; b.disabled=false; return}
-            pg.textContent={{t "消しています"}}+(j.total?' '+Math.floor(j.done*100/j.total)+'%':'');
+            pg.textContent={{t "伏せています"}}+(j.total?' '+Math.floor(j.done*100/j.total)+'%':'');
             setTimeout(poll,800);
           })})();
         }).catch(function(){pg.textContent={{t "保存できなかった"}}; b.disabled=false});

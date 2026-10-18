@@ -12,7 +12,7 @@ import (
 type Token struct {
 	ID        int64
 	Name      string
-	Machine   string // マシンのトークンならそのマシン名（空は AI などからつなぐトークン）
+	Machine   string // マシンのトークンならそのマシン名（空は連携したアプリのトークン）
 	CreatedAt time.Time
 	UsedAt    time.Time
 }

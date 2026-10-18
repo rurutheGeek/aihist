@@ -121,7 +121,7 @@ func humanBytes(n int64) string {
 // settings は設定の画面（マシンから送る・容量・言語）。
 // 設定の画面の項目（左の一覧の順）。
 var sections = []struct{ Key, Label string }{
-	{"general", "一般"}, {"sending", "送信"}, {"upload", "アップロード"}, {"machines", "マシン"}, {"tokens", "API トークン"}, {"ai", "AI"}, {"tags", "タグ"}, {"storage", "容量"},
+	{"general", "一般"}, {"sending", "送信"}, {"upload", "アップロード"}, {"machines", "マシン"}, {"ai", "AI"}, {"apps", "連携"}, {"tags", "タグ"}, {"storage", "容量"},
 }
 
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
@@ -144,8 +144,13 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 		return
 	}
 	sec := r.PathValue("section")
-	if newTok != "" && r.Context().Value(newMachineKey{}) == nil {
-		sec = "tokens"
+	if k, ok := r.Context().Value(newAppKey{}).(string); ok {
+		sec = "apps"
+		for _, a := range connApps(lang(r), s.origin(r)+"/api/mcp", newTok) {
+			if a.Key == k {
+				d["NewApp"] = a
+			}
+		}
 	}
 	if sec == "" {
 		sec = "general"
@@ -160,13 +165,14 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	}
 	d["Sub"] = sec
 	toks, _ := s.st.Tokens()
-	d["Tokens"], d["EnvToken"] = toks, s.token != ""
-	d["NewName"], d["NewToken"] = newName, newTok
-	if newTok != "" {
-		if d["NewHost"] == nil {
-			d["NewCmds"] = commands(s.origin(r), newTok, "")
+	var appToks []store.Token
+	for _, t := range toks {
+		if t.Machine == "" {
+			appToks = append(appToks, t)
 		}
 	}
+	d["AppTokens"], d["EnvToken"] = appToks, s.token != ""
+	d["Apps"] = connApps(lang(r), "", "")
 	d["Cmds"] = commands(s.origin(r), "", "")
 	d["Usage"], d["Page"], d["Deleted"] = s.usage(), "settings", s.st.Deleted()
 	days, _ := strconv.Atoi(s.st.Setting("cleanup_days", "0"))
@@ -181,8 +187,6 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	ac := s.aiConfig()
 	d["AIBase"], d["AIModelSet"], d["AIHasKey"] = ac.BaseURL, ac.Model, ac.Key != ""
 	d["TagList"], _ = s.st.Tags()
-	d["MCPURL"] = s.origin(r) + "/api/mcp"
-	d["MCPAdd"] = `claude mcp add --transport http aihist ` + s.origin(r) + `/api/mcp --header "Authorization: Bearer <` + tr(lang(r), "トークン") + `>"`
 	d["Schedule"] = s.st.Setting("schedule", DefaultSchedule)
 	d["Next"] = s.nextRuns(lang(r), d["Schedule"].(string), 3)
 	d["CleanupOpts2"] = []int{-1, 0, 7, 14, 30, 90}
@@ -196,35 +200,6 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 		return
 	}
 	s.render(w, r, "settings.html", d)
-}
-
-func (s *Server) addToken(w http.ResponseWriter, r *http.Request) {
-	if !sameOrigin(r) {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-	name := strings.TrimSpace(r.FormValue("name"))
-	if name == "" {
-		http.Redirect(w, r, "/settings/tokens", http.StatusSeeOther)
-		return
-	}
-	tok, err := s.st.CreateToken(name)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	s.renderSettings(w, r, name, tok)
-}
-
-func (s *Server) deleteToken(w http.ResponseWriter, r *http.Request) {
-	if !sameOrigin(r) {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-	if id, err := strconv.ParseInt(r.PathValue("id"), 10, 64); err == nil {
-		s.st.DeleteToken(id)
-	}
-	http.Redirect(w, r, "/settings/tokens", http.StatusSeeOther)
 }
 
 // DefaultSchedule は送るタイミングの既定（設定の画面で変える）。
