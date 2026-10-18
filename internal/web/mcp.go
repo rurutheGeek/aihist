@@ -55,8 +55,8 @@ var mcpTools = []mcpTool{
 		obj(map[string]any{"id": num, "model": str, "tags": strs, "summary": str, "knowledge": map[string]any{"type": "array", "items": obj(map[string]any{
 			"title": str, "conclusion": str, "environment": str, "symptom": str, "cause": str, "solution": str, "failed": str, "struggle": str, "evidence": strs, "fixed": strs, "score": num,
 		}, "title", "conclusion", "solution", "evidence", "fixed", "score")},
-			"profile": map[string]any{"type": "array", "items": obj(map[string]any{"text": str, "evidence": strs, "same": num, "replaces": num}, "text", "evidence")}}, "id", "summary")},
-	{"get_profile", "ユーザーのプロフィール（どんな人か・好み・してほしいこと）。答え方をユーザーに合わせるために、作業の最初に読む。", obj(map[string]any{})},
+			"profile": map[string]any{"type": "array", "items": obj(map[string]any{"text": str, "source": str, "lasting": map[string]any{"type": "boolean"}, "same": num, "replaces": num}, "text", "source", "lasting")}}, "id", "summary")},
+	{"get_profile", "ユーザーのプロフィール（どんな人か・経歴・趣味関心・好み・してほしいこと）。答え方をユーザーに合わせるために、作業の最初に読む。", obj(map[string]any{})},
 	{"search_knowledge", "登録したナレッジ（苦労して解決した問題の記事）を探す。", obj(map[string]any{"query": str})},
 }
 
