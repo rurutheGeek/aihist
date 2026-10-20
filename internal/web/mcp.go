@@ -63,6 +63,9 @@ var mcpTools = []mcpTool{
 	{"rename_conversation", "会話の名前を変える（title が空なら元の題名に戻す）。", obj(map[string]any{"id": num, "title": str}, "id")},
 	{"set_tags", "会話のタグを tags に置き換える（タグの一覧にある名前だけ）。", obj(map[string]any{"id": num, "tags": strs}, "id", "tags")},
 	{"list_tags", "タグの一覧。", obj(map[string]any{})},
+	{"list_conversations", "会話の一覧を新しい順に返す（題名・AI・最終更新・タグ・要約）。offset から limit 件（最大 500）。total は全体の件数。全体の傾向を見るときは offset を進めて順に読む。", obj(map[string]any{"offset": num, "limit": num})},
+	{"save_tag", "タグを作る（同じ名前があれば説明を変える）。old を渡すと、そのタグの名前を name に変える（付いている会話もそのまま）。description は会話を分けるときの目安になる。", obj(map[string]any{"name": str, "description": str, "old": str}, "name")},
+	{"delete_tag", "タグを消す（会話から外れる）。", obj(map[string]any{"name": str}, "name")},
 	{"search_knowledge", "登録したナレッジ（苦労して解決した問題の記事）を探す。", obj(map[string]any{"query": str})},
 }
 
@@ -173,13 +176,21 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		Archived  *bool          `json:"archived"`
 		Pinned    *bool          `json:"pinned"`
 		Title     *string        `json:"title"`
+		Offset    int            `json:"offset"`
+		Name      string         `json:"name"`
+		Desc      string         `json:"description"`
+		Old       string         `json:"old"`
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &a); err != nil {
 			return "", fmt.Errorf("引数を読めない: %v", err)
 		}
 	}
-	if a.Limit <= 0 || a.Limit > 100 {
+	if name == "list_conversations" {
+		if a.Limit <= 0 || a.Limit > 500 {
+			a.Limit = 100
+		}
+	} else if a.Limit <= 0 || a.Limit > 100 {
 		a.Limit = 20
 	}
 	switch name {
@@ -310,6 +321,34 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 			return "", err
 		}
 		return jsonText(ts), nil
+	case "list_conversations":
+		rows, _, err := s.st.Browse(store.Filter{Status: "all", Limit: 100000})
+		if err != nil {
+			return "", err
+		}
+		total := len(rows)
+		rows = rows[min(max(a.Offset, 0), total):]
+		rows = rows[:min(a.Limit, len(rows))]
+		return jsonText(map[string]any{"total": total, "offset": a.Offset, "conversations": brief(rows)}), nil
+	case "save_tag":
+		n := strings.TrimSpace(a.Name)
+		if n == "" {
+			return "", fmt.Errorf("name が要る")
+		}
+		if a.Old != "" && a.Old != n {
+			if err := s.st.RenameTag(a.Old, n); err != nil {
+				return "", err
+			}
+		}
+		if err := s.st.SetTag(n, strings.TrimSpace(a.Desc)); err != nil {
+			return "", err
+		}
+		return "タグ「" + n + "」を保存した", nil
+	case "delete_tag":
+		if err := s.st.DeleteTag(a.Name); err != nil {
+			return "", err
+		}
+		return "タグ「" + a.Name + "」を消した", nil
 	case "search_knowledge":
 		ks, err := s.st.KnowledgeList("registered", a.Query)
 		if err != nil {
