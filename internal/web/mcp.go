@@ -60,6 +60,7 @@ var mcpTools = []mcpTool{
 			"profile": map[string]any{"type": "array", "items": obj(map[string]any{"text": str, "source": str, "lasting": map[string]any{"type": "boolean"}, "same": num, "replaces": num}, "text", "source", "lasting")}}, "id", "summary")},
 	{"get_profile", "ユーザーのプロフィール（どんな人か・経歴・趣味関心・好み・してほしいこと）。答え方をユーザーに合わせるために、作業の最初に読む。", obj(map[string]any{})},
 	{"list_profile", "プロフィールの項目を番号つきで返す。kind は about（その人について）か wish（AI への希望）。", obj(map[string]any{})},
+	{"edit_profile", "プロフィールの項目の文を直す（text が空なら消す）。", obj(map[string]any{"id": num, "text": str}, "id")},
 	{"set_profile_kind", "プロフィールの項目の種類を変える。kind は about（経歴・趣味・暮らしなど、その人について）か wish（答え方・進め方など、AI にどうしてほしいか）。", obj(map[string]any{"id": num, "kind": str}, "id", "kind")},
 	{"list_skills", "ユーザーが集めた Skill（AI への手順書。プロンプトだけのものもある）の名前と説明。作業に合う Skill があれば get_skill で読んで従う。", obj(map[string]any{})},
 	{"get_skill", "Skill の SKILL.md と、付いているファイルの一覧を読む。手順がファイルを指していれば read_skill_file で読む。スクリプトを動かす Skill なら、そのファイルを手元に書いてから使う。", obj(map[string]any{"name": str}, "name")},
@@ -214,6 +215,7 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		Kind      string         `json:"kind"`
 		Body      string         `json:"body"`
 		Path      string         `json:"path"`
+		Text      string         `json:"text"`
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -317,6 +319,12 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 			out = append(out, item{t.ID, k, t.Text})
 		}
 		return jsonText(out), nil
+	case "edit_profile":
+		t := strings.TrimSpace(a.Text)
+		if t == "" {
+			return "消した", s.st.EditTrait(a.ID, "", "")
+		}
+		return "直した（ユーザーが直した項目は変えない）", s.st.RewriteTrait(a.ID, t)
 	case "set_profile_kind":
 		if a.Kind != "about" && a.Kind != "wish" {
 			return "", fmt.Errorf("kind は about か wish")

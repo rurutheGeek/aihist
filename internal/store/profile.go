@@ -129,3 +129,9 @@ func normKind(k string) string {
 	}
 	return ""
 }
+
+// RewriteTrait は AI が項目の文を直す（ユーザーが直した印は付けない）。
+func (s *Store) RewriteTrait(id int64, text string) error {
+	_, err := s.db.Exec(`UPDATE profile SET prev=text, text=?, updated_at=? WHERE id=? AND edited=0`, text, time.Now().Unix(), id)
+	return err
+}
