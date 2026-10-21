@@ -125,7 +125,7 @@ func (s *Store) Stale(id int64) bool {
 	}
 	var st string
 	s.db.QueryRow(`SELECT ai_stamp FROM conv_meta WHERE tool=? AND host=? AND external_id=?`, t, h, e).Scan(&st)
-	return st != "" && st != strings.TrimPrefix(stamp, reparse)
+	return st != "" && strings.TrimPrefix(st, reparse) != strings.TrimPrefix(stamp, reparse)
 }
 
 // AIInfo は会話 id をまとめたモデルと日時（まとめていなければ空）。
