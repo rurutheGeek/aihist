@@ -139,6 +139,17 @@ func runPush(home, host string, args []string) {
 				log.Printf(m("%s: deleted %d local files older than %d days (%.1f MB)", "%s: %[3]d 日より前の %[2]d ファイルを削除（%.1f MB）"), src.Tool, n, days, float64(size)/(1<<20))
 			}
 		}
+		for _, src := range push.SkillSources(home) {
+			if src.For != "" && !push.Selected(tools, src.For) {
+				continue
+			}
+			if n, res, err := c.Push(src.Source); err != nil {
+				log.Printf("%s: %v", src.Tool, err)
+			} else if n > 0 {
+				log.Printf(m("%s: sent %d files (%s)", "%s: %d ファイル送信（%s）"), src.Tool, n, imported(res))
+				sentAny = true
+			}
+		}
 		if push.Selected(tools, "opencode") {
 			if n, res, err := c.PushOpenCode(push.OpenCodeDB(home)); err != nil {
 				log.Printf("opencode: %v", err)

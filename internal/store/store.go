@@ -146,7 +146,7 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema + ";\n" + profileSchema + ";\n" + promptSchema); err != nil {
+	if _, err := db.Exec(schema + ";\n" + profileSchema + ";\n" + skillSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("schema: %w", err)
 	}
@@ -173,6 +173,9 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	if err := migrateAuto(db); err != nil {
+		return err
+	}
+	if err := migrateSkills(db); err != nil {
 		return err
 	}
 	// AI でまとめた要約と、どのモデルでいつ・どの版の会話をまとめたか

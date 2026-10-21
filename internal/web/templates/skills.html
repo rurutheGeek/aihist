@@ -1,0 +1,85 @@
+{{define "skills.html"}}{{template "head" "Skill"}}
+<div class="app">
+{{template "side" .}}
+<main class="main">
+  <div class="bar">
+    <button class="icon-btn menu" onclick="aihistMenu()" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="title">Skill</div>
+    <a class="btn" href="/skills/new">{{t "新しい Skill"}}</a>
+  </div>
+  <div class="scroll"><div class="col">
+    <form class="grp" method="post" action="/skills/import">
+      <div class="row"><div class="rl"><input class="inp wide" name="url" placeholder="https://github.com/…" required autocomplete="off" spellcheck="false"></div><div class="rc"><button class="btn">{{t "GitHub から取り込む"}}</button></div></div>
+    </form>
+    <div class="ktabs">
+      <a href="/skills"{{if eq .STab "registered"}} class="on"{{end}}>{{t "登録済み"}} <small>{{len .Skills}}</small></a>
+      <a href="/skills?tab=found"{{if eq .STab "found"}} class="on"{{end}}>{{t "履歴で使った Skill"}} <small>{{len .Found}}</small></a>
+    </div>
+    <div class="klist">
+      {{if eq .STab "registered"}}
+      {{range .Skills}}<a class="kitem" href="/skills/{{.ID}}"><b>{{.Name}}</b><small>{{if .Description}}{{.Description}}{{else}}{{rel .UpdatedAt}}{{end}}</small></a>
+      {{else}}<div class="empty mute">{{t "登録した Skill は無い"}}</div>{{end}}
+      {{else}}
+      {{range .Found}}<details class="kitem pfound"><summary><b>{{.Name}}</b><small>{{tf "会話 %d 件" .Uses}} · {{rel .LastUsed}}</small></summary><pre>{{.Body}}</pre><form method="post" action="/skills/new"><input type="hidden" name="from" value="{{.Name}}"><button class="btn pri">{{t "登録"}}</button></form></details>
+      {{else}}<div class="empty mute">{{t "履歴に Skill は無い"}}</div>{{end}}
+      {{end}}
+    </div>
+  </div></div>
+</main>
+</div>
+{{template "foot" .}}{{end}}
+
+{{define "sshow.html"}}{{template "head" (or .Item.Name (t "新しい Skill"))}}
+<div class="app">
+{{template "side" .}}
+<main class="main">
+  <div class="bar">
+    <button class="icon-btn menu" onclick="aihistMenu()" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <a class="icon-btn" href="/skills" aria-label="Skill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></a>
+    <div class="title">{{or .Item.Name (t "新しい Skill")}}</div>
+  </div>
+  <div class="scroll"><div class="col">
+    <form class="kedit" method="post" action="/skills/{{if .Item.ID}}{{.Item.ID}}{{else}}new{{end}}">
+      <input class="ktitle" name="name" value="{{.Item.Name}}" placeholder="{{t "名前"}}" required autocomplete="off" spellcheck="false">
+      <input class="inp wide" name="description" value="{{.Item.Description}}" placeholder="{{t "説明"}}" autocomplete="off">
+      <textarea name="body" rows="22" placeholder="SKILL.md" required>{{.Item.Body}}</textarea>
+      <div class="kbtns">{{if .Item.ID}}<button class="btn red" type="submit" form="sdel">{{t "削除"}}</button>{{end}}<button class="btn pri">{{t "保存"}}</button></div>
+    </form>
+    {{if .Item.ID}}<form id="sdel" method="post" action="/skills/{{.Item.ID}}/delete" onsubmit="return confirm({{t "この Skill を削除する？"}})"></form>
+    {{with .Item.Files}}<div class="gt">{{t "ファイル"}}</div>
+    <div class="grp">{{range .}}<a class="row" href="/skills/{{$.Item.ID}}?file={{.Path}}" target="_blank" rel="noopener"><div class="rl"><code>{{.Path}}</code></div><div class="rc mute">{{bytes (i64 .Size)}}</div></a>{{end}}</div>{{end}}
+    <div class="kmeta grp">
+      <div class="row"><div class="rl">{{t "出どころ"}}</div><div class="rc">{{if hasPrefix .Item.Source "https://"}}<a href="{{.Item.Source}}" target="_blank" rel="noopener">{{.Item.Source}}</a>{{else}}<span class="mute">{{or .Item.Source "—"}}</span>{{end}}</div></div>
+      {{if .Item.Version}}<div class="row"><div class="rl">{{t "版"}}</div><div class="rc mute"><code>{{slice .Item.Version 0 7}}</code></div></div>{{end}}
+      <div class="row"><div class="rl">{{t "更新"}}</div><div class="rc mute">{{when .Item.UpdatedAt}}</div></div>
+      {{if hasPrefix .Item.Source "https://github.com/"}}<form class="row" method="post" action="/skills/{{.Item.ID}}/update"><div class="rl">{{t "GitHub の今の版にする"}}</div><div class="rc"><button class="btn">{{t "更新"}}</button></div></form>{{end}}
+    </div>{{end}}
+  </div></div>
+</main>
+</div>
+{{template "foot" .}}{{end}}
+
+{{define "simport.html"}}{{template "head" (t "GitHub から取り込む")}}
+<div class="app">
+{{template "side" .}}
+<main class="main">
+  <div class="bar">
+    <button class="icon-btn menu" onclick="aihistMenu()" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <a class="icon-btn" href="/skills" aria-label="Skill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></a>
+    <div class="title">{{t "GitHub から取り込む"}}</div>
+  </div>
+  <div class="scroll"><div class="col">
+    <div class="mute">{{.ImportURL}}</div>
+    {{with .ImportErr}}<div class="kwarn">{{.}}</div>{{else}}
+    <form method="post" action="/skills/import/do">
+      <input type="hidden" name="pick" value="{{.Pick}}">
+      <div class="grp">
+        {{range .Rows}}<label class="row"><div class="rl"><b>{{.Name}}</b><small>{{.Description}}</small><small>{{tf "ファイル %d 件" (len .Files)}}{{if .Exists}} · <span class="warn">{{t "同じ名前の Skill を置き換える"}}</span>{{end}}</small></div><div class="rc"><input class="sw" type="checkbox" name="name" value="{{.Name}}"{{if not .Exists}} checked{{end}}></div></label>
+        {{else}}<div class="row"><div class="rl mute">{{t "SKILL.md が見つからない"}}</div></div>{{end}}
+      </div>
+      {{if .Rows}}<div class="kbtns"><a class="btn" href="/skills">{{t "キャンセル"}}</a><button class="btn pri">{{t "取り込む"}}</button></div>{{end}}
+    </form>{{end}}
+  </div></div>
+</main>
+</div>
+{{template "foot" .}}{{end}}

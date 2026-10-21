@@ -104,7 +104,7 @@ DB は既定で `~/.local/share/aihist/aihist.db`（`-db` で変更）。取り�
 | 使い方 | やること |
 |---|---|
 | API | 「設定 → AI」に OpenAI と同じ形の API の接続先・キー・モデルを入れる。会話の画面の ✦、会話を選んだときの「AI で整理」、アップロードの「取り込んだ会話を AI で整理」を押したときだけ呼ぶ |
-| プロンプト | よく使うプロンプトや Skill を登録し、MCP でつないだ AI から使う（MCP のプロンプトとして配り、`list_prompts`・`get_prompt` でも読める）。Claude Code が読み込んだ Skill は履歴から見つけて「履歴の Skill」に並べ、押すと登録できる |
+| Skill | AI への手順書（SKILL.md と、付いている規則・資料・スクリプト）を1か所に集める。GitHub の URL から中の Skill を探して選んで取り込み（あとで「更新」で今の版にできる）、各マシンの `~/.claude/skills`・`~/.codex/skills`・`~/.agents/skills` も送るときに集める。Claude Code が履歴で読み込んだ Skill は「履歴で使った Skill」に並ぶ。本文だけの Skill はプロンプトとしても使える。MCP でつないだ AI は `list_skills` で探して `get_skill`・`read_skill_file` で読む（MCP のプロンプトとしても配る） |
 | MCP | 自分の AI（Claude Code など）から `<サーバー>/api/mcp` をトークン付きでつなぐ（「設定 → 連携」でアプリを選ぶと、トークン入りの設定が出る）。AI が会話を読み、結果を書き戻す。会話の削除・アーカイブ・ピン留め・名前の変更・タグの付け替え、会話の一覧を見てタグを作ることも頼める。人ではなくプログラムや AI が動かした会話（`opencode run`・`claude -p`・`codex exec` など）は「自動実行」に分け、整理の対象から外す |
 
 - タグは「設定 → タグ」で作る（テンプレートもある）。AI は作ったタグの中からだけ付ける。

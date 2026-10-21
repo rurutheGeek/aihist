@@ -43,6 +43,28 @@ func Defaults(home string) []Source {
 	}
 }
 
+// SkillSources は各 AI の Skill の置き場所。For は、その AI を送る設定のときだけ送る（空は常に送る）。
+func SkillSources(home string) []struct {
+	Source
+	For string
+} {
+	want := func(rel string) bool {
+		return !strings.HasPrefix(rel, ".") && !strings.Contains(rel, "/.") && !strings.Contains(rel, "node_modules/")
+	}
+	type ss = struct {
+		Source
+		For string
+	}
+	return []ss{
+		{Source{"skills_claude", filepath.Join(home, ".claude", "skills"), want}, claudecode.Tool},
+		{Source{"skills_codex", filepath.Join(home, ".codex", "skills"), want}, codex.Tool},
+		{Source{"skills_agents", filepath.Join(home, ".agents", "skills"), want}, ""},
+	}
+}
+
+// IsSkills は Skill の置き場所を送るときの名前か。
+func IsSkills(tool string) bool { return strings.HasPrefix(tool, "skills_") }
+
 func path(rel string) string { return rel[strings.LastIndex(rel, "/")+1:] }
 
 type Client struct {
@@ -162,7 +184,7 @@ func (c *Client) Push(src Source) (int, Imported, error) {
 		q := url.Values{"host": {c.Host}, "tool": {src.Tool}, "path": {rel}}
 		up := &upload{f, st.Size(), st.ModTime()}
 		// Antigravity の DB は形を変えられないので、そのまま送る
-		if c.rewrites() && src.Tool != antigravity.Tool {
+		if c.rewrites() && src.Tool != antigravity.Tool && !IsSkills(src.Tool) {
 			t, size, err := stripped(f, c.Attach, c.Hide)
 			if err != nil {
 				return err

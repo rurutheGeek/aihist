@@ -1,11 +1,13 @@
 package web
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/rurutheGeek/aihist/internal/ai"
 	"github.com/rurutheGeek/aihist/internal/store"
@@ -59,9 +61,10 @@ var mcpTools = []mcpTool{
 	{"get_profile", "ユーザーのプロフィール（どんな人か・経歴・趣味関心・好み・してほしいこと）。答え方をユーザーに合わせるために、作業の最初に読む。", obj(map[string]any{})},
 	{"list_profile", "プロフィールの項目を番号つきで返す。kind は about（その人について）か wish（AI への希望）。", obj(map[string]any{})},
 	{"set_profile_kind", "プロフィールの項目の種類を変える。kind は about（経歴・趣味・暮らしなど、その人について）か wish（答え方・進め方など、AI にどうしてほしいか）。", obj(map[string]any{"id": num, "kind": str}, "id", "kind")},
-	{"list_prompts", "ユーザーが登録したプロンプト（Skill を含む）の名前と説明。", obj(map[string]any{})},
-	{"get_prompt", "登録したプロンプトの本文を読む。ユーザーが名前で頼んだら、その本文の指示に従う。", obj(map[string]any{"name": str}, "name")},
-	{"save_prompt", "プロンプトを登録する（同じ名前があれば本文と説明を置き換える）。", obj(map[string]any{"name": str, "description": str, "body": str}, "name", "body")},
+	{"list_skills", "ユーザーが集めた Skill（AI への手順書。プロンプトだけのものもある）の名前と説明。作業に合う Skill があれば get_skill で読んで従う。", obj(map[string]any{})},
+	{"get_skill", "Skill の SKILL.md と、付いているファイルの一覧を読む。手順がファイルを指していれば read_skill_file で読む。スクリプトを動かす Skill なら、そのファイルを手元に書いてから使う。", obj(map[string]any{"name": str}, "name")},
+	{"read_skill_file", "Skill に付いているファイルを1つ読む（path は get_skill の一覧のとおり）。", obj(map[string]any{"name": str, "path": str}, "name", "path")},
+	{"save_skill", "Skill を登録する（同じ名前があれば SKILL.md の本文と説明を置き換える。付いているファイルはそのまま）。", obj(map[string]any{"name": str, "description": str, "body": str}, "name", "body")},
 	{"delete_conversations", "会話を削除する（同じ会話としてまとめた分岐・続きも）。中身は戻せない。消した会話は送り直されても取り込まない。消す前に search で中身を確かめ、ユーザーに確認してから使う。", obj(map[string]any{"ids": map[string]any{"type": "array", "items": num}}, "ids")},
 	{"archive_conversations", "会話をアーカイブする（archived が false なら外す）。", obj(map[string]any{"ids": map[string]any{"type": "array", "items": num}, "archived": map[string]any{"type": "boolean"}}, "ids")},
 	{"pin_conversations", "会話をピン留めする（pinned が false なら外す）。", obj(map[string]any{"ids": map[string]any{"type": "array", "items": num}, "pinned": map[string]any{"type": "boolean"}}, "ids")},
@@ -103,15 +106,15 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 			"protocolVersion": v,
 			"capabilities":    map[string]any{"tools": map[string]any{}, "prompts": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "aihist", "version": s.Version},
-			"instructions":    "aihist は AI との会話の履歴。会話を探して読み、organize_instructions の決まりで整理して save_organized で保存できる。ユーザーが登録したプロンプト（Skill を含む）は list_prompts と get_prompt で読める。長い会話は1件ずつ別のサブエージェントで読むと、文脈を圧迫しない。",
+			"instructions":    "aihist は AI との会話の履歴。会話を探して読み、organize_instructions の決まりで整理して save_organized で保存できる。ユーザーが集めた Skill は list_skills で探し、合うものがあれば get_skill で読んで従う。長い会話は1件ずつ別のサブエージェントで読むと、文脈を圧迫しない。",
 		}, nil)
 	case "ping":
 		writeRPC(w, req.ID, map[string]any{}, nil)
 	case "prompts/list":
-		ps, _ := s.st.Prompts()
+		ks, _ := s.st.Skills()
 		out := []map[string]any{}
-		for _, p := range ps {
-			out = append(out, map[string]any{"name": p.Name, "description": p.Description})
+		for _, k := range ks {
+			out = append(out, map[string]any{"name": k.Name, "description": k.Description})
 		}
 		writeRPC(w, req.ID, map[string]any{"prompts": out}, nil)
 	case "prompts/get":
@@ -119,13 +122,17 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 			Name string `json:"name"`
 		}
 		json.Unmarshal(req.Params, &p)
-		pr, err := s.st.PromptByName(p.Name)
+		k, err := s.st.SkillByName(p.Name)
 		if err != nil {
 			writeRPC(w, req.ID, nil, &rpcErr{-32602, "unknown prompt"})
 			return
 		}
-		writeRPC(w, req.ID, map[string]any{"description": pr.Description, "messages": []map[string]any{
-			{"role": "user", "content": map[string]any{"type": "text", "text": pr.Body}}}}, nil)
+		text := k.Body
+		if len(k.Files) > 0 {
+			text += "\n\n（この Skill に付いているファイルは、aihist の read_skill_file で name \"" + k.Name + "\" を指定して読む）"
+		}
+		writeRPC(w, req.ID, map[string]any{"description": k.Description, "messages": []map[string]any{
+			{"role": "user", "content": map[string]any{"type": "text", "text": text}}}}, nil)
 	case "tools/list":
 		writeRPC(w, req.ID, map[string]any{"tools": mcpTools}, nil)
 	case "tools/call":
@@ -206,6 +213,7 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		Old       string         `json:"old"`
 		Kind      string         `json:"kind"`
 		Body      string         `json:"body"`
+		Path      string         `json:"path"`
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -317,37 +325,58 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 			return "", err
 		}
 		return "変えた", nil
-	case "list_prompts":
-		ps, err := s.st.Prompts()
+	case "list_skills":
+		ks, err := s.st.Skills()
 		if err != nil {
 			return "", err
 		}
-		type pb struct {
+		type kb struct {
 			Name        string `json:"name"`
 			Description string `json:"description"`
 		}
-		out := []pb{}
-		for _, p := range ps {
-			out = append(out, pb{p.Name, p.Description})
+		out := []kb{}
+		for _, k := range ks {
+			out = append(out, kb{k.Name, k.Description})
 		}
 		return jsonText(out), nil
-	case "get_prompt":
-		p, err := s.st.PromptByName(a.Name)
+	case "get_skill":
+		k, err := s.st.SkillByName(a.Name)
 		if err != nil {
-			return "", fmt.Errorf("プロンプト「%s」は無い", a.Name)
+			return "", fmt.Errorf("Skill「%s」は無い", a.Name)
 		}
-		return p.Body, nil
-	case "save_prompt":
+		out := k.SkillMD()
+		if len(k.Files) > 0 {
+			out += "\n---\n付いているファイル（read_skill_file で読む）:\n"
+			for _, f := range k.Files {
+				out += fmt.Sprintf("- %s（%d バイト）\n", f.Path, f.Size)
+			}
+		}
+		return out, nil
+	case "read_skill_file":
+		k, err := s.st.SkillByName(a.Name)
+		if err != nil {
+			return "", fmt.Errorf("Skill「%s」は無い", a.Name)
+		}
+		b, err := s.st.SkillFileData(k.ID, strings.TrimPrefix(a.Path, "./"))
+		if err != nil {
+			return "", fmt.Errorf("ファイル「%s」は無い", a.Path)
+		}
+		if !utf8.Valid(b) {
+			return fmt.Sprintf("「%s」は文字のファイルではないので base64 で返す（%d バイト）。手元に書くときは base64 を戻す。\n\n%s", a.Path, len(b), base64.StdEncoding.EncodeToString(b)), nil
+		}
+		return string(b), nil
+	case "save_skill":
 		n := strings.TrimSpace(a.Name)
 		if n == "" || strings.TrimSpace(a.Body) == "" {
 			return "", fmt.Errorf("name と body が要る")
 		}
-		p, _ := s.st.PromptByName(n)
-		p.Name, p.Description, p.Body = n, strings.TrimSpace(a.Desc), a.Body
-		if _, err := s.st.SavePrompt(p); err != nil {
+		k, _ := s.st.SkillByName(n)
+		k.Files = nil
+		k.Name, k.Description, k.Body = n, strings.TrimSpace(a.Desc), strings.TrimSpace(a.Body)
+		if _, err := s.st.SaveSkill(k); err != nil {
 			return "", err
 		}
-		return "プロンプト「" + n + "」を保存した", nil
+		return "Skill「" + n + "」を保存した", nil
 	case "delete_conversations":
 		if len(a.IDs) == 0 {
 			return "", fmt.Errorf("ids が要る")

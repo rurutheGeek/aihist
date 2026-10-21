@@ -127,6 +127,9 @@ func (s *Server) ingestProgress(host, tool string, p ingest.Progress) (ingest.Re
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if push.IsSkills(tool) {
+		return s.ingestSkills(host, tool, dir)
+	}
 	res, err := ingest.RunProgress(s.st, tool, host, dir, p)
 	log.Printf("%s/%s: %s %v", host, tool, res, err)
 	return res, err

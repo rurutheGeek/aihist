@@ -87,7 +87,9 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 			}
 			return m
 		},
-		"add64": func(a, b int64) int64 { return a + b },
+		"add64":     func(a, b int64) int64 { return a + b },
+		"i64":       func(n int) int64 { return int64(n) },
+		"hasPrefix": strings.HasPrefix,
 	}
 	tmpl := map[string]*template.Template{}
 	for _, l := range []string{"ja", "en"} {
@@ -140,10 +142,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /profile", s.profilePage)
 	mux.HandleFunc("POST /profile/settings", s.profileSettings)
 	mux.HandleFunc("POST /profile/edit", s.profileEdit)
-	mux.HandleFunc("GET /prompts", s.promptList)
-	mux.HandleFunc("GET /prompts/{id}", s.promptShow)
-	mux.HandleFunc("POST /prompts/{id}", s.promptSave)
-	mux.HandleFunc("POST /prompts/{id}/delete", s.promptDelete)
+	mux.HandleFunc("GET /skills", s.skillList)
+	mux.HandleFunc("POST /skills/import", s.skillImport)
+	mux.HandleFunc("POST /skills/import/do", s.skillImportDo)
+	mux.HandleFunc("GET /skills/{id}", s.skillShow)
+	mux.HandleFunc("POST /skills/{id}", s.skillSave)
+	mux.HandleFunc("POST /skills/{id}/delete", s.skillDelete)
+	mux.HandleFunc("POST /skills/{id}/update", s.skillUpdate)
+	mux.Handle("GET /prompts", http.RedirectHandler("/skills", http.StatusMovedPermanently))
 	mux.HandleFunc("GET /knowledge", s.knowledgeList)
 	mux.HandleFunc("GET /knowledge/{id}", s.knowledgeShow)
 	mux.HandleFunc("GET /knowledge/{id}/md", s.knowledgeMD)
