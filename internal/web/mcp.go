@@ -234,7 +234,7 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		if a.Page > len(pages) {
 			return "", fmt.Errorf("区切りは %d まで", len(pages))
 		}
-		return fmt.Sprintf("# %s\n(id %d · %s · 区切り %d / %d)\n\n%s", c.Title, c.ID, toolLabel(c.Tool), a.Page, len(pages), pages[a.Page-1]), nil
+		return fmt.Sprintf("# %s\n(id %d · %s · %s の会話 · 区切り %d / %d)\n\n%s", c.Title, c.ID, toolLabel(c.Tool), c.StartedAt.Local().Format("2006-01-02"), a.Page, len(pages), pages[a.Page-1]), nil
 	case "organize_instructions":
 		return ai.Instructions(s.aiTags(), "", s.profileReq()) + "\n\n結果は save_organized に渡す（JSON の各項目をそのまま引数にする）。", nil
 	case "save_organized":

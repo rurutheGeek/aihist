@@ -198,7 +198,7 @@ func (s *Server) organize(id int64, c ai.Config, l string) (int, error) {
 	pages := ai.Pages(msgs, ai.PageSize)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	res, err := c.Organize(ctx, conv.Title, pages, tags, l, s.profileReq(), nil)
+	res, err := c.Organize(ctx, conv.Title+"（"+conv.StartedAt.Local().Format("2006-01-02")+" の会話）", pages, tags, l, s.profileReq(), nil)
 	if err != nil {
 		log.Printf("ai %d: %v", id, err)
 		return 0, err
