@@ -20,6 +20,7 @@ type Conversation struct {
 	StartedAt  time.Time
 	UpdatedAt  time.Time
 	SourcePath string
+	Auto       bool // 人ではなくプログラムや AI が動かした会話（opencode run・claude -p・codex exec など）
 	Messages   []Message
 }
 

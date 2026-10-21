@@ -76,7 +76,7 @@ type Trait struct {
 // ProfileReq はプロフィールを書き足すときに渡すもの。nil なら取り出さない。
 type ProfileReq struct {
 	Existing []ExistingTrait
-	Note     string // ユーザーが書いた「覚えないでほしいこと」
+	Note     string // ユーザーが書いた「指示」
 }
 
 type ExistingTrait struct {

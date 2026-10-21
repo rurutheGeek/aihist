@@ -282,6 +282,8 @@ func Convert(r *Rows) *model.Conversation {
 		Tool: Tool, ExternalID: str(s["id"]), ParentID: str(s["parent_id"]), Title: str(s["title"]),
 		Cwd: str(s["directory"]), StartedAt: ms(num(s["time_created"])), UpdatedAt: ms(num(s["time_updated"])),
 	}
+	// opencode run や外からの呼び出しは、人に尋ねる道具（question）を禁じて会話を作る
+	c.Auto = c.ParentID == "" && strings.Contains(strings.ReplaceAll(str(s["permission"]), " ", ""), `"permission":"question","pattern":"*","action":"deny"`)
 	var sm struct {
 		ID string `json:"id"`
 	}

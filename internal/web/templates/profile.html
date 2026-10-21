@@ -10,7 +10,7 @@
   <div class="scroll"><div class="col">
     <form class="grp" id="pset">
       <label class="row"><div class="rl">{{t "AI で整理するときに書き足す"}}</div><div class="rc"><input class="sw" type="checkbox" name="on" value="1"{{if .ProfileOn}} checked{{end}}></div></label>
-      <div class="row col"><div class="rl">{{t "覚えないでほしいこと"}}</div><div class="rc"><textarea class="pnote" name="note" rows="3" placeholder="{{t "健康や家族のことは取り出さない"}}">{{.ProfileNote}}</textarea></div></div>
+      <div class="row col"><div class="rl">{{t "指示"}}</div><div class="rc"><textarea class="pnote" name="note" rows="3" placeholder="{{t "健康や家族のことは取り出さない"}}">{{.ProfileNote}}</textarea></div></div>
     </form>
     {{template "ptraits" (dict "Title" (t "あなたについて") "Kind" "" "Items" .About)}}
     {{template "ptraits" (dict "Title" (t "AI への希望") "Kind" "wish" "Items" .Wishes)}}

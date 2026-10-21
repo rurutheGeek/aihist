@@ -40,7 +40,7 @@ type choice struct{ Value, Label string }
 
 var (
 	periods  = []choice{{"", "すべて"}, {"1d", "今日"}, {"7d", "7日"}, {"30d", "30日"}, {"90d", "90日"}, {"365d", "1年"}}
-	statuses = []choice{{"", "アクティブ"}, {"archived", "アーカイブ済み"}, {"all", "すべて"}}
+	statuses = []choice{{"", "アクティブ"}, {"archived", "アーカイブ済み"}, {"auto", "自動実行"}, {"all", "すべて"}}
 	groupBys = []choice{{"", "日付"}, {"project", "プロジェクト"}, {"tool", "AI"}, {"none", "なし"}}
 	sorts    = []choice{{"", "最終更新"}, {"started", "始めた日"}}
 )

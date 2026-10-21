@@ -30,6 +30,7 @@ type line struct {
 	IsSidechain bool            `json:"isSidechain"`
 	IsMeta      bool            `json:"isMeta"`
 	CustomTitle string          `json:"customTitle"`
+	Entrypoint  string          `json:"entrypoint"`
 	AgentName   string          `json:"agentName"`
 	Summary     string          `json:"summary"`
 	Message     json.RawMessage `json:"message"`
@@ -122,6 +123,10 @@ func Parse(path string) (*model.Conversation, error) {
 		case "user", "assistant":
 		default:
 			continue
+		}
+		// claude -p や Agent SDK から動かした会話は entrypoint が sdk-…
+		if strings.HasPrefix(l.Entrypoint, "sdk") {
+			c.Auto = true
 		}
 		if l.Cwd != "" {
 			c.Cwd = l.Cwd

@@ -48,7 +48,7 @@ var (
 
 var mcpTools = []mcpTool{
 	{"search", "会話を探す。query は本文・題名・要約から探す。tag・tool で絞れる。", obj(map[string]any{"query": str, "tag": str, "tool": str, "limit": num})},
-	{"list_unorganized", "まだタグ・要約を付けていない会話と、付けたあとに続きが足された会話を、新しい順に返す。", obj(map[string]any{"limit": num})},
+	{"list_unorganized", "まだタグ・要約を付けていない会話と、付けたあとに続きが足された会話を、新しい順に返す（プログラムや AI が動かした会話は除く）。", obj(map[string]any{"limit": num})},
 	{"read_conversation", "会話を読む。長い会話は区切り（page は 1 から）ごとに返すので、pages まで順に読む。", obj(map[string]any{"id": num, "page": num}, "id")},
 	{"organize_instructions", "会話を整理するときの決まり（タグの一覧・要約・ナレッジの基準と形）。save_organized の前に読む。", obj(map[string]any{})},
 	{"save_organized", "会話を整理した結果を保存する。tags はタグの一覧にある名前だけ。knowledge は下書きに入る（利用者が登録する）。evidence は会話からそのまま写した文で、記録に無ければ捨てられる。",
@@ -59,6 +59,9 @@ var mcpTools = []mcpTool{
 	{"get_profile", "ユーザーのプロフィール（どんな人か・経歴・趣味関心・好み・してほしいこと）。答え方をユーザーに合わせるために、作業の最初に読む。", obj(map[string]any{})},
 	{"list_profile", "プロフィールの項目を番号つきで返す。kind は about（その人について）か wish（AI への希望）。", obj(map[string]any{})},
 	{"set_profile_kind", "プロフィールの項目の種類を変える。kind は about（経歴・趣味・暮らしなど、その人について）か wish（答え方・進め方など、AI にどうしてほしいか）。", obj(map[string]any{"id": num, "kind": str}, "id", "kind")},
+	{"list_prompts", "ユーザーが登録したプロンプト（Skill を含む）の名前と説明。", obj(map[string]any{})},
+	{"get_prompt", "登録したプロンプトの本文を読む。ユーザーが名前で頼んだら、その本文の指示に従う。", obj(map[string]any{"name": str}, "name")},
+	{"save_prompt", "プロンプトを登録する（同じ名前があれば本文と説明を置き換える）。", obj(map[string]any{"name": str, "description": str, "body": str}, "name", "body")},
 	{"delete_conversations", "会話を削除する（同じ会話としてまとめた分岐・続きも）。中身は戻せない。消した会話は送り直されても取り込まない。消す前に search で中身を確かめ、ユーザーに確認してから使う。", obj(map[string]any{"ids": map[string]any{"type": "array", "items": num}}, "ids")},
 	{"archive_conversations", "会話をアーカイブする（archived が false なら外す）。", obj(map[string]any{"ids": map[string]any{"type": "array", "items": num}, "archived": map[string]any{"type": "boolean"}}, "ids")},
 	{"pin_conversations", "会話をピン留めする（pinned が false なら外す）。", obj(map[string]any{"ids": map[string]any{"type": "array", "items": num}, "pinned": map[string]any{"type": "boolean"}}, "ids")},
@@ -98,12 +101,31 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 		}
 		writeRPC(w, req.ID, map[string]any{
 			"protocolVersion": v,
-			"capabilities":    map[string]any{"tools": map[string]any{}},
+			"capabilities":    map[string]any{"tools": map[string]any{}, "prompts": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "aihist", "version": s.Version},
-			"instructions":    "aihist は AI との会話の履歴。会話を探して読み、organize_instructions の決まりで整理して save_organized で保存できる。長い会話は1件ずつ別のサブエージェントで読むと、文脈を圧迫しない。",
+			"instructions":    "aihist は AI との会話の履歴。会話を探して読み、organize_instructions の決まりで整理して save_organized で保存できる。ユーザーが登録したプロンプト（Skill を含む）は list_prompts と get_prompt で読める。長い会話は1件ずつ別のサブエージェントで読むと、文脈を圧迫しない。",
 		}, nil)
 	case "ping":
 		writeRPC(w, req.ID, map[string]any{}, nil)
+	case "prompts/list":
+		ps, _ := s.st.Prompts()
+		out := []map[string]any{}
+		for _, p := range ps {
+			out = append(out, map[string]any{"name": p.Name, "description": p.Description})
+		}
+		writeRPC(w, req.ID, map[string]any{"prompts": out}, nil)
+	case "prompts/get":
+		var p struct {
+			Name string `json:"name"`
+		}
+		json.Unmarshal(req.Params, &p)
+		pr, err := s.st.PromptByName(p.Name)
+		if err != nil {
+			writeRPC(w, req.ID, nil, &rpcErr{-32602, "unknown prompt"})
+			return
+		}
+		writeRPC(w, req.ID, map[string]any{"description": pr.Description, "messages": []map[string]any{
+			{"role": "user", "content": map[string]any{"type": "text", "text": pr.Body}}}}, nil)
 	case "tools/list":
 		writeRPC(w, req.ID, map[string]any{"tools": mcpTools}, nil)
 	case "tools/call":
@@ -183,6 +205,7 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		Desc      string         `json:"description"`
 		Old       string         `json:"old"`
 		Kind      string         `json:"kind"`
+		Body      string         `json:"body"`
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -217,7 +240,7 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		}
 		var out []store.ConvRow
 		for _, c := range rows {
-			if c.Summary == "" || s.st.Stale(c.ID) {
+			if !c.Auto && (c.Summary == "" || s.st.Stale(c.ID)) {
 				out = append(out, c)
 				if len(out) == a.Limit {
 					break
@@ -294,6 +317,37 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 			return "", err
 		}
 		return "変えた", nil
+	case "list_prompts":
+		ps, err := s.st.Prompts()
+		if err != nil {
+			return "", err
+		}
+		type pb struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		}
+		out := []pb{}
+		for _, p := range ps {
+			out = append(out, pb{p.Name, p.Description})
+		}
+		return jsonText(out), nil
+	case "get_prompt":
+		p, err := s.st.PromptByName(a.Name)
+		if err != nil {
+			return "", fmt.Errorf("プロンプト「%s」は無い", a.Name)
+		}
+		return p.Body, nil
+	case "save_prompt":
+		n := strings.TrimSpace(a.Name)
+		if n == "" || strings.TrimSpace(a.Body) == "" {
+			return "", fmt.Errorf("name と body が要る")
+		}
+		p, _ := s.st.PromptByName(n)
+		p.Name, p.Description, p.Body = n, strings.TrimSpace(a.Desc), a.Body
+		if _, err := s.st.SavePrompt(p); err != nil {
+			return "", err
+		}
+		return "プロンプト「" + n + "」を保存した", nil
 	case "delete_conversations":
 		if len(a.IDs) == 0 {
 			return "", fmt.Errorf("ids が要る")

@@ -51,7 +51,7 @@ func (s *Server) profilePage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "profile.html", d)
 }
 
-// profileSettings は使うかどうかと覚えないでほしいことを保存する。
+// profileSettings は使うかどうかと指示を保存する。
 func (s *Server) profileSettings(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)

@@ -146,7 +146,7 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema + ";\n" + profileSchema); err != nil {
+	if _, err := db.Exec(schema + ";\n" + profileSchema + ";\n" + promptSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("schema: %w", err)
 	}
@@ -170,6 +170,9 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	if err := migrateModels(db); err != nil {
+		return err
+	}
+	if err := migrateAuto(db); err != nil {
 		return err
 	}
 	// AI でまとめた要約と、どのモデルでいつ・どの版の会話をまとめたか
@@ -216,6 +219,20 @@ func migrateModels(db *sql.DB) error {
 	  UPDATE conversations SET models = model WHERE models = '' AND model NOT IN ('', '<synthetic>');`)
 	return err
 }
+
+// migrateAuto は auto（人ではなくプログラムや AI が動かした会話）を足す。既にある会話は印に reparse: を付け、
+// 次に送られたときに読み直して埋める（印は同じに戻るので、AI でまとめた結果は古くならない）。
+func migrateAuto(db *sql.DB) error {
+	if hasColumn(db, "auto") {
+		return nil
+	}
+	_, err := db.Exec(`ALTER TABLE conversations ADD COLUMN auto INTEGER NOT NULL DEFAULT 0;
+	  UPDATE conversations SET source_stamp = '` + reparse + `' || source_stamp WHERE source_stamp != ''`)
+	return err
+}
+
+// reparse は読み直しを待つ印の頭。
+const reparse = "reparse:"
 
 func hasColumnIn(db *sql.DB, table, col string) bool {
 	var n int
@@ -317,10 +334,10 @@ func putTx(tx *sql.Tx, c *model.Conversation, stamp string) error {
 		return err
 	}
 	res, err := tx.Exec(`INSERT INTO conversations
-	  (tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, source_path, source_stamp, message_count, root_id, continues_from, models)
-	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	  (tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, source_path, source_stamp, message_count, root_id, continues_from, models, auto)
+	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		c.Tool, c.Host, c.ExternalID, c.ParentID, c.Title, c.Cwd, c.GitBranch, c.Model,
-		unix(c.StartedAt), unix(c.UpdatedAt), c.SourcePath, stamp, len(c.Messages), rootID(c), continuesFrom(c), strings.Join(models(c), "\n"))
+		unix(c.StartedAt), unix(c.UpdatedAt), c.SourcePath, stamp, len(c.Messages), rootID(c), continuesFrom(c), strings.Join(models(c), "\n"), c.Auto)
 	if err != nil {
 		return err
 	}
@@ -418,6 +435,7 @@ type ConvRow struct {
 	Archived      bool   // アーカイブ（まとめた会話のどれかに付いていれば）
 	Tags          []string
 	Summary       string // AI でまとめた要約
+	Auto          bool   // 人ではなくプログラムや AI が動かした会話
 	orphan        bool   // 親の会話が取り込まれていないサブエージェント
 }
 
@@ -557,8 +575,17 @@ func (s *Store) Browse(f Filter) ([]ConvRow, map[string][]Facet, error) {
 				continue
 			}
 			archived := slices.ContainsFunc(g.members, func(i int) bool { return rows[i].Archived })
-			if (f.Status == "archived") != archived && f.Status != "all" {
-				continue
+			auto := !slices.ContainsFunc(g.members, func(i int) bool { return !rows[i].Auto })
+			switch f.Status {
+			case "all":
+			case "auto":
+				if !auto {
+					continue
+				}
+			default:
+				if auto || (f.Status == "archived") != archived {
+					continue
+				}
 			}
 			gs = append(gs, g)
 		}
@@ -631,7 +658,7 @@ func splitModels(s string) []string {
 	return strings.Split(s, "\n")
 }
 
-const rowCols = `id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id, continues_from, models`
+const rowCols = `id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id, continues_from, models, auto`
 
 func (s *Store) rowsWhere(tool, host string) ([]ConvRow, error) {
 	q := `SELECT ` + rowCols + ` FROM conversations WHERE 1=1`
@@ -658,7 +685,7 @@ func (s *Store) query(q string, args ...any) ([]ConvRow, error) {
 		var r ConvRow
 		var st, up int64
 		var ms string
-		if err := rows.Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom, &ms); err != nil {
+		if err := rows.Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom, &ms, &r.Auto); err != nil {
 			return nil, err
 		}
 		r.Models = splitModels(ms)
@@ -868,7 +895,7 @@ func (s *Store) Get(id int64) (*ConvRow, []model.Message, error) {
 	var st, up int64
 	var ms string
 	err := s.db.QueryRow(`SELECT `+rowCols+` FROM conversations WHERE id=?`, id).
-		Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom, &ms)
+		Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom, &ms, &r.Auto)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -30,8 +30,10 @@ type line struct {
 }
 
 type meta struct {
-	ID             string `json:"id"`
-	ParentThreadID string `json:"parent_thread_id"`
+	ID             string          `json:"id"`
+	ParentThreadID string          `json:"parent_thread_id"`
+	Originator     string          `json:"originator"`
+	Source         json.RawMessage `json:"source"`
 	Timestamp      time.Time
 	Cwd            string `json:"cwd"`
 	AgentNickname  string `json:"agent_nickname"`
@@ -200,6 +202,7 @@ func Load(s Session) (*model.Conversation, error) {
 				var m meta
 				if json.Unmarshal(l.Payload, &m) == nil && fi == 0 {
 					c.Cwd, c.GitBranch, c.ParentID = m.Cwd, m.Git.Branch, m.ParentThreadID
+					c.Auto = m.auto()
 					c.StartedAt = l.Timestamp
 					if m.ParentThreadID != "" {
 						c.Title = m.AgentNickname
@@ -304,4 +307,15 @@ func output(raw json.RawMessage) string {
 		return joinText(cs)
 	}
 	return string(raw)
+}
+
+// auto は人が開いた会話でないか（codex exec や、親の無いサブエージェント＝guardian など）。
+func (m meta) auto() bool {
+	if m.Originator == "codex_exec" || string(m.Source) == `"exec"` {
+		return true
+	}
+	var src struct {
+		Subagent json.RawMessage `json:"subagent"`
+	}
+	return m.ParentThreadID == "" && json.Unmarshal(m.Source, &src) == nil && len(src.Subagent) > 0
 }
