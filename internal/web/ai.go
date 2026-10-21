@@ -227,7 +227,7 @@ func (s *Server) saveResult(conv *store.ConvRow, pages []string, res ai.Result, 
 	}
 	if s.profileOn() {
 		for _, t := range res.Profile {
-			s.st.AddTrait(string(t.Text), t.Same, t.Replaces, [3]string{conv.Tool, conv.Host, conv.ExternalID})
+			s.st.AddTrait(traitKind(t.Kind), string(t.Text), t.Same, t.Replaces, [3]string{conv.Tool, conv.Host, conv.ExternalID})
 		}
 	}
 	return len(res.Knowledge), nil
@@ -243,7 +243,7 @@ func (s *Server) profileReq() *ai.ProfileReq {
 	p := &ai.ProfileReq{Note: s.st.Setting("profile_note", "")}
 	ts, _ := s.st.Profile()
 	for _, t := range ts {
-		p.Existing = append(p.Existing, ai.ExistingTrait{ID: t.ID, Text: t.Text})
+		p.Existing = append(p.Existing, ai.ExistingTrait{ID: t.ID, Kind: t.Kind, Text: t.Text})
 	}
 	return p
 }
@@ -256,4 +256,12 @@ func (s *Server) aiTags() []ai.Tag {
 		tags = append(tags, ai.Tag{Name: t.Name, Desc: t.Description})
 	}
 	return tags
+}
+
+// traitKind は AI が返した種類（about / wish）を保存する形にする。
+func traitKind(k string) string {
+	if k == "wish" {
+		return store.KindWish
+	}
+	return ""
 }

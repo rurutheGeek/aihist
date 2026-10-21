@@ -57,6 +57,8 @@ var mcpTools = []mcpTool{
 		}, "title", "conclusion", "solution", "evidence", "fixed", "score")},
 			"profile": map[string]any{"type": "array", "items": obj(map[string]any{"text": str, "source": str, "lasting": map[string]any{"type": "boolean"}, "same": num, "replaces": num}, "text", "source", "lasting")}}, "id", "summary")},
 	{"get_profile", "ユーザーのプロフィール（どんな人か・経歴・趣味関心・好み・してほしいこと）。答え方をユーザーに合わせるために、作業の最初に読む。", obj(map[string]any{})},
+	{"list_profile", "プロフィールの項目を番号つきで返す。kind は about（その人について）か wish（AI への希望）。", obj(map[string]any{})},
+	{"set_profile_kind", "プロフィールの項目の種類を変える。kind は about（経歴・趣味・暮らしなど、その人について）か wish（答え方・進め方など、AI にどうしてほしいか）。", obj(map[string]any{"id": num, "kind": str}, "id", "kind")},
 	{"delete_conversations", "会話を削除する（同じ会話としてまとめた分岐・続きも）。中身は戻せない。消した会話は送り直されても取り込まない。消す前に search で中身を確かめ、ユーザーに確認してから使う。", obj(map[string]any{"ids": map[string]any{"type": "array", "items": num}}, "ids")},
 	{"archive_conversations", "会話をアーカイブする（archived が false なら外す）。", obj(map[string]any{"ids": map[string]any{"type": "array", "items": num}, "archived": map[string]any{"type": "boolean"}}, "ids")},
 	{"pin_conversations", "会話をピン留めする（pinned が false なら外す）。", obj(map[string]any{"ids": map[string]any{"type": "array", "items": num}, "pinned": map[string]any{"type": "boolean"}}, "ids")},
@@ -180,6 +182,7 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		Name      string         `json:"name"`
 		Desc      string         `json:"description"`
 		Old       string         `json:"old"`
+		Kind      string         `json:"kind"`
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -263,7 +266,34 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		if err != nil {
 			return "", err
 		}
-		return profileMarkdown(ts), nil
+		return profileMarkdown("ja", ts), nil
+	case "list_profile":
+		ts, err := s.st.Profile()
+		if err != nil {
+			return "", err
+		}
+		type item struct {
+			ID   int64  `json:"id"`
+			Kind string `json:"kind"`
+			Text string `json:"text"`
+		}
+		out := []item{}
+		for _, t := range ts {
+			k := "about"
+			if t.Kind == store.KindWish {
+				k = "wish"
+			}
+			out = append(out, item{t.ID, k, t.Text})
+		}
+		return jsonText(out), nil
+	case "set_profile_kind":
+		if a.Kind != "about" && a.Kind != "wish" {
+			return "", fmt.Errorf("kind は about か wish")
+		}
+		if err := s.st.SetTraitKind(a.ID, traitKind(a.Kind)); err != nil {
+			return "", err
+		}
+		return "変えた", nil
 	case "delete_conversations":
 		if len(a.IDs) == 0 {
 			return "", fmt.Errorf("ids が要る")

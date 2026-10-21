@@ -5,11 +5,15 @@ import (
 	"time"
 )
 
-// 前の版の分類（category）の列は使わない（空のまま）。
+// category の列は種類。空はその人について（経歴・趣味など）、KindWish は AI への希望（答え方の好み）。
+// 前の版の分類（仕事・技術など）は、読み込むときに空へ戻す。
+
+const KindWish = "wish"
 
 // Trait はユーザーについて分かったこと（プロフィールの1項目）。会話から AI が書き足し、ユーザーが直せる。
 type Trait struct {
 	ID      int64
+	Kind    string // 空はその人について、KindWish は AI への希望
 	Text    string
 	Prev    string // 前はこうだった（新しいことで置き換えたとき）
 	Count   int    // 裏付けになった会話の数
@@ -30,7 +34,7 @@ const profileSchema = `CREATE TABLE IF NOT EXISTS profile (
 )`
 
 func (s *Store) Profile() ([]Trait, error) {
-	rows, err := s.db.Query(`SELECT id, text, prev, count, sources, edited, updated_at FROM profile ORDER BY count DESC, updated_at DESC`)
+	rows, err := s.db.Query(`SELECT id, category, text, prev, count, sources, edited, updated_at FROM profile ORDER BY count DESC, updated_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -40,10 +44,13 @@ func (s *Store) Profile() ([]Trait, error) {
 		var t Trait
 		var src string
 		var u int64
-		if err := rows.Scan(&t.ID, &t.Text, &t.Prev, &t.Count, &src, &t.Edited, &u); err != nil {
+		if err := rows.Scan(&t.ID, &t.Kind, &t.Text, &t.Prev, &t.Count, &src, &t.Edited, &u); err != nil {
 			return nil, err
 		}
 		json.Unmarshal([]byte(src), &t.Sources)
+		if t.Kind != KindWish {
+			t.Kind = ""
+		}
 		t.Updated = fromUnix(u)
 		out = append(out, t)
 	}
@@ -71,7 +78,8 @@ func addSource(t *Trait, src [3]string) bool {
 
 // AddTrait は AI が見つけた特徴を書き足す。same が既存の特徴なら裏付けを足し、replaces なら新しい文に置き換える
 // （ユーザーが直した特徴は文を変えず、裏付けだけ足す）。
-func (s *Store) AddTrait(text string, same, replaces int64, src [3]string) error {
+func (s *Store) AddTrait(kind, text string, same, replaces int64, src [3]string) error {
+	kind = normKind(kind)
 	now := time.Now().Unix()
 	for _, id := range []int64{same, replaces} {
 		if id == 0 {
@@ -84,27 +92,40 @@ func (s *Store) AddTrait(text string, same, replaces int64, src [3]string) error
 		addSource(&t, src)
 		b, _ := json.Marshal(t.Sources)
 		if id == replaces && !t.Edited && t.Text != text {
-			_, err = s.db.Exec(`UPDATE profile SET prev=text, text=?, count=?, sources=?, updated_at=? WHERE id=?`, text, t.Count, string(b), now, id)
+			_, err = s.db.Exec(`UPDATE profile SET prev=text, text=?, category=?, count=?, sources=?, updated_at=? WHERE id=?`, text, kind, t.Count, string(b), now, id)
 		} else {
 			_, err = s.db.Exec(`UPDATE profile SET count=?, sources=?, updated_at=? WHERE id=?`, t.Count, string(b), now, id)
 		}
 		return err
 	}
 	b, _ := json.Marshal([][3]string{src})
-	_, err := s.db.Exec(`INSERT INTO profile (text, count, sources, updated_at) VALUES (?,1,?,?)`, text, string(b), now)
+	_, err := s.db.Exec(`INSERT INTO profile (category, text, count, sources, updated_at) VALUES (?,?,1,?,?)`, kind, text, string(b), now)
 	return err
 }
 
 // EditTrait はユーザーが特徴を直す（空なら消す）。
-func (s *Store) EditTrait(id int64, text string) error {
+func (s *Store) EditTrait(id int64, kind, text string) error {
 	if text == "" {
 		_, err := s.db.Exec(`DELETE FROM profile WHERE id=?`, id)
 		return err
 	}
 	if id == 0 {
-		_, err := s.db.Exec(`INSERT INTO profile (text, count, edited, updated_at) VALUES (?,0,1,?)`, text, time.Now().Unix())
+		_, err := s.db.Exec(`INSERT INTO profile (category, text, count, edited, updated_at) VALUES (?,?,0,1,?)`, normKind(kind), text, time.Now().Unix())
 		return err
 	}
 	_, err := s.db.Exec(`UPDATE profile SET text=?, edited=1, updated_at=? WHERE id=?`, text, time.Now().Unix(), id)
 	return err
+}
+
+// SetTraitKind は項目の種類を変える。
+func (s *Store) SetTraitKind(id int64, kind string) error {
+	_, err := s.db.Exec(`UPDATE profile SET category=? WHERE id=?`, normKind(kind), id)
+	return err
+}
+
+func normKind(k string) string {
+	if k == KindWish {
+		return KindWish
+	}
+	return ""
 }

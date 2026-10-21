@@ -66,6 +66,7 @@ type Result struct {
 // Trait はユーザーについて会話から分かったこと。
 type Trait struct {
 	Text     Text   `json:"text"`
+	Kind     string `json:"kind"`     // about（どんな人か）/ wish（AI にどう答えてほしいか）
 	Source   string `json:"source"`   // self（本人がふつうに話したこと）/ draft / hypothetical / other
 	Lasting  bool   `json:"lasting"`  // 長く変わらないことか
 	Same     int64  `json:"same"`     // 今のプロフィールの同じ項目の番号
@@ -75,11 +76,12 @@ type Trait struct {
 // ProfileReq はプロフィールを書き足すときに渡すもの。nil なら取り出さない。
 type ProfileReq struct {
 	Existing []ExistingTrait
-	Note     string // ユーザーが書いた AI への指示（取り出してほしくない情報など）
+	Note     string // ユーザーが書いた「覚えないでほしいこと」
 }
 
 type ExistingTrait struct {
 	ID   int64
+	Kind string
 	Text string
 }
 
@@ -171,7 +173,11 @@ func profileSection(p *ProfileReq) string {
 		if i == 300 {
 			break
 		}
-		fmt.Fprintf(&ex, "%d. %s\n", t.ID, t.Text)
+		k := "about"
+		if t.Kind == "wish" {
+			k = "wish"
+		}
+		fmt.Fprintf(&ex, "%d. [%s] %s\n", t.ID, k, t.Text)
 	}
 	if ex.Len() == 0 {
 		ex.WriteString("（まだ無い）\n")
@@ -193,6 +199,9 @@ func profileSection(p *ProfileReq) string {
   - "hypothetical"：たとえ話・仮定・冗談・皮肉・売り言葉
   - "other"：家族・友人・相手など、ほかの人のこと
 - 学年・年齢・勤め先・住まい・役職など、年月がたつと変わることは、会話の日付から「2026年10月時点で大学院の修士1年」のように、いつの話かを入れて書く
+- kind：どちらの項目か
+  - "about"：その人について（経歴・学年・仕事・住まい・趣味・関心・暮らし・持ち物・考え方）
+  - "wish"：AI にどう答えてほしいか・何をしてほしい／してほしくないか（言語・書き方・報告のしかた・進め方・確認のしかた・避けてほしいこと）
 - lasting：その人について続いていること・変わりにくいことか（true）、その会話の用件にだけ関わること・一度きりの出来事か（false）。体のこと・暮らし方なども、続いていることなら true
 
 例：
@@ -200,10 +209,11 @@ func profileSection(p *ProfileReq) string {
 - 「志望動機：幼い頃から人の役に立ちたいと…」（応募書類の下書き）→ source "draft"
 - 「自分で作った機械かもしれないだろ」→ source "hypothetical"
 - 「夫は来月から転職する」→ source "other"
-- 「1日1食にしている」→ lasting true
+- 「1日1食にしている」→ kind "about", lasting true
+- 「英語で返されると読めない。日本語で書いて」→ kind "wish", lasting true
 - 「今日はラーメンを3杯食べた」「予算は1万5千円で探して」→ lasting false
 
-各項目：{"text": 1文で（主語はユーザー。家族のことは「ユーザーには〜がいる」のようにユーザーから見て書く）, "source": 上のどれか, "lasting": true か false, "same": 今のプロフィールに同じ内容があればその番号（無ければ 0）, "replaces": 今のプロフィールの項目が古くなった（変わった）ならその番号（無ければ 0）}
+各項目：{"text": 1文で（主語はユーザー。家族のことは「ユーザーには〜がいる」のようにユーザーから見て書く）, "kind": "about" か "wish", "source": 上のどれか, "lasting": true か false, "same": 今のプロフィールに同じ内容があればその番号（無ければ 0）, "replaces": 今のプロフィールの項目が古くなった（変わった）ならその番号（無ければ 0）}
 推測では書かない。会話からはっきり分かることだけ。無ければ空の配列。
 
 ### 今のプロフィール

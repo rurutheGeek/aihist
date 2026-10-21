@@ -10,12 +10,10 @@
   <div class="scroll"><div class="col">
     <form class="grp" id="pset">
       <label class="row"><div class="rl">{{t "AI で整理するときに書き足す"}}</div><div class="rc"><input class="sw" type="checkbox" name="on" value="1"{{if .ProfileOn}} checked{{end}}></div></label>
-      <div class="row col"><div class="rl">{{t "AI への指示"}}</div><div class="rc"><textarea class="pnote" name="note" rows="3" placeholder="{{t "健康や家族のことは取り出さない"}}">{{.ProfileNote}}</textarea></div></div>
+      <div class="row col"><div class="rl">{{t "覚えないでほしいこと"}}</div><div class="rc"><textarea class="pnote" name="note" rows="3" placeholder="{{t "健康や家族のことは取り出さない"}}">{{.ProfileNote}}</textarea></div></div>
     </form>
-    <div class="grp ptraits">
-      {{range .Traits}}<div class="row ptrait" data-id="{{.ID}}"><div class="rl"><textarea class="pt" rows="1" aria-label="{{t "特徴"}}">{{.Text}}</textarea><small>{{if .Count}}{{tf "会話 %d 件" .Count}} · {{end}}{{rel .Updated}}{{if .Prev}} · {{t "前は"}}：{{.Prev}}{{end}}</small></div><div class="rc"><button class="icon-btn pdel" type="button" aria-label="{{t "削除"}}">×</button></div></div>{{end}}
-      <div class="row ptrait new" data-id="0"><div class="rl"><textarea class="pt" rows="1" placeholder="＋ {{t "追加"}}" aria-label="{{t "追加"}}"></textarea></div></div>
-    </div>
+    {{template "ptraits" (dict "Title" (t "あなたについて") "Kind" "" "Items" .About)}}
+    {{template "ptraits" (dict "Title" (t "AI への希望") "Kind" "wish" "Items" .Wishes)}}
     <textarea id="pmd" hidden>{{.ProfileMD}}</textarea>
   </div></div>
 </main>
@@ -27,7 +25,7 @@
   function saveSet(){clearTimeout(tm); tm=setTimeout(function(){fetch('/profile/settings',{method:'POST',body:new URLSearchParams(new FormData(f))}).then(function(r){say(r.ok)})},400)}
   f.addEventListener('change',saveSet); f.querySelector('textarea').addEventListener('input',saveSet);
   function edit(row,text){
-    var p=new URLSearchParams({id:row.dataset.id,text:text});
+    var p=new URLSearchParams({id:row.dataset.id,kind:row.dataset.kind||'',text:text});
     return fetch('/profile/edit',{method:'POST',body:p}).then(function(r){say(r.ok); return r.ok});
   }
   document.querySelectorAll('.ptrait .pt').forEach(function(i){
@@ -47,3 +45,9 @@
 })();
 </script>
 {{template "foot" .}}{{end}}
+
+{{define "ptraits"}}<div class="gt">{{.Title}}</div>
+    <div class="grp ptraits">
+      {{range .Items}}<div class="row ptrait" data-id="{{.ID}}" data-kind="{{.Kind}}"><div class="rl"><textarea class="pt" rows="1" aria-label="{{$.Title}}">{{.Text}}</textarea><small>{{if .Count}}{{tf "会話 %d 件" .Count}} · {{end}}{{rel .Updated}}{{if .Prev}} · {{t "前は"}}：{{.Prev}}{{end}}</small></div><div class="rc"><button class="icon-btn pdel" type="button" aria-label="{{t "削除"}}">×</button></div></div>{{end}}
+      <div class="row ptrait new" data-id="0" data-kind="{{.Kind}}"><div class="rl"><textarea class="pt" rows="1" placeholder="＋ {{t "追加"}}" aria-label="{{t "追加"}}"></textarea></div></div>
+    </div>{{end}}

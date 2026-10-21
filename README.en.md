@@ -60,7 +60,7 @@ Adds tags and a summary to chats, and drafts "knowledge" — short write-ups of 
 - **MCP**: connect your own AI (Claude Code and others) to `<server>/api/mcp` with a token (pick the app in **Settings → Connected apps** to get its setup with the token filled in). Your AI reads the chats and writes the results back. It can also delete, archive, pin, rename, and retag chats, or look through the chat list and create tags, when you ask.
 - Tags are yours (**Settings → Tags**, with templates). Each chat is read in its own requests; long chats are read in pages with running notes.
 - Knowledge is kept only when the AI's quoted evidence of the struggle appears verbatim in the chat and its score is 4 or more. Drafts warn about machine names, folder names, URLs, and IPs; you decide what to register.
-- **Profile**: turn on "Add to it when organizing with AI" to keep adding one-line notes about who you are, taken from what you plainly say about yourself (not drafts, hypotheticals, other people, or one-off requests). Write what not to extract in "Instructions for the AI". Edit any line, copy it as Markdown for other AIs, or read it over MCP with `get_profile`.
+- **Profile**: turn on "Add to it when organizing with AI" to keep adding one-line notes about who you are, taken from what you plainly say about yourself (not drafts, hypotheticals, other people, or one-off requests), split into "About you" and "How you want AI to respond". Write what not to extract in "Things not to remember". Edit any line, copy it as Markdown for other AIs, or read it over MCP with `get_profile`.
 
 ## Continue in the original AI
 
