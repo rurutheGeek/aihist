@@ -66,3 +66,57 @@ func ContinuesFrom(first string) string {
 	}
 	return ""
 }
+
+// MainLine は巻き戻して捨てた枝を除いたメッセージを返す。同じ親に、あとから別の発言を
+// 送り直したとき（Claude Code の巻き戻しなど）、先に送った発言と、それに続く枝を除く。
+// 途中で止めて送り直したときの AI の発言（操作はもう済んでいる）は残す。親の ID が無い記録はそのまま。
+func MainLine(msgs []Message) []Message {
+	idx := map[string]int{}
+	for i, m := range msgs {
+		if m.ExternalID != "" && !m.Sidechain {
+			idx[m.ExternalID] = i
+		}
+	}
+	kids := map[string][]int{}
+	for i, m := range msgs {
+		if m.ParentID != "" && !m.Sidechain {
+			if _, ok := idx[m.ParentID]; ok {
+				kids[m.ParentID] = append(kids[m.ParentID], i)
+			}
+		}
+	}
+	drop := map[int]bool{}
+	var cut func(i int)
+	cut = func(i int) {
+		if drop[i] {
+			return
+		}
+		drop[i] = true
+		for _, k := range kids[msgs[i].ExternalID] {
+			cut(k)
+		}
+	}
+	for _, ch := range kids {
+		last := -1
+		for _, i := range ch {
+			if msgs[i].Role == "user" {
+				last = i
+			}
+		}
+		for _, i := range ch {
+			if i < last && msgs[i].Role == "user" {
+				cut(i)
+			}
+		}
+	}
+	if len(drop) == 0 {
+		return msgs
+	}
+	out := make([]Message, 0, len(msgs)-len(drop))
+	for i, m := range msgs {
+		if !drop[i] {
+			out = append(out, m)
+		}
+	}
+	return out
+}

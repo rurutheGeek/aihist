@@ -77,6 +77,38 @@ func (s *Server) apiPut(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// apiPresent はマシンに今ある会話のファイルを受け取り、原本はあるのにマシンに無い会話に印を付ける。
+func (s *Server) apiPresent(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var have []string
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<20)).Decode(&have); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	all, err := s.raw.List(q.Get("host"), q.Get("tool"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	here := map[string]bool{}
+	for _, h := range have {
+		here[h] = true
+	}
+	var gone []string
+	for rel := range all {
+		if !here[rel] {
+			if p, err := s.raw.Path(q.Get("host"), q.Get("tool"), rel); err == nil {
+				gone = append(gone, p)
+			}
+		}
+	}
+	if err := s.st.MarkGone(q.Get("host"), q.Get("tool"), gone); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // apiFile は原本1ファイルを返す（元の AI へ戻すときに使う）。
 func (s *Server) apiFile(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()

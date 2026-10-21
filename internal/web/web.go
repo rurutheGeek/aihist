@@ -89,6 +89,7 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 		},
 		"add64":     func(a, b int64) int64 { return a + b },
 		"i64":       func(n int) int64 { return int64(n) },
+		"sub":       func(a, b int) int { return a - b },
 		"hasPrefix": strings.HasPrefix,
 	}
 	tmpl := map[string]*template.Template{}
@@ -151,6 +152,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /skills/{id}/update", s.skillUpdate)
 	mux.Handle("GET /prompts", http.RedirectHandler("/skills", http.StatusMovedPermanently))
 	mux.HandleFunc("GET /knowledge", s.knowledgeList)
+	mux.HandleFunc("GET /knowledge/graph", s.knowledgeGraph)
+	mux.HandleFunc("GET /knowledge/graph.json", s.knowledgeGraphData)
 	mux.HandleFunc("GET /knowledge/{id}", s.knowledgeShow)
 	mux.HandleFunc("GET /knowledge/{id}/md", s.knowledgeMD)
 	mux.HandleFunc("POST /knowledge/{id}", s.knowledgeSave)
@@ -172,6 +175,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/files", s.auth(s.apiPut))
 	mux.HandleFunc("POST /api/import", s.auth(s.apiImport))
 	mux.HandleFunc("GET /api/file", s.auth(s.apiFile))
+	mux.HandleFunc("POST /api/present", s.auth(s.apiPresent))
 	mux.HandleFunc("GET /api/install.sh", s.installScript("install.sh"))
 	mux.HandleFunc("GET /api/install.ps1", s.installScript("install.ps1"))
 	mux.HandleFunc("GET /api/uninstall.sh", s.installScript("uninstall.sh"))
@@ -232,6 +236,7 @@ func (s *Server) show(w http.ResponseWriter, r *http.Request) {
 	}
 	d["Branches"], d["Children"], d["Group"], d["ManyHosts"] = branches, children, in, len(hosts) > 1
 	d["AIUsed"], d["AIAt"] = s.st.AIInfo(c.ID)
+	d["SumAfter"] = sumAfter(d["Turns"].([]Turn), d["AIAt"].(time.Time))
 	d["TagList"], _ = s.st.Tags()
 	s.render(w, r, "show.html", d)
 }

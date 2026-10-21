@@ -165,7 +165,6 @@ func (s *Server) side(r *http.Request, q url.Values) (map[string]any, error) {
 		groups[i].Rows = append(groups[i].Rows, c)
 	}
 
-	drafts, _ := s.st.KnowledgeCounts()
 	keep := query(q, "", "")
 	clear := url.Values{}
 	if v := q.Get("q"); v != "" {
@@ -174,7 +173,7 @@ func (s *Server) side(r *http.Request, q url.Values) (map[string]any, error) {
 	return map[string]any{
 		"Filter": f, "Rows": rows, "Pinned": pinned, "Groups": groups, "Menu": menu, "Pills": pills,
 		"Tools": facets[store.DimTool], "Keep": keep, "Clear": "?" + clear.Encode(),
-		"AI": s.aiConfig().Ready(), "AIModel": s.aiConfig().Model, "KDrafts": drafts,
+		"AI": s.aiConfig().Ready(), "AIModel": s.aiConfig().Model,
 	}, nil
 }
 

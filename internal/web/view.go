@@ -228,3 +228,17 @@ func base(p string) string {
 	}
 	return path.Base(strings.ReplaceAll(p, `\`, "/"))
 }
+
+// sumAfter は要約を置く場所（要約した時点の最後の発言の番号）。時刻が分からなければ最後。
+func sumAfter(ts []Turn, at time.Time) int {
+	last := len(ts) - 1
+	if at.IsZero() {
+		return last
+	}
+	for i := last; i >= 0; i-- {
+		if !ts[i].At.IsZero() && !ts[i].At.After(at) {
+			return i
+		}
+	}
+	return last
+}

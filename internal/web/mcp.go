@@ -53,11 +53,13 @@ var mcpTools = []mcpTool{
 	{"list_unorganized", "まだタグ・要約を付けていない会話と、付けたあとに続きが足された会話を、新しい順に返す（プログラムや AI が動かした会話は除く）。", obj(map[string]any{"limit": num})},
 	{"read_conversation", "会話を読む。長い会話は区切り（page は 1 から）ごとに返すので、pages まで順に読む。", obj(map[string]any{"id": num, "page": num}, "id")},
 	{"organize_instructions", "会話を整理するときの決まり（タグの一覧・要約・ナレッジの基準と形）。save_organized の前に読む。", obj(map[string]any{})},
-	{"save_organized", "会話を整理した結果を保存する。tags はタグの一覧にある名前だけ。knowledge は下書きに入る（利用者が登録する）。evidence は会話からそのまま写した文で、記録に無ければ捨てられる。",
+	{"save_organized", "会話を整理した結果を保存する。tags はタグの一覧にある名前だけ。knowledge はナレッジに入る（利用者が直したり消したりする）。evidence は会話からそのまま写した文で、記録に無ければ捨てられる。",
 		obj(map[string]any{"id": num, "model": str, "tags": strs, "summary": str, "knowledge": map[string]any{"type": "array", "items": obj(map[string]any{
 			"title": str, "conclusion": str, "environment": str, "symptom": str, "cause": str, "solution": str, "failed": str, "struggle": str, "evidence": strs, "fixed": strs, "score": num,
-		}, "title", "conclusion", "solution", "evidence", "fixed", "score")},
-			"profile": map[string]any{"type": "array", "items": obj(map[string]any{"text": str, "source": str, "lasting": map[string]any{"type": "boolean"}, "same": num, "replaces": num}, "text", "source", "lasting")}}, "id", "summary")},
+		}, "title", "conclusion", "solution", "evidence", "fixed", "score")}}, "id", "summary")},
+	{"read_profile_source", "会話の中の、ユーザー本人の発言だけと、プロフィールに足す決まり。プロフィールを使う設定のときだけ。結果は save_profile に渡す。", obj(map[string]any{"id": num}, "id")},
+	{"save_profile", "read_profile_source で読んだ会話から、プロフィールに足すことを保存する。",
+		obj(map[string]any{"id": num, "profile": map[string]any{"type": "array", "items": obj(map[string]any{"quote": str, "text": str, "kind": str, "source": str, "lasting": map[string]any{"type": "boolean"}, "same": num, "replaces": num}, "quote", "text", "kind", "source", "lasting")}}, "id", "profile")},
 	{"get_profile", "ユーザーのプロフィール（どんな人か・経歴・趣味関心・好み・してほしいこと）。答え方をユーザーに合わせるために、作業の最初に読む。", obj(map[string]any{})},
 	{"list_profile", "プロフィールの項目を番号つきで返す。kind は about（その人について）か wish（AI への希望）。", obj(map[string]any{})},
 	{"edit_profile", "プロフィールの項目の文を直す（text が空なら消す）。", obj(map[string]any{"id": num, "text": str}, "id")},
@@ -75,7 +77,7 @@ var mcpTools = []mcpTool{
 	{"list_conversations", "会話の一覧を新しい順に返す（題名・AI・最終更新・タグ・要約）。offset から limit 件（最大 500）。total は全体の件数。全体の傾向を見るときは offset を進めて順に読む。", obj(map[string]any{"offset": num, "limit": num})},
 	{"save_tag", "タグを作る（同じ名前があれば説明を変える）。old を渡すと、そのタグの名前を name に変える（付いている会話もそのまま）。description は会話を分けるときの目安になる。", obj(map[string]any{"name": str, "description": str, "old": str}, "name")},
 	{"delete_tag", "タグを消す（会話から外れる）。", obj(map[string]any{"name": str}, "name")},
-	{"search_knowledge", "登録したナレッジ（苦労して解決した問題の記事）を探す。", obj(map[string]any{"query": str})},
+	{"search_knowledge", "ナレッジ（苦労して解決した問題の記事）を探す。", obj(map[string]any{"query": str})},
 }
 
 func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +109,7 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 			"protocolVersion": v,
 			"capabilities":    map[string]any{"tools": map[string]any{}, "prompts": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "aihist", "version": s.Version},
-			"instructions":    "aihist は AI との会話の履歴。会話を探して読み、organize_instructions の決まりで整理して save_organized で保存できる。ユーザーが集めた Skill は list_skills で探し、合うものがあれば get_skill で読んで従う。長い会話は1件ずつ別のサブエージェントで読むと、文脈を圧迫しない。",
+			"instructions":    "aihist は AI との会話の履歴。会話を探して読み、organize_instructions の決まりで整理して save_organized で保存できる（プロフィールは read_profile_source と save_profile）。ユーザーが集めた Skill は list_skills で探し、合うものがあれば get_skill で読んで従う。長い会話は1件ずつ別のサブエージェントで読むと、文脈を圧迫しない。",
 		}, nil)
 	case "ping":
 		writeRPC(w, req.ID, map[string]any{}, nil)
@@ -272,14 +274,14 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		}
 		return fmt.Sprintf("# %s\n(id %d · %s · %s の会話 · 区切り %d / %d)\n\n%s", c.Title, c.ID, toolLabel(c.Tool), c.StartedAt.Local().Format("2006-01-02"), a.Page, len(pages), pages[a.Page-1]), nil
 	case "organize_instructions":
-		return ai.Instructions(s.aiTags(), "", s.profileReq()) + "\n\n結果は save_organized に渡す（JSON の各項目をそのまま引数にする）。", nil
+		return ai.Instructions(s.aiTags(), "") + "\n\n結果は save_organized に渡す（JSON の各項目をそのまま引数にする）。", nil
 	case "save_organized":
 		c, msgs, err := s.st.Get(a.ID)
 		if err != nil {
 			return "", fmt.Errorf("会話 %d が無い", a.ID)
 		}
 		pages := ai.Pages(msgs, ai.PageSize)
-		res := ai.Result{Tags: a.Tags, Summary: a.Summary, Knowledge: a.Knowledge, Profile: a.Profile}.Clean(s.aiTags(), strings.Join(pages, "\n"))
+		res := ai.Result{Tags: a.Tags, Summary: a.Summary, Knowledge: a.Knowledge}.Clean(s.aiTags(), strings.Join(pages, "\n"))
 		model := "mcp"
 		if a.Model != "" {
 			model = "mcp: " + a.Model
@@ -289,11 +291,37 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 			return "", err
 		}
 		dropped := len(a.Knowledge) - n
-		msg := fmt.Sprintf("保存した（タグ %d・ナレッジの下書き %d）", len(res.Tags), n)
+		msg := fmt.Sprintf("保存した（タグ %d・ナレッジ %d）", len(res.Tags), n)
 		if dropped > 0 {
 			msg += fmt.Sprintf("。ナレッジ %d 件は決まり（score %d 以上・evidence と fixed が会話にそのままあること・conclusion と solution）に合わず捨てた", dropped, ai.MinScore)
 		}
 		return msg, nil
+	case "read_profile_source":
+		p := s.profileReq()
+		if p == nil {
+			return "", fmt.Errorf("プロフィールを使わない設定になっている")
+		}
+		c, msgs, err := s.st.Get(a.ID)
+		if err != nil {
+			return "", fmt.Errorf("会話 %d が無い", a.ID)
+		}
+		said := ai.UserSays(ai.Pages(msgs, ai.PageSize))
+		if said == "" {
+			said = "（無い）"
+		}
+		return ai.ProfileInstructions(p, "") + fmt.Sprintf("\n# 会話の題名\n%s（%s の会話）\n\n# この人の発言\n%s\n\n結果の profile を save_profile に渡す。", c.Title, c.StartedAt.Local().Format("2006-01-02"), said), nil
+	case "save_profile":
+		if s.profileReq() == nil {
+			return "", fmt.Errorf("プロフィールを使わない設定になっている")
+		}
+		c, _, err := s.st.Get(a.ID)
+		if err != nil {
+			return "", fmt.Errorf("会話 %d が無い", a.ID)
+		}
+		_, msgs, _ := s.st.Get(a.ID)
+		ts := ai.CleanTraits(a.Profile, ai.UserSays(ai.Pages(msgs, ai.PageSize)))
+		s.saveTraits(c, ts)
+		return fmt.Sprintf("%d 件を足した（本人の話で続いていることだけ、根拠が発言にそのままあるものだけ、多くても2つ）", len(ts)), nil
 	case "get_profile":
 		ts, err := s.st.Profile()
 		if err != nil {
@@ -471,7 +499,7 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		}
 		return "タグ「" + a.Name + "」を消した", nil
 	case "search_knowledge":
-		ks, err := s.st.KnowledgeList("registered", a.Query)
+		ks, err := s.st.KnowledgeList(a.Query)
 		if err != nil {
 			return "", err
 		}

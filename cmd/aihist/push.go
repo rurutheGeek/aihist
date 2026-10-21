@@ -138,6 +138,7 @@ func runPush(home, host string, args []string) {
 			} else if n > 0 {
 				log.Printf(m("%s: deleted %d local files older than %d days (%.1f MB)", "%s: %[3]d 日より前の %[2]d ファイルを削除（%.1f MB）"), src.Tool, n, days, float64(size)/(1<<20))
 			}
+			c.Present(src) // 手元に無い会話に印を付けてもらう
 		}
 		for _, src := range push.SkillSources(home) {
 			if src.For != "" && !push.Selected(tools, src.For) {
@@ -157,6 +158,7 @@ func runPush(home, host string, args []string) {
 				log.Printf(m("opencode: sent %d chats (%s)", "opencode: %d 会話送信（%s）"), n, imported(res))
 				sentAny = true
 			}
+			c.PresentOpenCode(push.OpenCodeDB(home))
 		}
 		if !*tick && !sentAny {
 			log.Print(m("nothing new to send", "送るものは無い"))

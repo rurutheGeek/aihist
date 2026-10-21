@@ -198,10 +198,19 @@ func (s *Server) organize(id int64, c ai.Config, l string) (int, error) {
 	pages := ai.Pages(msgs, ai.PageSize)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	res, err := c.Organize(ctx, conv.Title+"（"+conv.StartedAt.Local().Format("2006-01-02")+" の会話）", pages, tags, l, s.profileReq(), nil)
+	title := conv.Title + "（" + conv.StartedAt.Local().Format("2006-01-02") + " の会話）"
+	res, err := c.Organize(ctx, title, pages, tags, l, nil)
 	if err != nil {
 		log.Printf("ai %d: %v", id, err)
 		return 0, err
+	}
+	// プロフィールは本人の発言だけを別に読む
+	if p := s.profileReq(); p != nil {
+		ts, err := c.Profile(ctx, title, ai.UserSays(pages), l, p)
+		if err != nil {
+			log.Printf("ai %d profile: %v", id, err)
+		}
+		s.saveTraits(conv, ts)
 	}
 	return s.saveResult(conv, pages, res, c.Model, l)
 }
@@ -214,7 +223,7 @@ func (s *Server) saveResult(conv *store.ConvRow, pages []string, res ai.Result, 
 	if err := s.st.SetSummary(conv.ID, res.Summary, model); err != nil {
 		return 0, err
 	}
-	// まとめ直したら、登録していない前の下書きは置き換える
+	// まとめ直したら、AI が書いたまま人が直していない前の記事は置き換える
 	s.st.DropDrafts(conv.Tool, conv.Host, conv.ExternalID)
 	words := ai.Personal(conv.Host, conv.Cwd, conv.GitBranch, strings.Join(pages, "\n"))
 	for _, k := range res.Knowledge {
@@ -225,12 +234,17 @@ func (s *Server) saveResult(conv *store.ConvRow, pages []string, res ai.Result, 
 			Warn: ai.Leaks(string(k.Title)+"\n"+body, words),
 		})
 	}
-	if s.profileOn() {
-		for _, t := range res.Profile {
-			s.st.AddTrait(traitKind(t.Kind), string(t.Text), t.Same, t.Replaces, [3]string{conv.Tool, conv.Host, conv.ExternalID})
-		}
-	}
 	return len(res.Knowledge), nil
+}
+
+// saveTraits はプロフィールに足す（使わない設定なら何もしない）。
+func (s *Server) saveTraits(conv *store.ConvRow, ts []ai.Trait) {
+	if !s.profileOn() {
+		return
+	}
+	for _, t := range ts {
+		s.st.AddTrait(traitKind(t.Kind), string(t.Text), t.Same, t.Replaces, [3]string{conv.Tool, conv.Host, conv.ExternalID})
+	}
 }
 
 func (s *Server) profileOn() bool { return s.st.Setting("profile_on", "0") == "1" }

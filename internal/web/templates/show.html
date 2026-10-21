@@ -19,15 +19,15 @@
         {{if .C.GitBranch}}<span>{{.C.GitBranch}}</span>{{end}}
         {{if .C.Model}}<span>{{.C.Model}}</span>{{end}}
         <span>{{when .C.StartedAt}} – {{when .C.UpdatedAt}}</span>
+        {{if .C.Gone}}<span class="gone-m" title="{{t "サーバーの原本から元の AI へ戻せる"}}"><svg class="gone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="{{t "マシンから消えている"}}"><path d="M7 18h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 9.5 4.3 4.3 0 0 0 7 18z"/></svg>{{t "マシンから消えている"}}</span>{{end}}
       </div>
       <div class="aisum" data-aisum>
         <div class="ctags" data-id="{{.C.ID}}">{{range .C.Tags}}<span class="ctag" data-tag="{{.}}">{{.}}<button type="button" aria-label="{{t "外す"}}">×</button></span>{{end}}{{if .TagList}}<select class="addtag" aria-label="{{t "タグを付ける"}}"><option value="">＋ {{t "タグ"}}</option>{{range .TagList}}<option>{{.Name}}</option>{{end}}</select>{{end}}</div>
-        {{if .C.Summary}}<p>{{.C.Summary}}</p><small class="mute">{{.AIUsed}} · {{when .AIAt}}</small>{{end}}
       </div>
       {{if .C.ParentID}}<div class="rel"><b>{{t "親の会話"}}</b><a href="/find/{{.C.Tool}}/{{.C.Host}}/{{.C.ParentID}}">{{short .C.ParentID 12}}</a></div>{{end}}
       {{if gt (len .Branches) 1}}<div class="rel"><b>{{t "版"}}</b>{{range $i, $b := .Branches}}<a class="{{if eq $b.ID $.C.ID}}on{{end}}" href="/c/{{$b.ID}}" title="{{$b.Host}} {{when $b.StartedAt}} – {{when $b.UpdatedAt}}">{{if $.ManyHosts}}{{$b.Host}} · {{end}}{{if $b.ContinuesFrom}}{{t "続き"}} · {{end}}{{clock $b.UpdatedAt}} · {{$b.MessageCount}}</a>{{end}}</div>{{end}}
       {{if .Children}}<div class="rel"><b>{{t "サブエージェント"}}</b>{{range .Children}}<a href="/c/{{.ID}}" title="{{.Title}}">{{if .Title}}{{oneline .Title}}{{else}}{{short .ExternalID 12}}{{end}}</a>{{end}}</div>{{end}}
-      {{range .Turns}}
+      {{range $i, $_ := .Turns}}
       {{if eq .Role "user"}}
         <div class="turn user{{if .Sidechain}} side{{end}}" id="{{.Anchor}}">
           <div class="bub">{{range .Blocks}}{{if eq .Kind "text"}}<div class="md" data-md>{{.Text}}</div>{{else}}<div class="file">{{.Text}}</div>{{end}}{{end}}</div>
@@ -49,6 +49,7 @@
           </div>
         </div>
       {{end}}
+      {{if and $.C.Summary (eq $i $.SumAfter)}}<div class="csum"><div class="csum-h"><b>{{t "要約"}}</b><small class="mute">{{$.AIUsed}} · {{when $.AIAt}}</small></div><p>{{$.C.Summary}}</p>{{if lt $i (sub (len $.Turns) 1)}}<small class="mute">{{t "このあとの発言は、まだ要約に入っていない"}}</small>{{end}}</div>{{end}}
       {{end}}
     </div>
   </div>

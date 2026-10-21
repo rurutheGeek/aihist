@@ -1,7 +1,9 @@
 package web
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -9,24 +11,19 @@ import (
 	"github.com/rurutheGeek/aihist/internal/store"
 )
 
-// knowledgeList はナレッジの一覧（下書き・登録済み）。
+// knowledgeList はナレッジの一覧。
 func (s *Server) knowledgeList(w http.ResponseWriter, r *http.Request) {
 	d, err := s.side(r, nil)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	st := r.URL.Query().Get("status")
-	if st != "registered" {
-		st = "draft"
-	}
-	ks, err := s.st.KnowledgeList(st, r.URL.Query().Get("q"))
+	ks, err := s.st.KnowledgeList(r.URL.Query().Get("q"))
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	d["K"], d["KStatus"], d["KQ"], d["Page"] = ks, st, r.URL.Query().Get("q"), "knowledge"
-	d["Drafts"], d["Registered"] = s.st.KnowledgeCounts()
+	d["K"], d["KQ"], d["Page"] = ks, r.URL.Query().Get("q"), "knowledge"
 	s.render(w, r, "knowledge.html", d)
 }
 
@@ -57,11 +54,10 @@ func (s *Server) knowledgeShow(w http.ResponseWriter, r *http.Request) {
 	}
 	d["Item"], d["Page"] = k, "knowledge"
 	d["ConvID"] = s.st.LookupExt(k.Tool, k.Host, k.ExtID)
-	d["Drafts"], d["Registered"] = s.st.KnowledgeCounts()
 	s.render(w, r, "kshow.html", d)
 }
 
-// knowledgeSave は題名・本文を直し、登録（下書きへ戻す）する。個人の情報の警告は直すたびに見直す。
+// knowledgeSave は題名・本文を直す（人が直した記事は、まとめ直しても置き換えない）。個人の情報の警告は直すたびに見直す。
 func (s *Server) knowledgeSave(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -77,10 +73,7 @@ func (s *Server) knowledgeSave(w http.ResponseWriter, r *http.Request) {
 	if b, ok := r.Form["body"]; ok {
 		k.Body = strings.ReplaceAll(b[0], "\r\n", "\n")
 	}
-	switch r.FormValue("status") {
-	case "registered", "draft":
-		k.Status = r.FormValue("status")
-	}
+	k.Status = "registered"
 	var words []string
 	if id := s.st.LookupExt(k.Tool, k.Host, k.ExtID); id != 0 {
 		if c, _, err := s.st.Get(id); err == nil {
@@ -109,7 +102,7 @@ func (s *Server) knowledgeDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.st.DeleteKnowledge(k.ID)
-	http.Redirect(w, r, "/knowledge?status="+k.Status, http.StatusSeeOther)
+	http.Redirect(w, r, "/knowledge", http.StatusSeeOther)
 }
 
 // knowledgeMD は記事を Markdown で渡す（付帯情報は入れない）。
@@ -123,4 +116,64 @@ func (s *Server) knowledgeMD(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", `attachment; filename="knowledge-`+strconv.FormatInt(k.ID, 10)+`.md"`)
 	}
 	w.Write([]byte("# " + k.Title + "\n\n" + k.Body))
+}
+
+// knowledgeGraph はナレッジ・タグ・会話のつながりを図にする画面。
+func (s *Server) knowledgeGraph(w http.ResponseWriter, r *http.Request) {
+	d, err := s.side(r, nil)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	d["Page"] = "knowledge"
+	s.render(w, r, "kgraph.html", d)
+}
+
+type graphNode struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Kind  string `json:"kind"` // tag / knowledge / conv
+	URL   string `json:"url,omitempty"`
+	Color string `json:"color,omitempty"`
+}
+
+// knowledgeGraphData は図の点と線。
+func (s *Server) knowledgeGraphData(w http.ResponseWriter, r *http.Request) {
+	convs, err := s.st.Graph()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	ks, _ := s.st.KnowledgeList("")
+	nodes := []graphNode{}
+	links := [][2]string{}
+	seen := map[string]bool{}
+	add := func(n graphNode) {
+		if !seen[n.ID] {
+			seen[n.ID] = true
+			nodes = append(nodes, n)
+		}
+	}
+	for _, k := range ks {
+		add(graphNode{ID: "k" + strconv.FormatInt(k.ID, 10), Label: k.Title, Kind: "knowledge", URL: "/knowledge/" + strconv.FormatInt(k.ID, 10)})
+	}
+	for _, c := range convs {
+		cid := "c" + strconv.FormatInt(c.ID, 10)
+		title := strings.Join(strings.Fields(c.Title), " ")
+		if title == "" {
+			title = toolLabel(c.Tool)
+		}
+		add(graphNode{ID: cid, Label: title, Kind: "conv", URL: "/c/" + strconv.FormatInt(c.ID, 10), Color: string(toolColor(c.Tool))})
+		for _, t := range c.Tags {
+			add(graphNode{ID: "t" + t, Label: t, Kind: "tag", URL: "/?tag=" + url.QueryEscape(t)})
+			links = append(links, [2]string{cid, "t" + t})
+		}
+		for _, k := range c.Knowledge {
+			if kid := "k" + strconv.FormatInt(k, 10); seen[kid] {
+				links = append(links, [2]string{cid, kid})
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"nodes": nodes, "links": links})
 }

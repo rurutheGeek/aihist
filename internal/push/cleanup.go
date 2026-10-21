@@ -1,6 +1,8 @@
 package push
 
 import (
+	"bytes"
+	"encoding/json"
 	"io/fs"
 	"net/url"
 	"os"
@@ -8,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rurutheGeek/aihist/internal/adapter/opencode"
 	"github.com/rurutheGeek/aihist/internal/raw"
 )
 
@@ -82,4 +85,54 @@ func (c *Client) Cleanup(src Source, days int) (int, int64, error) {
 		os.Remove(dirs[i])
 	}
 	return n, size, err
+}
+
+// Present は手元にある会話のファイル（rel）を集めてサーバーに知らせる。サーバーは、
+// 原本はあるのに手元に無い会話に「マシンから消えている」印を付ける。古いサーバーは知らないので、失敗は無視してよい。
+func (c *Client) Present(src Source) error {
+	if _, err := os.Stat(src.Dir); err != nil {
+		return nil
+	}
+	var rels []string
+	filepath.WalkDir(src.Dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		r, _ := filepath.Rel(src.Dir, p)
+		if rel := filepath.ToSlash(r); src.Want(rel) {
+			rels = append(rels, rel)
+		}
+		return nil
+	})
+	return c.present(src.Tool, rels)
+}
+
+// PresentOpenCode は OpenCode の DB にある会話を知らせる。
+func (c *Client) PresentOpenCode(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		return nil
+	}
+	db, err := opencode.Open(path)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	sessions, err := db.Sessions()
+	if err != nil {
+		return err
+	}
+	rels := make([]string, 0, len(sessions))
+	for _, s := range sessions {
+		rels = append(rels, s.ID+".json")
+	}
+	return c.present(opencode.Tool, rels)
+}
+
+func (c *Client) present(tool string, rels []string) error {
+	b, _ := json.Marshal(rels)
+	res, err := c.req("POST", "/api/present", url.Values{"host": {c.Host}, "tool": {tool}}, &upload{bytes.NewReader(b), int64(len(b)), time.Now()})
+	if err != nil {
+		return err
+	}
+	return res.Body.Close()
 }

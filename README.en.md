@@ -1,6 +1,6 @@
 # aihist
 
-A self-hosted hub for the conversation history of AI coding tools. It collects conversations from Claude Code, Codex, OpenCode and Antigravity (plus ChatGPT and claude.ai exports), lets you search and browse them in a chat-style UI, exports a conversation as Markdown for another AI, and restores a conversation back into the original tool so you can keep going.
+A self-hosted hub for the conversation history of AI coding tools. It collects conversations from Claude Code, Codex, OpenCode and Antigravity (plus ChatGPT and claude.ai exports), lets you search and browse them in a chat-style UI, exports a conversation as Markdown for another AI, and restores a conversation back into the original tool so you can keep going. Chats deleted from their machine get a cloud mark, and rewound turns are hidden.
 
 [日本語](README.md)
 
@@ -54,14 +54,15 @@ You can also drop files on the **Upload** page: Claude Code `.jsonl`, Codex `rol
 
 ## Organize with AI (tags, summaries, knowledge)
 
-Adds tags and a summary to chats, and drafts "knowledge" — short write-ups of problems that took real effort to solve. Nothing runs automatically.
+Adds tags and a summary to chats, and writes "knowledge" — short write-ups of problems that took real effort to solve. Nothing runs automatically.
 
 - **API**: enter an OpenAI-compatible endpoint, key, and model in **Settings → AI**. It's called only when you press ✦ on a chat, "Organize with AI" on selected chats, or the option on the upload page.
 - **Skills**: keep your agent skills (SKILL.md plus its rules, references, and scripts) in one place. Paste a GitHub URL to find the skills in it and import the ones you pick (update them to the latest version later), and machines send `~/.claude/skills`, `~/.codex/skills`, and `~/.agents/skills` along with your chats. Skills Claude Code loaded show up under "Used in history". A skill with only a body works as a prompt. AIs connected over MCP find skills with `list_skills` and read them with `get_skill` and `read_skill_file` (they are also served as MCP prompts).
 - **MCP**: connect your own AI (Claude Code and others) to `<server>/api/mcp` with a token (pick the app in **Settings → Connected apps** to get its setup with the token filled in). Your AI reads the chats and writes the results back. It can also delete, archive, pin, rename, and retag chats, or look through the chat list and create tags, when you ask. Chats started by programs or AIs (`opencode run`, `claude -p`, `codex exec`, and so on) are listed under "Automated" and skipped when organizing.
 - Tags are yours (**Settings → Tags**, with templates). Each chat is read in its own requests; long chats are read in pages with running notes.
-- Knowledge is kept only when the AI's quoted evidence of the struggle appears verbatim in the chat and its score is 4 or more. Drafts warn about machine names, folder names, URLs, and IPs; you decide what to register.
-- **Profile**: turn on "Add to it when organizing with AI" to keep adding one-line notes about who you are, taken from what you plainly say about yourself (not drafts, hypotheticals, other people, or one-off requests), split into "About you" and "How you want AI to respond". Write what not to extract in "Instructions". Edit any line, copy it as Markdown for other AIs, or read it over MCP with `get_profile`.
+- Knowledge is kept only when the AI's quoted evidence of the struggle appears verbatim in the chat and its score is 4 or more. Articles warn about machine names, folder names, URLs, and IPs, and ones you edited are never replaced when re-organizing. Knowledge can also be viewed as a graph of tags, articles, and chats.
+- The summary appears after the last message it covers, so later messages are visibly not yet summarized.
+- **Profile**: turn on "Add to it when organizing with AI" to keep adding one-line notes about who you are, taken from what you plainly say about yourself (not drafts, hypotheticals, other people, or one-off requests). Only your own messages are read for this, without AI replies, tool output, or long pastes, and a line is dropped unless the quote it cites appears verbatim in them. Over MCP, use `read_profile_source` and `save_profile`. Notes are split into "About you" and "How you want AI to respond". Write what not to extract in "Instructions". Edit any line, copy it as Markdown for other AIs, or read it over MCP with `get_profile`.
 
 ## Continue in the original AI
 

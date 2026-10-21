@@ -142,7 +142,7 @@ func (s *Store) AIInfo(id int64) (model string, at time.Time) {
 // Knowledge は苦労して解決した問題の記事。
 type Knowledge struct {
 	ID                  int64
-	Title, Body, Status string // status: draft（下書き）/ registered（登録済み）
+	Title, Body, Status string // status: draft（AI が書いたまま。まとめ直すと置き換わる）/ registered（人が直した）
 	Tool, Host, ExtID   string // 元の会話（記事には出さない付帯情報）
 	ConvTitle, Model    string
 	Struggle            string
@@ -164,7 +164,7 @@ func scanKnowledge(sc interface{ Scan(...any) error }) (Knowledge, error) {
 	return k, err
 }
 
-// AddKnowledge は下書きを足す。
+// AddKnowledge は AI が書いた記事を足す（まとめ直すと置き換わる）。
 func (s *Store) AddKnowledge(k Knowledge) (int64, error) {
 	w, _ := json.Marshal(k.Warn)
 	now := time.Now().Unix()
@@ -179,16 +179,16 @@ func (s *Store) AddKnowledge(k Knowledge) (int64, error) {
 	return r.LastInsertId()
 }
 
-// DropDrafts は会話の下書き（登録していないもの）を消す。同じ会話をまとめ直すとき。
+// DropDrafts は会話の、AI が書いたまま人が直していない記事を消す。同じ会話をまとめ直すとき。
 func (s *Store) DropDrafts(tool, host, ext string) error {
 	_, err := s.db.Exec(`DELETE FROM knowledge WHERE status='draft' AND tool=? AND host=? AND external_id=?`, tool, host, ext)
 	return err
 }
 
-// KnowledgeList は status の記事（q を題名か本文に含むもの）を新しい順に。
-func (s *Store) KnowledgeList(status, q string) ([]Knowledge, error) {
-	query := `SELECT ` + knowledgeCols + ` FROM knowledge WHERE status=?`
-	args := []any{status}
+// KnowledgeList は記事（q を題名か本文に含むもの）を新しい順に。
+func (s *Store) KnowledgeList(q string) ([]Knowledge, error) {
+	query := `SELECT ` + knowledgeCols + ` FROM knowledge WHERE 1`
+	var args []any
 	if q = strings.TrimSpace(q); q != "" {
 		query += ` AND (title LIKE ? ESCAPE '\' OR body LIKE ? ESCAPE '\')`
 		like := "%" + escapeLike(q) + "%"
@@ -210,10 +210,9 @@ func (s *Store) KnowledgeList(status, q string) ([]Knowledge, error) {
 	return out, rows.Err()
 }
 
-// KnowledgeCounts は下書きと登録済みの数。
-func (s *Store) KnowledgeCounts() (drafts, registered int) {
-	s.db.QueryRow(`SELECT count(*) FROM knowledge WHERE status='draft'`).Scan(&drafts)
-	s.db.QueryRow(`SELECT count(*) FROM knowledge WHERE status='registered'`).Scan(&registered)
+// KnowledgeCount は記事の数。
+func (s *Store) KnowledgeCount() (n int) {
+	s.db.QueryRow(`SELECT count(*) FROM knowledge`).Scan(&n)
 	return
 }
 
@@ -240,4 +239,55 @@ func (s *Store) LookupExt(tool, host, ext string) int64 {
 		return 0
 	}
 	return id
+}
+
+// GraphConv はグラフに出す会話（タグかナレッジのあるもの）。
+type GraphConv struct {
+	ID          int64
+	Title, Tool string
+	Tags        []string
+	Knowledge   []int64 // この会話から書いたナレッジ
+}
+
+// Graph はナレッジ・タグ・会話のつながり。タグもナレッジも無い会話は入れない。
+func (s *Store) Graph() ([]GraphConv, error) {
+	rows, err := s.db.Query(`
+	  SELECT c.id, c.title, c.tool, ifnull(m.title, ''), t.tag, NULL FROM conv_tags t
+	    JOIN conversations c ON c.tool=t.tool AND c.host=t.host AND c.external_id=t.external_id
+	    LEFT JOIN conv_meta m ON m.tool=c.tool AND m.host=c.host AND m.external_id=c.external_id
+	  UNION ALL
+	  SELECT c.id, c.title, c.tool, ifnull(m.title, ''), NULL, k.id FROM knowledge k
+	    JOIN conversations c ON c.tool=k.tool AND c.host=k.host AND c.external_id=k.external_id
+	    LEFT JOIN conv_meta m ON m.tool=c.tool AND m.host=c.host AND m.external_id=c.external_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	at := map[int64]int{}
+	var out []GraphConv
+	for rows.Next() {
+		var id int64
+		var title, tool, mine string
+		var tag sql.NullString
+		var kid sql.NullInt64
+		if err := rows.Scan(&id, &title, &tool, &mine, &tag, &kid); err != nil {
+			return nil, err
+		}
+		i, ok := at[id]
+		if !ok {
+			if mine != "" {
+				title = mine
+			}
+			i = len(out)
+			at[id] = i
+			out = append(out, GraphConv{ID: id, Title: title, Tool: tool})
+		}
+		if tag.Valid {
+			out[i].Tags = append(out[i].Tags, tag.String)
+		}
+		if kid.Valid {
+			out[i].Knowledge = append(out[i].Knowledge, kid.Int64)
+		}
+	}
+	return out, rows.Err()
 }

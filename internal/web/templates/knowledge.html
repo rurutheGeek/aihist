@@ -5,16 +5,13 @@
   <div class="bar">
     <button class="icon-btn menu" onclick="aihistMenu()" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <div class="title">{{t "ナレッジ"}}</div>
+    {{template "kview" "list"}}
   </div>
   <div class="scroll"><div class="col">
-    <div class="ktabs">
-      <a href="/knowledge?status=draft"{{if eq .KStatus "draft"}} class="on"{{end}}>{{t "下書き"}} <small>{{.Drafts}}</small></a>
-      <a href="/knowledge?status=registered"{{if eq .KStatus "registered"}} class="on"{{end}}>{{t "登録済み"}} <small>{{.Registered}}</small></a>
-      <form class="ksearch" action="/knowledge"><input type="hidden" name="status" value="{{.KStatus}}"><input name="q" value="{{.KQ}}" placeholder="{{t "ナレッジを検索"}}" autocomplete="off"></form>
-    </div>
+    <form class="ksearch kone" action="/knowledge"><input name="q" value="{{.KQ}}" placeholder="{{t "ナレッジを検索"}}" autocomplete="off"></form>
     <div class="klist">
       {{range .K}}<a class="kitem" href="/knowledge/{{.ID}}"><b>{{.Title}}</b><small>{{rel .UpdatedAt}}{{if .Warn}} · <span class="warn">{{tf "個人の情報らしき語 %d 件" (len .Warn)}}</span>{{end}}</small></a>
-      {{else}}<div class="empty mute">{{if eq .KStatus "draft"}}{{t "下書きは無い"}}{{else}}{{t "登録したナレッジは無い"}}{{end}}</div>{{end}}
+      {{else}}<div class="empty mute">{{t "ナレッジは無い"}}</div>{{end}}
     </div>
   </div></div>
 </main>
@@ -27,8 +24,8 @@
 <main class="main">
   <div class="bar">
     <button class="icon-btn menu" onclick="aihistMenu()" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-    <a class="icon-btn" href="/knowledge?status={{.Item.Status}}" aria-label="{{t "ナレッジ"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></a>
-    <div class="title">{{if eq .Item.Status "draft"}}{{t "下書き"}}{{else}}{{t "登録済み"}}{{end}}</div>
+    <a class="icon-btn" href="/knowledge" aria-label="{{t "ナレッジ"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></a>
+    <div class="title">{{t "ナレッジ"}}</div>
     <a class="icon-btn" href="/knowledge/{{.Item.ID}}/md?dl=1" title="{{t "Markdown を保存"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></a>
   </div>
   <div class="scroll"><div class="col">
@@ -40,13 +37,11 @@
     <form class="kedit" method="post" action="/knowledge/{{.Item.ID}}" hidden>
       <input class="ktitle" name="title" value="{{.Item.Title}}" required>
       <textarea name="body" rows="22">{{.Item.Body}}</textarea>
-      <input type="hidden" name="status" value="{{.Item.Status}}">
       <div class="kbtns"><button class="btn" type="button" data-kcancel>{{t "キャンセル"}}</button><button class="btn pri">{{t "保存"}}</button></div>
     </form>
     <div class="kbtns kmain">
       <form method="post" action="/knowledge/{{.Item.ID}}/delete" onsubmit="return confirm({{t "このナレッジを削除する？"}})"><button class="btn red">{{t "削除"}}</button></form>
       <button class="btn" type="button" data-kedit>{{t "編集"}}</button>
-      <form method="post" action="/knowledge/{{.Item.ID}}">{{if eq .Item.Status "draft"}}<input type="hidden" name="status" value="registered"><button class="btn pri">{{t "登録"}}</button>{{else}}<input type="hidden" name="status" value="draft"><button class="btn">{{t "下書きに戻す"}}</button>{{end}}</form>
     </div>
     <div class="kmeta grp">
       <div class="row"><div class="rl">{{t "元の会話"}}</div><div class="rc">{{if .ConvID}}<a href="/c/{{.ConvID}}">{{or .Item.ConvTitle .Item.ExtID}}</a>{{else}}<span class="mute">{{or .Item.ConvTitle "—"}}</span>{{end}}</div></div>
@@ -68,6 +63,86 @@
   var v=document.querySelector('.kview'), e=document.querySelector('.kedit'), m=document.querySelector('.kmain');
   document.querySelector('[data-kedit]').onclick=function(){v.hidden=true;m.hidden=true;e.hidden=false;e.querySelector('textarea').focus()};
   document.querySelector('[data-kcancel]').onclick=function(){v.hidden=false;m.hidden=false;e.hidden=true};
+})();
+</script>
+{{template "foot" .}}{{end}}
+
+{{define "kview"}}<div class="seg kview-seg"><a href="/knowledge"{{if ne . "graph"}} class="on"{{end}}>{{t "一覧"}}</a><a href="/knowledge/graph"{{if eq . "graph"}} class="on"{{end}}>{{t "グラフ"}}</a></div>{{end}}
+
+{{define "kgraph.html"}}{{template "head" (t "ナレッジ")}}
+<div class="app">
+{{template "side" .}}
+<main class="main">
+  <div class="bar">
+    <button class="icon-btn menu" onclick="aihistMenu()" aria-label="{{t "一覧"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="title">{{t "ナレッジ"}}</div>
+    {{template "kview" "graph"}}
+  </div>
+  <div class="kg">
+    <canvas id="kg"></canvas>
+    <div class="kg-legend"><span><i class="kg-t"></i>{{t "タグ"}}</span><span><i class="kg-k"></i>{{t "ナレッジ"}}</span><span><i class="kg-c"></i>{{t "会話"}}</span></div>
+    <div class="kg-tip" hidden></div>
+    <div class="empty mute kg-empty" hidden>{{t "タグやナレッジの付いた会話が無い"}}</div>
+  </div>
+</main>
+</div>
+<script>
+(function(){
+  var cv=document.getElementById('kg'), ctx=cv.getContext('2d'), tip=document.querySelector('.kg-tip');
+  var N=[], L=[], byId={}, adj={}, W=0, H=0, dpr=window.devicePixelRatio||1;
+  var view={x:0,y:0,k:1}, hover=null, drag=null, pan=null, moved=false, alpha=1;
+  var css=getComputedStyle(document.documentElement);
+  function col(v,f){return (css.getPropertyValue(v)||'').trim()||f}
+  var C={fg:col('--fg','#222'),faint:col('--faint','#999'),line:col('--line','#ddd'),tag:col('--fg','#222'),know:'#3b82f6'};
+  function size(){var r=cv.parentNode.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';draw()}
+  function rad(n){return n.kind==='tag'?5+Math.sqrt(n.deg)*1.6:n.kind==='knowledge'?6:3}
+  fetch('/knowledge/graph.json').then(function(r){return r.json()}).then(function(d){
+    N=d.nodes; if(!N.length){document.querySelector('.kg-empty').hidden=false;return}
+    N.forEach(function(n,i){byId[n.id]=n;n.deg=0;var a=i*2.399,r=12*Math.sqrt(i);n.x=Math.cos(a)*r;n.y=Math.sin(a)*r;n.vx=0;n.vy=0;adj[n.id]={}});
+    d.links.forEach(function(l){var a=byId[l[0]],b=byId[l[1]];if(!a||!b)return;L.push([a,b]);a.deg++;b.deg++;adj[a.id][b.id]=1;adj[b.id][a.id]=1});
+    size(); fit(); loop();
+  });
+  // 近くの点だけを押し合う（升目に分けて数を抑える）
+  function step(){
+    var cell=60, grid={};
+    N.forEach(function(n){var k=Math.floor(n.x/cell)+','+Math.floor(n.y/cell);(grid[k]=grid[k]||[]).push(n)});
+    N.forEach(function(n){
+      var gx=Math.floor(n.x/cell), gy=Math.floor(n.y/cell);
+      for(var i=-1;i<=1;i++)for(var j=-1;j<=1;j++){var g=grid[(gx+i)+','+(gy+j)];if(!g)continue;
+        for(var q=0;q<g.length;q++){var m=g[q];if(m===n)continue;var dx=n.x-m.x,dy=n.y-m.y,d2=dx*dx+dy*dy+.01;if(d2>cell*cell)continue;var f=120/d2;n.vx+=dx*f*alpha;n.vy+=dy*f*alpha}}
+      n.vx-=n.x*.002*alpha; n.vy-=n.y*.002*alpha;
+    });
+    L.forEach(function(l){var a=l[0],b=l[1],dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy)||1,want=a.kind==='tag'||b.kind==='tag'?70:30,f=(d-want)/d*.04*alpha;
+      var wa=a.kind==='tag'?.2:1, wb=b.kind==='tag'?.2:1; a.vx+=dx*f*wa;a.vy+=dy*f*wa;b.vx-=dx*f*wb;b.vy-=dy*f*wb});
+    N.forEach(function(n){if(n===drag)return;n.vx*=.6;n.vy*=.6;n.x+=n.vx;n.y+=n.vy});
+    alpha=Math.max(alpha*.985,.02);
+  }
+  function loop(){if(alpha>.021||drag){step();draw()}requestAnimationFrame(loop)}
+  function fit(){for(var i=0;i<200;i++)step();var x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;N.forEach(function(n){x0=Math.min(x0,n.x);y0=Math.min(y0,n.y);x1=Math.max(x1,n.x);y1=Math.max(y1,n.y)});
+    view.k=Math.min(W/(x1-x0+80),H/(y1-y0+80),2);view.x=W/2-(x0+x1)/2*view.k;view.y=H/2-(y0+y1)/2*view.k;draw()}
+  function draw(){
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);ctx.translate(view.x,view.y);ctx.scale(view.k,view.k);
+    var hv=hover&&adj[hover.id];
+    ctx.lineWidth=1/view.k;
+    L.forEach(function(l){var on=hover&&(l[0]===hover||l[1]===hover);ctx.strokeStyle=on?C.fg:C.line;ctx.globalAlpha=hover&&!on?.25:.8;ctx.beginPath();ctx.moveTo(l[0].x,l[0].y);ctx.lineTo(l[1].x,l[1].y);ctx.stroke()});
+    N.forEach(function(n){var dim=hover&&n!==hover&&!(hv&&hv[n.id]);ctx.globalAlpha=dim?.25:1;ctx.fillStyle=n.kind==='tag'?C.tag:n.kind==='knowledge'?C.know:(n.color||C.faint);ctx.beginPath();ctx.arc(n.x,n.y,rad(n),0,7);ctx.fill()});
+    ctx.globalAlpha=1;ctx.fillStyle=C.fg;ctx.textAlign='center';
+    N.forEach(function(n){var show=n.kind==='tag'||(n.kind==='knowledge'&&view.k>1.6)||n===hover||(hv&&hv[n.id]);if(!show)return;
+      ctx.font=(n.kind==='tag'?'600 ':'')+(12/view.k)+'px system-ui,sans-serif';var t=n.label.length>28?n.label.slice(0,27)+'…':n.label;ctx.fillText(t,n.x,n.y-rad(n)-4/view.k)});
+  }
+  function at(e){var r=cv.getBoundingClientRect(),x=(e.clientX-r.left-view.x)/view.k,y=(e.clientY-r.top-view.y)/view.k,best=null,bd=1e9;
+    N.forEach(function(n){var dx=n.x-x,dy=n.y-y,d=dx*dx+dy*dy,rr=rad(n)+6/view.k;if(d<rr*rr&&d<bd){bd=d;best=n}});return best}
+  cv.addEventListener('pointerdown',function(e){cv.setPointerCapture(e.pointerId);moved=false;var n=at(e);if(n){drag=n;alpha=Math.max(alpha,.3)}else pan={x:e.clientX-view.x,y:e.clientY-view.y}});
+  cv.addEventListener('pointermove',function(e){
+    if(drag){var r=cv.getBoundingClientRect();drag.x=(e.clientX-r.left-view.x)/view.k;drag.y=(e.clientY-r.top-view.y)/view.k;moved=true;draw();return}
+    if(pan){view.x=e.clientX-pan.x;view.y=e.clientY-pan.y;moved=true;draw();return}
+    var n=at(e);if(n!==hover){hover=n;cv.style.cursor=n?'pointer':'grab';draw()}
+    if(n){tip.hidden=false;tip.textContent=n.label;var r=cv.getBoundingClientRect();tip.style.left=(e.clientX-r.left+12)+'px';tip.style.top=(e.clientY-r.top+12)+'px'}else tip.hidden=true});
+  cv.addEventListener('pointerup',function(e){var n=drag;drag=null;pan=null;if(!moved){var m=n||at(e);if(m&&m.url)location.href=m.url}});
+  cv.addEventListener('pointerleave',function(){hover=null;tip.hidden=true;draw()});
+  cv.addEventListener('wheel',function(e){e.preventDefault();var r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top,f=Math.exp(-e.deltaY*.0015),k=Math.min(Math.max(view.k*f,.1),6);
+    view.x=mx-(mx-view.x)*k/view.k;view.y=my-(my-view.y)*k/view.k;view.k=k;draw()},{passive:false});
+  window.addEventListener('resize',size);
 })();
 </script>
 {{template "foot" .}}{{end}}

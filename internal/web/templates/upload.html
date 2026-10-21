@@ -29,7 +29,7 @@
 </div>
 <script>
 (function(){
-  var T={wait:{{t "待機"}},up:{{t "送信中"}},imp:{{t "取り込み中"}},queue:{{t "順番待ち"}},ok:{{t "%d 件取り込み"}},same:{{t "%d 件は変更なし"}},open:{{t "開く"}},pick:{{t "中身を選ぶ"}},ai:{{t "AI で整理中"}},aidone:{{t "AI で整理した"}},kn:{{t "ナレッジの下書き %d 件"}}};
+  var T={wait:{{t "待機"}},up:{{t "送信中"}},imp:{{t "取り込み中"}},queue:{{t "順番待ち"}},ok:{{t "%d 件取り込み"}},same:{{t "%d 件は変更なし"}},open:{{t "開く"}},pick:{{t "中身を選ぶ"}},ai:{{t "AI で整理中"}},aidone:{{t "AI で整理した"}},kn:{{t "ナレッジ %d 件"}}};
   var d=document.getElementById('drop'), f=document.getElementById('files'), q=document.getElementById('queue'), busy=false, todo=[];
   function size(n){return n>=1<<30?(n/(1<<30)).toFixed(1)+' GB':n>=1<<20?(n/(1<<20)).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'}
   function add(files){

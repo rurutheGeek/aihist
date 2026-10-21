@@ -178,6 +178,9 @@ func migrate(db *sql.DB) error {
 	if err := migrateSkills(db); err != nil {
 		return err
 	}
+	if err := migrateGone(db); err != nil {
+		return err
+	}
 	// AI でまとめた要約と、どのモデルでいつ・どの版の会話をまとめたか
 	for _, c := range []string{"summary TEXT NOT NULL DEFAULT ''", "ai_model TEXT NOT NULL DEFAULT ''", "ai_at INTEGER NOT NULL DEFAULT 0", "ai_stamp TEXT NOT NULL DEFAULT ''"} {
 		if !hasColumnIn(db, "conv_meta", strings.Fields(c)[0]) {
@@ -232,6 +235,33 @@ func migrateAuto(db *sql.DB) error {
 	_, err := db.Exec(`ALTER TABLE conversations ADD COLUMN auto INTEGER NOT NULL DEFAULT 0;
 	  UPDATE conversations SET source_stamp = '` + reparse + `' || source_stamp WHERE source_stamp != ''`)
 	return err
+}
+
+// migrateGone は gone（原本はサーバーにあるが、マシンからは消えている会話）を足す。
+func migrateGone(db *sql.DB) error {
+	if hasColumn(db, "gone") {
+		return nil
+	}
+	_, err := db.Exec(`ALTER TABLE conversations ADD COLUMN gone INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
+// MarkGone は host・tool の会話のうち、原本 paths の会話にマシンから消えている印を付け、ほかは外す。
+func (s *Store) MarkGone(host, tool string, paths []string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE conversations SET gone=0 WHERE host=? AND tool=? AND gone=1`, host, tool); err != nil {
+		return err
+	}
+	for _, p := range paths {
+		if _, err := tx.Exec(`UPDATE conversations SET gone=1 WHERE host=? AND tool=? AND source_path=?`, host, tool, p); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // reparse は読み直しを待つ印の頭。
@@ -439,6 +469,7 @@ type ConvRow struct {
 	Tags          []string
 	Summary       string // AI でまとめた要約
 	Auto          bool   // 人ではなくプログラムや AI が動かした会話
+	Gone          bool   // マシンからは消えている（サーバーの原本から戻せる）
 	orphan        bool   // 親の会話が取り込まれていないサブエージェント
 }
 
@@ -639,6 +670,7 @@ func (s *Store) Browse(f Filter) ([]ConvRow, map[string][]Facet, error) {
 				}
 				rep.Pinned = rep.Pinned || rows[i].Pinned
 				rep.Archived = rep.Archived || rows[i].Archived
+				rep.Gone = rep.Gone && rows[i].Gone
 			}
 			out = append(out, rep)
 		}
@@ -661,7 +693,7 @@ func splitModels(s string) []string {
 	return strings.Split(s, "\n")
 }
 
-const rowCols = `id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id, continues_from, models, auto`
+const rowCols = `id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id, continues_from, models, auto, gone`
 
 func (s *Store) rowsWhere(tool, host string) ([]ConvRow, error) {
 	q := `SELECT ` + rowCols + ` FROM conversations WHERE 1=1`
@@ -688,7 +720,7 @@ func (s *Store) query(q string, args ...any) ([]ConvRow, error) {
 		var r ConvRow
 		var st, up int64
 		var ms string
-		if err := rows.Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom, &ms, &r.Auto); err != nil {
+		if err := rows.Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom, &ms, &r.Auto, &r.Gone); err != nil {
 			return nil, err
 		}
 		r.Models = splitModels(ms)
@@ -898,7 +930,7 @@ func (s *Store) Get(id int64) (*ConvRow, []model.Message, error) {
 	var st, up int64
 	var ms string
 	err := s.db.QueryRow(`SELECT `+rowCols+` FROM conversations WHERE id=?`, id).
-		Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom, &ms, &r.Auto)
+		Scan(&r.ID, &r.Tool, &r.Host, &r.ExternalID, &r.ParentID, &r.Title, &r.Cwd, &r.GitBranch, &r.Model, &st, &up, &r.MessageCount, &r.RootID, &r.ContinuesFrom, &ms, &r.Auto, &r.Gone)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -934,7 +966,8 @@ func (s *Store) Get(id int64) (*ConvRow, []model.Message, error) {
 			cur.Parts = append(cur.Parts, model.Part{Kind: model.PartKind(kind.String), Text: text.String, ToolName: tool.String, ToolCallID: call.String, IsError: isErr.Bool})
 		}
 	}
-	return &r, msgs, rows.Err()
+	// 巻き戻して捨てた枝は、表示にも AI にも渡さない（原本はそのまま）
+	return &r, model.MainLine(msgs), rows.Err()
 }
 
 // FindByExternal は ExternalID の前方一致で会話を探す（CLI 用）。

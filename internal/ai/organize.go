@@ -60,29 +60,6 @@ type Result struct {
 	Tags      []string    `json:"tags"`
 	Summary   string      `json:"summary"`
 	Knowledge []Knowledge `json:"knowledge"`
-	Profile   []Trait     `json:"profile"`
-}
-
-// Trait はユーザーについて会話から分かったこと。
-type Trait struct {
-	Text     Text   `json:"text"`
-	Kind     string `json:"kind"`     // about（どんな人か）/ wish（AI にどう答えてほしいか）
-	Source   string `json:"source"`   // self（本人がふつうに話したこと）/ draft / hypothetical / other
-	Lasting  bool   `json:"lasting"`  // 長く変わらないことか
-	Same     int64  `json:"same"`     // 今のプロフィールの同じ項目の番号
-	Replaces int64  `json:"replaces"` // 新しいことで置き換える項目の番号
-}
-
-// ProfileReq はプロフィールを書き足すときに渡すもの。nil なら取り出さない。
-type ProfileReq struct {
-	Existing []ExistingTrait
-	Note     string // ユーザーが書いた「指示」
-}
-
-type ExistingTrait struct {
-	ID   int64
-	Kind string
-	Text string
 }
 
 func langName(lang string) string {
@@ -106,7 +83,7 @@ func LangOf(s string) string {
 }
 
 // Instructions は整理の決まり（API でも MCP でも同じものを使う）。
-func Instructions(tags []Tag, lang string, prof *ProfileReq) string {
+func Instructions(tags []Tag, lang string) string {
 	var tl strings.Builder
 	for _, t := range tags {
 		tl.WriteString("- " + t.Name)
@@ -119,9 +96,6 @@ func Instructions(tags []Tag, lang string, prof *ProfileReq) string {
 		tl.WriteString("（タグは無い。tags は空の配列にする）\n")
 	}
 	keys := `{"tags": [...], "summary": "...", "knowledge": [...]}`
-	if prof != nil {
-		keys = `{"tags": [...], "summary": "...", "knowledge": [...], "profile": [...]}`
-	}
 	return `AI との会話の記録を整理する。会話を読み、次の形の JSON だけを返す。
 
 ` + keys + `
@@ -161,85 +135,19 @@ func Instructions(tags []Tag, lang string, prof *ProfileReq) string {
 - 記録に無いことを書かない。推測で埋めない。solution には会話の中で実際に効いた方法だけを書き、会話に出ていない別の方法を足さない。cause は会話の中で確かめられた原因だけを書く（確かめていなければ「分かっていない」と書く）。
 - 個人の情報を書かない：マシン名・ユーザー名・人名・プロジェクト名・社名・ドメイン・IP アドレス・メールアドレス・パスの中の個人名・トークンやパスワード。必要なら <サーバー>・<プロジェクト>・<ユーザー> のように書く。
 - [トークン]・[メール] のような印は、すでに消した情報。そのまま扱う。
-- 文章は` + langName(lang) + `で書く。` + profileSection(prof)
-}
-
-func profileSection(p *ProfileReq) string {
-	if p == nil {
-		return ""
-	}
-	var ex strings.Builder
-	for i, t := range p.Existing {
-		if i == 300 {
-			break
-		}
-		k := "about"
-		if t.Kind == "wish" {
-			k = "wish"
-		}
-		fmt.Fprintf(&ex, "%d. [%s] %s\n", t.ID, k, t.Text)
-	}
-	if ex.Len() == 0 {
-		ex.WriteString("（まだ無い）\n")
-	}
-	note := ""
-	if strings.TrimSpace(p.Note) != "" {
-		note = "\n### ユーザーからの指示（必ず従う）\n" + p.Note + "\n"
-	}
-	return `
-
-## profile
-このユーザーがどんな人かを、あとで別の AI が読んで、どんな話題の会話でも答え方を合わせられるよう、短い文で残す。
-残すのは、人を紹介するときに言うようなこと：住んでいる地域（市区町村まで）・年代・仕事や学校・立場・経歴・家族・趣味・好きなもの・関心・暮らし・体のこと・性格・ものの考え方。
-AI への希望は、どの会話にも通じる答え方の好み（言語・書き方・長さ・報告や質問のしかた）だけ。
-
-残さないもの：
-- その会話の作業の中身・進め方・決めたこと（何を作った・直した・調べた、どの手順で進めた）
-- 特定のプロジェクトや作業の決まり・方針（設計・配備・命名・UI・使う道具の方針など。これはそのプロジェクトの設定に書くもので、人の紹介ではない）
-- 作っている物・使っている道具の細かい説明（「〇〇を開発している」は、趣味や仕事として続いているときに、短く1つだけ）
-- AI の答えへの一度きりの文句や注文
-迷ったら残さない。1つの会話から残すのは多くても2つ。今のプロフィールにある項目と似ていれば same にする。
-
-まず会話の中から候補を挙げ、候補ごとに次を判断する。
-- source：その文の出どころ
-  - "self"：ユーザーが自分のこととして、ふつうに話した事実
-  - "draft"：応募書類・自己PR・作文・投稿などの下書きとして渡した文や、AI に書かせた文（盛ったり作ったりしていることがある）
-  - "hypothetical"：たとえ話・仮定・冗談・皮肉・売り言葉
-  - "other"：家族・友人・相手など、ほかの人のこと
-- 学年・年齢・勤め先・住まい・役職など、年月がたつと変わることは、会話の日付から「2026年10月時点で大学院の修士1年」のように、いつの話かを入れて書く
-- kind：どちらの項目か
-  - "about"：その人について（経歴・学年・仕事・住まい・家族・趣味・関心・暮らし・性格・考え方）
-  - "wish"：どの会話にも通じる、AI への答え方の好み（言語・書き方・長さ・報告や質問のしかた）
-- lasting：その人について続いていること・変わりにくいことか（true）、その会話の用件にだけ関わること・一度きりの出来事か（false）。体のこと・暮らし方なども、続いていることなら true
-
-例：
-- 「会社員で、週末は登山をしている」→ source "self", lasting true
-- 「志望動機：幼い頃から人の役に立ちたいと…」（応募書類の下書き）→ source "draft"
-- 「自分で作った機械かもしれないだろ」→ source "hypothetical"
-- 「夫は来月から転職する」→ source "other"
-- 「1日1食にしている」→ kind "about", lasting true
-- 「英語で返されると読めない。日本語で書いて」→ kind "wish", lasting true
-- 「今日はラーメンを3杯食べた」「予算は1万5千円で探して」→ lasting false
-- 「PR をマージしてから配備して」「この画面は製品に合わせて」「Terraform で管理している」→ 残さない（作業やプロジェクトの決まり）
-
-各項目：{"text": 1文で（主語はユーザー。家族のことは「ユーザーには〜がいる」のようにユーザーから見て書く）, "kind": "about" か "wish", "source": 上のどれか, "lasting": true か false, "same": 今のプロフィールに同じ内容があればその番号（無ければ 0）, "replaces": 今のプロフィールの項目が古くなった（変わった）ならその番号（無ければ 0）}
-推測では書かない。会話からはっきり分かることだけ。無ければ空の配列。
-
-### 今のプロフィール
-` + ex.String() + `今のプロフィールと同じこと・言い換えにあたることは、新しい項目にせず same にその番号を入れる。
-` + note
+- 文章は` + langName(lang) + `で書く。`
 }
 
 const readNotes = `AI との会話の記録が長いので、区切りごとに読み進めている。
 これまでのメモと次の区切りを読み、メモを書き足して {"notes": "..."} の JSON だけを返す。
 メモには、話題の流れ、出てきた問題・試したこと（失敗も）・原因・解決、関係する機器・ソフト・サービスとその版を残す。
-あとで要約と、苦労して解決した問題の記事と、ユーザーがどんな人か分かること（本人の話か、下書き・たとえ話・ほかの人の話かも分かるように）を書くのに要ることを落とさない。重複は省き、6000字以内にする。
+あとで要約と、苦労して解決した問題の記事を書くのに要ることを落とさない。重複は省き、6000字以内にする。
 エラーの文や失敗した結果、ユーザーの「まだ動かない」などの言葉は、あとで引用できるよう記録からそのまま「」で写しておく。
 記録に無いことを書かない。`
 
 // Organize は会話（Pages で分けたもの）を読み、タグ・要約・ナレッジを返す。
 // 長い会話は区切りごとに別のリクエストで読み進め、それまでのメモを次へ渡す。progress は読んだ区切りの数を受け取る。
-func (c Config) Organize(ctx context.Context, title string, pages []string, tags []Tag, lang string, prof *ProfileReq, progress func(done, total int)) (Result, error) {
+func (c Config) Organize(ctx context.Context, title string, pages []string, tags []Tag, lang string, progress func(done, total int)) (Result, error) {
 	if len(pages) == 0 {
 		return Result{}, nil
 	}
@@ -275,7 +183,7 @@ func (c Config) Organize(ctx context.Context, title string, pages []string, tags
 	var r Result
 	// 返事の形が崩れていたら、もう1回だけ頼む
 	for try := 0; ; try++ {
-		out, err := c.Chat(ctx, Instructions(tags, lang, prof), user, true)
+		out, err := c.Chat(ctx, Instructions(tags, lang), user, true)
 		if err == nil {
 			if err = decode(out, &r); err == nil {
 				break
@@ -288,11 +196,7 @@ func (c Config) Organize(ctx context.Context, title string, pages []string, tags
 	if progress != nil {
 		progress(len(pages), len(pages))
 	}
-	r = r.Clean(tags, strings.Join(pages, "\n"))
-	if prof == nil {
-		r.Profile = nil
-	}
-	return r, nil
+	return r.Clean(tags, strings.Join(pages, "\n")), nil
 }
 
 // Clean は決まりから外れたもの（無いタグ・空の記事・価値の低い記事・つまずきの証拠が記録に無い記事）を落とす。
@@ -318,16 +222,6 @@ func (r Result) Clean(tags []Tag, text string) Result {
 	}
 	r.Knowledge = ks
 	r.Summary = strings.TrimSpace(r.Summary)
-	// プロフィールは、本人がふつうに話した、長く変わらないことだけ
-	var ps []Trait
-	for _, p := range r.Profile {
-		p.Text = Text(strings.TrimSpace(string(p.Text)))
-		if p.Text == "" || p.Source != "self" || !p.Lasting {
-			continue
-		}
-		ps = append(ps, p)
-	}
-	r.Profile = ps
 	return r
 }
 
