@@ -113,7 +113,7 @@ func Instructions(tags []Tag, lang string) string {
 - 多くの人が使うソフト・サービス・機器・言語・ライブラリのふるまいが原因で、それを使う別の人も同じように当たりうるもの
 入れないもの：
 - その人のプロジェクト固有の作り・データ・仕様・業務の決まりが原因のもの（自作アプリの判定の間違い、名簿や会員データの移し替え、自作の認証や権限の決まり、ゲームやクイズの中身など）。同じソフトを使う他の人には起きない
-- 一度で済んだ作業、手順どおりの実行、質問に答えただけのもの、未解決のもの
+- 説明書やよくある直し方ですぐ分かるもの、手順どおりの実行、質問に答えただけのもの、未解決のもの
 - 調べもの・相談・計算・文章作り・買い物・手続き・暮らしや考え方の質問（AI に聞いて答えをもらっただけで、何かが動かなくて困ったのではないもの）
 - 1つのゲームやアプリの特定の版だけ、その人の機器の組み合わせだけに当てはまる狭い手順。題名を読んで「自分も当たりそう」と思う人がほとんどいないもの
 - その場だけの打ち間違いや、一回きりの事情
@@ -199,7 +199,45 @@ func (c Config) Organize(ctx context.Context, title string, pages []string, tags
 	if progress != nil {
 		progress(len(pages), len(pages))
 	}
-	return r.Clean(tags, strings.Join(pages, "\n")), nil
+	r = r.Clean(tags, strings.Join(pages, "\n"))
+	r.Knowledge = c.review(ctx, r.Knowledge)
+	return r, nil
+}
+
+const reviewRule = `ナレッジ記事の候補を、決まりに合うかだけ見直す。
+ナレッジは、同じソフト・サービス・機器を使う別の人も当たりうる問題で、答えを見つけにくいもの（症状から原因が想像しにくい、よくある直し方が効かない、説明書に書いていない）の解決を残す短い記事。
+次のどれかに当たる候補は外す：
+- 調べもの・相談・計算・勉強・文章作り・買い物・手続き・暮らしや考え方の質問（答えを聞いただけで、何かが動かなくて困ったのではない）
+- その人のプロジェクト固有の作り・データ・仕様・自作のコードや設定の間違いが原因のもの
+- 1つのゲームやアプリの特定の版だけ、その人の機器の組み合わせだけに当てはまる狭い手順
+- 説明書やよくある直し方ですぐ分かるもの
+{"keep": [残す候補の番号]} の JSON だけを返す。`
+
+// review は書いた記事を同じ AI にもう一度だけ見せ、決まりに合わないものを外す。
+// 書くときには決まりを守れないモデルでも、見分けるだけならできる。見直せなかったときはそのまま返す。
+func (c Config) review(ctx context.Context, ks []Knowledge) []Knowledge {
+	if len(ks) == 0 {
+		return ks
+	}
+	var b strings.Builder
+	for i, k := range ks {
+		fmt.Fprintf(&b, "%d. %s\n   症状: %s\n   原因: %s\n   結論: %s\n", i+1, k.Title, cut(string(k.Symptom), 200), cut(string(k.Cause), 200), cut(string(k.Conclusion), 200))
+	}
+	out, err := c.Chat(ctx, reviewRule, b.String(), true)
+	var v struct {
+		Keep []int `json:"keep"`
+	}
+	if err != nil || decode(out, &v) != nil {
+		return ks
+	}
+	var kept []Knowledge
+	for _, n := range v.Keep {
+		if n >= 1 && n <= len(ks) && ks[n-1].Title != "" {
+			kept = append(kept, ks[n-1])
+			ks[n-1].Title = "" // 同じ番号を2回数えない
+		}
+	}
+	return kept
 }
 
 // Clean は決まりから外れたもの（無いタグ・空の記事・価値の低い記事・問題の証拠が記録に無い記事）を落とす。
