@@ -159,3 +159,71 @@ func TestDeleteKeepsMark(t *testing.T) {
 		t.Fatal("not reimported")
 	}
 }
+
+// 続きが足されて取り込み直しても、会話の番号は変わらず、中身と全文検索は新しくなる。
+func TestPutKeepsID(t *testing.T) {
+	st, _ := Open(filepath.Join(t.TempDir(), "a.db"))
+	c := &model.Conversation{Tool: "codex", Host: "h", ExternalID: "x1", Title: "a", Messages: []model.Message{{Role: "user", Parts: []model.Part{{Kind: model.Text, Text: "最初の発言"}}}}}
+	st.Put(c, "s1")
+	id1, _ := st.Lookup("codex", "h", "x1")
+	c.Messages = append(c.Messages, model.Message{Role: "assistant", Parts: []model.Part{{Kind: model.Text, Text: "続きの返事"}}})
+	if err := st.Put(c, "s2"); err != nil {
+		t.Fatal(err)
+	}
+	id2, _ := st.Lookup("codex", "h", "x1")
+	if id1 == 0 || id1 != id2 {
+		t.Fatalf("番号が変わった: %d → %d", id1, id2)
+	}
+	_, msgs, err := st.Get(id2)
+	if err != nil || len(msgs) != 2 {
+		t.Fatalf("中身: %d %v", len(msgs), err)
+	}
+	for q, want := range map[string]int{"続きの返事": 1, "最初の発言": 1} {
+		rows, _, _ := st.Browse(Filter{Query: q, Status: "all", Limit: 10})
+		if len(rows) != want {
+			t.Errorf("%s: %d 件", q, len(rows))
+		}
+	}
+}
+
+// 見直していない記事だけが出て、外すと消え、残すと見直し済みになる。人が直した記事は消さない。
+func TestReview(t *testing.T) {
+	st, _ := Open(filepath.Join(t.TempDir(), "a.db"))
+	a, _ := st.AddKnowledge(Knowledge{Title: "a", Body: "x"})
+	b, _ := st.AddKnowledge(Knowledge{Title: "b", Body: "x"})
+	c, _ := st.AddKnowledge(Knowledge{Title: "c", Body: "x", Status: "registered"})
+	if ks, _ := st.Unreviewed(); len(ks) != 2 {
+		t.Fatalf("見直す記事: %d", len(ks))
+	}
+	st.Review(a, true)
+	st.Review(b, false)
+	st.Review(c, false)
+	if ks, _ := st.Unreviewed(); len(ks) != 0 {
+		t.Errorf("残った: %+v", ks)
+	}
+	if _, err := st.GetKnowledge(a); err != nil {
+		t.Error("残した記事が無い")
+	}
+	if _, err := st.GetKnowledge(b); err == nil {
+		t.Error("外した記事が残った")
+	}
+	if _, err := st.GetKnowledge(c); err != nil {
+		t.Error("人が直した記事を消した")
+	}
+}
+
+// 自動実行の会話のサブエージェントは、親と子のどちらが先に来ても自動実行になる。
+func TestAutoChildren(t *testing.T) {
+	st, _ := Open(filepath.Join(t.TempDir(), "a.db"))
+	msg := []model.Message{{Role: "user", Parts: []model.Part{{Kind: model.Text, Text: "x"}}}}
+	st.Put(&model.Conversation{Tool: "opencode", Host: "h", ExternalID: "c1", ParentID: "p", Messages: msg}, "s")
+	st.Put(&model.Conversation{Tool: "opencode", Host: "h", ExternalID: "p", Auto: true, Messages: msg}, "s")
+	st.Put(&model.Conversation{Tool: "opencode", Host: "h", ExternalID: "c2", ParentID: "p", Messages: msg}, "s")
+	for _, e := range []string{"c1", "c2"} {
+		id, _ := st.Lookup("opencode", "h", e)
+		r, _, _ := st.Get(id)
+		if !r.Auto {
+			t.Errorf("%s が自動実行になっていない", e)
+		}
+	}
+}

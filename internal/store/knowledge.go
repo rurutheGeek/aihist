@@ -227,6 +227,34 @@ func (s *Store) UpdateKnowledge(k Knowledge) error {
 	return err
 }
 
+// Unreviewed は AI が書いたまま、まだ見直していない記事。
+func (s *Store) Unreviewed() ([]Knowledge, error) {
+	rows, err := s.db.Query(`SELECT id, title, body FROM knowledge WHERE status='draft' AND reviewed=0 ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Knowledge
+	for rows.Next() {
+		var k Knowledge
+		if err := rows.Scan(&k.ID, &k.Title, &k.Body); err != nil {
+			return nil, err
+		}
+		out = append(out, k)
+	}
+	return out, rows.Err()
+}
+
+// Review は見直しの結果を記事に付ける。keep なら見直し済みにし、そうでなければ消す（人が直した記事は消さない）。
+func (s *Store) Review(id int64, keep bool) error {
+	if keep {
+		_, err := s.db.Exec(`UPDATE knowledge SET reviewed=1 WHERE id=?`, id)
+		return err
+	}
+	_, err := s.db.Exec(`DELETE FROM knowledge WHERE id=? AND status='draft'`, id)
+	return err
+}
+
 func (s *Store) DeleteKnowledge(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM knowledge WHERE id=?`, id)
 	return err

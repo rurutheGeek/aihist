@@ -181,6 +181,12 @@ func migrate(db *sql.DB) error {
 	if err := migrateGone(db); err != nil {
 		return err
 	}
+	if err := migrateReviewed(db); err != nil {
+		return err
+	}
+	if err := autoChildren(db); err != nil {
+		return err
+	}
 	// AI でまとめた要約と、どのモデルでいつ・どの版の会話をまとめたか
 	for _, c := range []string{"summary TEXT NOT NULL DEFAULT ''", "ai_model TEXT NOT NULL DEFAULT ''", "ai_at INTEGER NOT NULL DEFAULT 0", "ai_stamp TEXT NOT NULL DEFAULT ''"} {
 		if !hasColumnIn(db, "conv_meta", strings.Fields(c)[0]) {
@@ -243,6 +249,26 @@ func migrateGone(db *sql.DB) error {
 		return nil
 	}
 	_, err := db.Exec(`ALTER TABLE conversations ADD COLUMN gone INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
+// autoChildren は、プログラムや AI が動かした会話のサブエージェントも自動実行にする。
+const autoChildSQL = `UPDATE conversations SET auto=1 WHERE auto=0 AND parent_external_id<>'' AND EXISTS (
+  SELECT 1 FROM conversations p WHERE p.tool=conversations.tool AND p.host=conversations.host AND p.external_id=conversations.parent_external_id AND p.auto=1)`
+
+func autoChildren(db *sql.DB) error {
+	_, err := db.Exec(autoChildSQL)
+	return err
+}
+
+// migrateReviewed は reviewed（AI が書いた記事を、まとめて見直し済みか）を足す。前からある記事は見直し済みにする。
+func migrateReviewed(db *sql.DB) error {
+	var n int
+	db.QueryRow(`SELECT count(*) FROM pragma_table_info('knowledge') WHERE name='reviewed'`).Scan(&n)
+	if n > 0 {
+		return nil
+	}
+	_, err := db.Exec(`ALTER TABLE knowledge ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0; UPDATE knowledge SET reviewed=1`)
 	return err
 }
 
@@ -363,18 +389,39 @@ func putTx(tx *sql.Tx, c *model.Conversation, stamp string) error {
 	if gone > 0 {
 		return nil
 	}
-	if _, err := tx.Exec(`DELETE FROM conversations WHERE tool=? AND host=? AND external_id=?`, c.Tool, c.Host, c.ExternalID); err != nil {
-		return err
+	vals := []any{c.ParentID, c.Title, c.Cwd, c.GitBranch, c.Model,
+		unix(c.StartedAt), unix(c.UpdatedAt), c.SourcePath, stamp, len(c.Messages), rootID(c), continuesFrom(c), strings.Join(models(c), "\n"), c.Auto}
+	// 前からある会話は番号（画面の URL や MCP の id）を変えずに、中身だけ入れ替える
+	var convID int64
+	tx.QueryRow(`SELECT id FROM conversations WHERE tool=? AND host=? AND external_id=?`, c.Tool, c.Host, c.ExternalID).Scan(&convID)
+	if convID != 0 {
+		if _, err := tx.Exec(`UPDATE conversations SET parent_external_id=?, title=?, cwd=?, git_branch=?, model=?, started_at=?, updated_at=?,
+		  source_path=?, source_stamp=?, message_count=?, root_id=?, continues_from=?, models=?, auto=?, gone=0 WHERE id=?`, append(vals, convID)...); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM messages WHERE conversation_id=?`, convID); err != nil {
+			return err
+		}
+	} else {
+		res, err := tx.Exec(`INSERT INTO conversations
+		  (tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, source_path, source_stamp, message_count, root_id, continues_from, models, auto)
+		  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, append([]any{c.Tool, c.Host, c.ExternalID}, vals...)...)
+		if err != nil {
+			return err
+		}
+		convID, _ = res.LastInsertId()
 	}
-	res, err := tx.Exec(`INSERT INTO conversations
-	  (tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, source_path, source_stamp, message_count, root_id, continues_from, models, auto)
-	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		c.Tool, c.Host, c.ExternalID, c.ParentID, c.Title, c.Cwd, c.GitBranch, c.Model,
-		unix(c.StartedAt), unix(c.UpdatedAt), c.SourcePath, stamp, len(c.Messages), rootID(c), continuesFrom(c), strings.Join(models(c), "\n"), c.Auto)
-	if err != nil {
-		return err
+	// 親が自動実行なら、その子（サブエージェント）も自動実行。親があとから来ても子に付ける
+	if c.Auto {
+		if _, err := tx.Exec(`UPDATE conversations SET auto=1 WHERE tool=? AND host=? AND parent_external_id=?`, c.Tool, c.Host, c.ExternalID); err != nil {
+			return err
+		}
+	} else if c.ParentID != "" {
+		if _, err := tx.Exec(`UPDATE conversations SET auto=1 WHERE id=? AND EXISTS (SELECT 1 FROM conversations WHERE tool=? AND host=? AND external_id=? AND auto=1)`,
+			convID, c.Tool, c.Host, c.ParentID); err != nil {
+			return err
+		}
 	}
-	convID, _ := res.LastInsertId()
 	msgStmt, err := tx.Prepare(`INSERT INTO messages (conversation_id, seq, external_id, parent_external_id, role, created_at, model, sidechain) VALUES (?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return err

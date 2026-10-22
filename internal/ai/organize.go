@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -188,7 +189,10 @@ func (c Config) Organize(ctx context.Context, title string, pages []string, tags
 	for try := 0; ; try++ {
 		out, err := c.Chat(ctx, Instructions(tags, lang), user, true)
 		if err == nil {
-			if err = decode(out, &r); err == nil {
+			if err = decode(out, &r); err == nil && strings.TrimSpace(r.Summary) == "" {
+				err = errors.New("要約が空だった")
+			}
+			if err == nil {
 				break
 			}
 		}
@@ -202,7 +206,8 @@ func (c Config) Organize(ctx context.Context, title string, pages []string, tags
 	return r.Clean(tags, strings.Join(pages, "\n")), nil
 }
 
-const reviewRule = `ナレッジ記事の候補を、決まりに合うかだけ見直す。
+// ReviewRule は書いた記事を見直す決まり（API でも MCP でも同じものを使う）。
+const ReviewRule = `ナレッジ記事の候補を、決まりに合うかだけ見直す。
 ナレッジは、同じソフト・サービス・機器を使う別の人も当たりうる問題で、答えを見つけにくいもの（症状から原因が想像しにくい、よくある直し方が効かない、説明書に書いていない）の解決を残す短い記事。
 次のどれかに当たる候補は外す：
 - 調べもの・相談・計算・勉強・文章作り・買い物・手続き・暮らしや考え方の質問（答えを聞いただけで、何かが動かなくて困ったのではない）
@@ -227,7 +232,7 @@ func (c Config) Review(ctx context.Context, items []string) []bool {
 		for i := at; i < end; i++ {
 			fmt.Fprintf(&b, "%d. %s\n\n", i-at+1, cut(items[i], 600))
 		}
-		out, err := c.Chat(ctx, reviewRule, b.String(), true)
+		out, err := c.Chat(ctx, ReviewRule, b.String(), true)
 		var v struct {
 			Keep []int `json:"keep"`
 		}

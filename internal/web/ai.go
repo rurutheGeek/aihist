@@ -152,7 +152,46 @@ func (s *Server) aiRun(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"id": id})
 }
 
+// aiQueue は裏で進める整理の残り。サーバーが止まっても、次に起きたときに続きから進める。
+type aiQueue struct {
+	IDs   []int64 `json:"ids"`   // まだ整理していない会話
+	Fresh []int64 `json:"fresh"` // この仕事で書いた記事（最後にまとめて見直す）
+	Model string  `json:"model"`
+	Lang  string  `json:"lang"`
+	Force bool    `json:"force"`
+}
+
+func (s *Server) saveQueue(q *aiQueue) {
+	if q == nil {
+		s.st.SetSetting("ai_queue", "")
+		return
+	}
+	b, _ := json.Marshal(q)
+	s.st.SetSetting("ai_queue", string(b))
+}
+
+// resumeOrganize は前に止まった整理を続ける。
+func (s *Server) resumeOrganize() {
+	var q aiQueue
+	if json.Unmarshal([]byte(s.st.Setting("ai_queue", "")), &q) != nil || len(q.IDs)+len(q.Fresh) == 0 {
+		return
+	}
+	c := s.aiConfig()
+	c.Model = q.Model
+	if !c.Ready() {
+		return
+	}
+	log.Printf("ai: 前に止まった整理を続ける（残り %d 件）", len(q.IDs))
+	s.runOrganize(&q, c)
+}
+
 func (s *Server) startOrganize(ids []int64, c ai.Config, l string, force bool) string {
+	return s.runOrganize(&aiQueue{IDs: ids, Model: c.Model, Lang: l, Force: force}, c)
+}
+
+func (s *Server) runOrganize(q *aiQueue, c ai.Config) string {
+	ids, l, force := q.IDs, q.Lang, q.Force
+	s.saveQueue(q)
 	id := newJobID()
 	j := &job{State: "waiting", Total: len(ids)}
 	jobs.Lock()
@@ -163,7 +202,7 @@ func (s *Server) startOrganize(ids []int64, c ai.Config, l string, force bool) s
 		aiMu.Lock()
 		defer aiMu.Unlock()
 		set(func() { j.State = "running" })
-		var fresh []int64 // この仕事で書いた記事
+		fresh := q.Fresh
 		for i, cid := range ids {
 			if !force && s.st.Organized(cid, c.Model) {
 				set(func() { j.Skipped++; j.Done = i + 1 })
@@ -171,6 +210,7 @@ func (s *Server) startOrganize(ids []int64, c ai.Config, l string, force bool) s
 			}
 			made, err := s.organize(cid, c, l)
 			fresh = append(fresh, made...)
+			s.saveQueue(&aiQueue{IDs: ids[i+1:], Fresh: fresh, Model: q.Model, Lang: l, Force: force})
 			set(func() {
 				j.Imported += len(made)
 				j.Done = i + 1
@@ -183,6 +223,7 @@ func (s *Server) startOrganize(ids []int64, c ai.Config, l string, force bool) s
 		if n := s.reviewKnowledge(c, fresh); n > 0 {
 			set(func() { j.Imported -= n })
 		}
+		s.saveQueue(nil)
 		set(func() {
 			j.State = "done"
 			if j.Error != "" && len(ids) == 1 {
@@ -211,8 +252,8 @@ func (s *Server) reviewKnowledge(c ai.Config, ids []int64) int {
 	defer cancel()
 	n := 0
 	for i, ok := range c.Review(ctx, items) {
+		s.st.Review(got[i], ok)
 		if !ok {
-			s.st.DeleteKnowledge(got[i])
 			n++
 		}
 	}
@@ -231,6 +272,10 @@ func (s *Server) organize(id int64, c ai.Config, l string) ([]int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	title := conv.Title + "（" + conv.StartedAt.Local().Format("2006-01-02") + " の会話）"
+	// 要約や記事は、画面の言語ではなく会話の言語で書く（MCP で整理したときと同じ）
+	if said := ai.UserSays(pages); said != "" {
+		l = ai.LangOf(said)
+	}
 	res, err := c.Organize(ctx, title, pages, tags, l, nil)
 	if err != nil {
 		log.Printf("ai %d: %v", id, err)

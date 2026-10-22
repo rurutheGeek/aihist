@@ -101,7 +101,9 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 		funcs["rel"] = func(t time.Time) string { return relIn(l, t) }
 		tmpl[l] = template.Must(template.New("").Funcs(funcs).ParseFS(files, "templates/*.html"))
 	}
-	return &Server{st: st, raw: rs, token: token, tmpl: tmpl}
+	s := &Server{st: st, raw: rs, token: token, tmpl: tmpl}
+	go s.resumeOrganize()
+	return s
 }
 
 func (s *Server) Handler() http.Handler {

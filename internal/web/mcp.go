@@ -77,6 +77,8 @@ var mcpTools = []mcpTool{
 	{"list_conversations", "会話の一覧を新しい順に返す（題名・AI・最終更新・タグ・要約）。offset から limit 件（最大 500）。total は全体の件数。全体の傾向を見るときは offset を進めて順に読む。", obj(map[string]any{"offset": num, "limit": num})},
 	{"save_tag", "タグを作る（同じ名前があれば説明を変える）。old を渡すと、そのタグの名前を name に変える（付いている会話もそのまま）。description は会話を分けるときの目安になる。", obj(map[string]any{"name": str, "description": str, "old": str}, "name")},
 	{"delete_tag", "タグを消す（会話から外れる）。", obj(map[string]any{"name": str}, "name")},
+	{"review_knowledge", "AI が書いて、まだ見直していないナレッジの記事と、見直しの決まり。会話をまとめて整理し終えたら、最後に1回読んで save_review に結果を渡す。", obj(map[string]any{})},
+	{"save_review", "review_knowledge の見直しの結果。keep は残す記事の id、drop は外す記事の id（外した記事は消える）。", obj(map[string]any{"keep": map[string]any{"type": "array", "items": num}, "drop": map[string]any{"type": "array", "items": num}})},
 	{"search_knowledge", "ナレッジ（答えを見つけにくい問題の解決の記事）を探す。", obj(map[string]any{"query": str})},
 }
 
@@ -109,7 +111,7 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 			"protocolVersion": v,
 			"capabilities":    map[string]any{"tools": map[string]any{}, "prompts": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "aihist", "version": s.Version},
-			"instructions":    "aihist は AI との会話の履歴。会話を探して読み、organize_instructions の決まりで整理して save_organized で保存できる（プロフィールは read_profile_source と save_profile）。ユーザーが集めた Skill は list_skills で探し、合うものがあれば get_skill で読んで従う。長い会話は1件ずつ別のサブエージェントで読むと、文脈を圧迫しない。",
+			"instructions":    "aihist は AI との会話の履歴。会話を探して読み、organize_instructions の決まりで整理して save_organized で保存できる（プロフィールは read_profile_source と save_profile）。何件かまとめて整理したら、最後に review_knowledge で書いた記事を見直す。ユーザーが集めた Skill は list_skills で探し、合うものがあれば get_skill で読んで従う。長い会話は1件ずつ別のサブエージェントで読むと、文脈を圧迫しない。",
 		}, nil)
 	case "ping":
 		writeRPC(w, req.ID, map[string]any{}, nil)
@@ -218,6 +220,8 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		Body      string         `json:"body"`
 		Path      string         `json:"path"`
 		Text      string         `json:"text"`
+		Keep      []int64        `json:"keep"`
+		Drop      []int64        `json:"drop"`
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -499,6 +503,32 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 			return "", err
 		}
 		return "タグ「" + a.Name + "」を消した", nil
+	case "review_knowledge":
+		ks, err := s.st.Unreviewed()
+		if err != nil {
+			return "", err
+		}
+		if len(ks) == 0 {
+			return "見直す記事は無い", nil
+		}
+		var b strings.Builder
+		b.WriteString(strings.Replace(ai.ReviewRule, `{"keep": [残す候補の番号]} の JSON だけを返す。`, "結果は save_review に、残す記事の id を keep、外す記事の id を drop に入れて渡す。", 1) + "\n\n")
+		for _, k := range ks {
+			body := []rune(k.Body)
+			if len(body) > 600 {
+				body = body[:600]
+			}
+			fmt.Fprintf(&b, "## id %d: %s\n%s\n\n", k.ID, k.Title, string(body))
+		}
+		return b.String(), nil
+	case "save_review":
+		for _, id := range a.Keep {
+			s.st.Review(id, true)
+		}
+		for _, id := range a.Drop {
+			s.st.Review(id, false)
+		}
+		return fmt.Sprintf("残した %d 件・外した %d 件", len(a.Keep), len(a.Drop)), nil
 	case "search_knowledge":
 		ks, err := s.st.KnowledgeList(a.Query)
 		if err != nil {

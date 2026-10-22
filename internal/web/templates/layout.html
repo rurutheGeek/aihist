@@ -240,11 +240,12 @@ body.resizing{cursor:col-resize;user-select:none}
 .app.collapsed .bar{padding-left:54px}
 .modal{display:none;position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.35);align-items:center;justify-content:center;padding:24px}
 .modal.open{display:flex}
-.abox{background:var(--bg);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(440px,100%);padding:20px 22px 18px;display:flex;flex-direction:column;gap:14px}
-.abox b{font-size:16px}
-.abox p{margin:0;color:var(--mute)}
-.abox p:empty,.abox .inp[hidden]{display:none}
-.abox .kbtns{display:flex;justify-content:flex-end;gap:8px}
+.askbox{background:var(--bg);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(440px,100%);padding:20px 22px 18px;display:flex;flex-direction:column;gap:14px}
+.askbox b{font-size:16px}
+.askbox p{margin:0;color:var(--mute)}
+.askbox .inp{width:100%;box-sizing:border-box}
+.askbox p:empty,.askbox .inp[hidden]{display:none}
+.askbox .kbtns{display:flex;justify-content:flex-end;gap:8px}
 .mbox{background:var(--bg);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(920px,100%);height:min(680px,100%);overflow:hidden;display:flex}
 .mbox .sx{display:grid;grid-template-columns:200px 1fr;grid-template-rows:auto 1fr;width:100%;max-width:none;margin:0;padding:0;gap:0}
 .mtop{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px 20px}
@@ -592,7 +593,7 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
 {{end}}
 
 {{define "foot"}}
-<div class="modal" id="ask"><form class="abox" role="dialog" aria-modal="true"><b></b><p></p><input class="inp wide" autocomplete="off" spellcheck="false"><div class="kbtns"><button type="button" class="btn" data-no>{{t "キャンセル"}}</button><button class="btn pri"></button></div></form></div>
+<div class="modal" id="ask"><form class="askbox" role="dialog" aria-modal="true"><b></b><p></p><input class="inp wide" autocomplete="off" spellcheck="false"><div class="kbtns"><button type="button" class="btn" data-no>{{t "キャンセル"}}</button><button class="btn pri"></button></div></form></div>
 <div class="modal" id="settings"><div class="mbox"></div></div>
 <div class="modal top" id="search"><div class="qbox" role="dialog" aria-label="{{t "検索"}}">
   <div class="qin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="text" placeholder="{{t "会話を検索"}}" autocomplete="off"><button class="icon-btn" type="button" data-close aria-label="{{t "閉じる"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
