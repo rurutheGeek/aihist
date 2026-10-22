@@ -286,7 +286,8 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		if a.Model != "" {
 			model = "mcp: " + a.Model
 		}
-		n, err := s.saveResult(c, pages, res, model, ai.LangOf(a.Summary))
+		made, err := s.saveResult(c, pages, res, model, ai.LangOf(a.Summary))
+		n := len(made)
 		if err != nil {
 			return "", err
 		}

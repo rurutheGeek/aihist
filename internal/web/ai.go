@@ -163,19 +163,25 @@ func (s *Server) startOrganize(ids []int64, c ai.Config, l string, force bool) s
 		aiMu.Lock()
 		defer aiMu.Unlock()
 		set(func() { j.State = "running" })
+		var fresh []int64 // この仕事で書いた記事
 		for i, cid := range ids {
 			if !force && s.st.Organized(cid, c.Model) {
 				set(func() { j.Skipped++; j.Done = i + 1 })
 				continue
 			}
-			n, err := s.organize(cid, c, l)
+			made, err := s.organize(cid, c, l)
+			fresh = append(fresh, made...)
 			set(func() {
-				j.Imported += n
+				j.Imported += len(made)
 				j.Done = i + 1
 				if err != nil {
 					j.Error = err.Error()
 				}
 			})
+		}
+		// 最後に、書いた記事をまとめて見直し、決まりに合わないものを外す
+		if n := s.reviewKnowledge(c, fresh); n > 0 {
+			set(func() { j.Imported -= n })
 		}
 		set(func() {
 			j.State = "done"
@@ -188,11 +194,37 @@ func (s *Server) startOrganize(ids []int64, c ai.Config, l string, force bool) s
 	return id
 }
 
-// organize は会話1件をまとめて保存し、作ったナレッジの数を返す。
-func (s *Server) organize(id int64, c ai.Config, l string) (int, error) {
+// reviewKnowledge は ids の記事を AI にまとめて見直させ、外した数を返す。
+func (s *Server) reviewKnowledge(c ai.Config, ids []int64) int {
+	if len(ids) == 0 {
+		return 0
+	}
+	var items []string
+	var got []int64
+	for _, id := range ids {
+		if k, err := s.st.GetKnowledge(id); err == nil {
+			items = append(items, k.Title+"\n"+k.Body)
+			got = append(got, id)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	n := 0
+	for i, ok := range c.Review(ctx, items) {
+		if !ok {
+			s.st.DeleteKnowledge(got[i])
+			n++
+		}
+	}
+	log.Printf("ai review: %d 件中 %d 件を外した", len(items), n)
+	return n
+}
+
+// organize は会話1件をまとめて保存し、書いた記事の ID を返す。
+func (s *Server) organize(id int64, c ai.Config, l string) ([]int64, error) {
 	conv, msgs, err := s.st.Get(id)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	tags := s.aiTags()
 	pages := ai.Pages(msgs, ai.PageSize)
@@ -202,7 +234,7 @@ func (s *Server) organize(id int64, c ai.Config, l string) (int, error) {
 	res, err := c.Organize(ctx, title, pages, tags, l, nil)
 	if err != nil {
 		log.Printf("ai %d: %v", id, err)
-		return 0, err
+		return nil, err
 	}
 	// プロフィールは本人の発言だけを別に読む
 	if p := s.profileReq(); p != nil {
@@ -215,26 +247,30 @@ func (s *Server) organize(id int64, c ai.Config, l string) (int, error) {
 	return s.saveResult(conv, pages, res, c.Model, l)
 }
 
-// saveResult は整理の結果（API でも MCP でも）を保存し、作ったナレッジの数を返す。
-func (s *Server) saveResult(conv *store.ConvRow, pages []string, res ai.Result, model, l string) (int, error) {
+// saveResult は整理の結果（API でも MCP でも）を保存し、書いた記事の ID を返す。
+func (s *Server) saveResult(conv *store.ConvRow, pages []string, res ai.Result, model, l string) ([]int64, error) {
 	if err := s.st.SetConvTags(conv.ID, res.Tags); err != nil {
-		return 0, err
+		return nil, err
 	}
 	if err := s.st.SetSummary(conv.ID, res.Summary, model); err != nil {
-		return 0, err
+		return nil, err
 	}
 	// まとめ直したら、AI が書いたまま人が直していない前の記事は置き換える
 	s.st.DropDrafts(conv.Tool, conv.Host, conv.ExternalID)
 	words := ai.Personal(conv.Host, conv.Cwd, conv.GitBranch, strings.Join(pages, "\n"))
+	var ids []int64
 	for _, k := range res.Knowledge {
 		body := k.Markdown(l)
-		s.st.AddKnowledge(store.Knowledge{
+		id, err := s.st.AddKnowledge(store.Knowledge{
 			Title: string(k.Title), Body: body, Tool: conv.Tool, Host: conv.Host, ExtID: conv.ExternalID,
 			ConvTitle: conv.Title, Model: model, Struggle: string(k.Struggle), Score: k.Score,
 			Warn: ai.Leaks(string(k.Title)+"\n"+body, words),
 		})
+		if err == nil {
+			ids = append(ids, id)
+		}
 	}
-	return len(res.Knowledge), nil
+	return ids, nil
 }
 
 // saveTraits はプロフィールに足す（使わない設定なら何もしない）。

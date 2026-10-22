@@ -17,12 +17,17 @@ func fakeAI(t *testing.T, reply string) Config {
 }
 
 func TestReview(t *testing.T) {
-	ks := []Knowledge{{Title: "a"}, {Title: "b"}, {Title: "c"}}
-	got := fakeAI(t, `{"keep": [3, 1, 3, 9]}`).review(context.Background(), append([]Knowledge(nil), ks...))
-	if len(got) != 2 || got[0].Title != "c" || got[1].Title != "a" {
-		t.Errorf("番号の記事だけを1回ずつ残す: %+v", got)
+	items := make([]string, 23)
+	got := fakeAI(t, `{"keep": [3, 1, 3, 99]}`).Review(context.Background(), items)
+	// 20 件ずつ見せる。どちらの回も 1 と 3 だけ残す
+	for i, k := range got {
+		if want := i == 0 || i == 2 || i == 20 || i == 22; k != want {
+			t.Errorf("%d: %v", i, k)
+		}
 	}
-	if got := fakeAI(t, `壊れた返事`).review(context.Background(), ks); len(got) != 3 {
-		t.Errorf("見直せなかったときはそのまま: %+v", got)
+	for i, k := range fakeAI(t, `壊れた返事`).Review(context.Background(), items) {
+		if !k {
+			t.Errorf("見直せなかったときは残す: %d", i)
+		}
 	}
 }

@@ -199,9 +199,7 @@ func (c Config) Organize(ctx context.Context, title string, pages []string, tags
 	if progress != nil {
 		progress(len(pages), len(pages))
 	}
-	r = r.Clean(tags, strings.Join(pages, "\n"))
-	r.Knowledge = c.review(ctx, r.Knowledge)
-	return r, nil
+	return r.Clean(tags, strings.Join(pages, "\n")), nil
 }
 
 const reviewRule = `ナレッジ記事の候補を、決まりに合うかだけ見直す。
@@ -213,31 +211,39 @@ const reviewRule = `ナレッジ記事の候補を、決まりに合うかだけ
 - 説明書やよくある直し方ですぐ分かるもの
 {"keep": [残す候補の番号]} の JSON だけを返す。`
 
-// review は書いた記事を同じ AI にもう一度だけ見せ、決まりに合わないものを外す。
-// 書くときには決まりを守れないモデルでも、見分けるだけならできる。見直せなかったときはそのまま返す。
-func (c Config) review(ctx context.Context, ks []Knowledge) []Knowledge {
-	if len(ks) == 0 {
-		return ks
+// reviewChunk は1回の見直しで見せる記事の数。
+const reviewChunk = 20
+
+// Review は書いた記事（題名と本文の頭）を、まとめて同じ AI に見せ、決まりに合うものに true を返す。
+// 書くときには決まりを守れないモデルでも、並べて見分けるだけならできる。見直せなかった分は残す。
+func (c Config) Review(ctx context.Context, items []string) []bool {
+	keep := make([]bool, len(items))
+	for i := range keep {
+		keep[i] = true
 	}
-	var b strings.Builder
-	for i, k := range ks {
-		fmt.Fprintf(&b, "%d. %s\n   症状: %s\n   原因: %s\n   結論: %s\n", i+1, k.Title, cut(string(k.Symptom), 200), cut(string(k.Cause), 200), cut(string(k.Conclusion), 200))
-	}
-	out, err := c.Chat(ctx, reviewRule, b.String(), true)
-	var v struct {
-		Keep []int `json:"keep"`
-	}
-	if err != nil || decode(out, &v) != nil {
-		return ks
-	}
-	var kept []Knowledge
-	for _, n := range v.Keep {
-		if n >= 1 && n <= len(ks) && ks[n-1].Title != "" {
-			kept = append(kept, ks[n-1])
-			ks[n-1].Title = "" // 同じ番号を2回数えない
+	for at := 0; at < len(items); at += reviewChunk {
+		end := min(at+reviewChunk, len(items))
+		var b strings.Builder
+		for i := at; i < end; i++ {
+			fmt.Fprintf(&b, "%d. %s\n\n", i-at+1, cut(items[i], 600))
+		}
+		out, err := c.Chat(ctx, reviewRule, b.String(), true)
+		var v struct {
+			Keep []int `json:"keep"`
+		}
+		if err != nil || decode(out, &v) != nil {
+			continue
+		}
+		for i := at; i < end; i++ {
+			keep[i] = false
+		}
+		for _, n := range v.Keep {
+			if n >= 1 && at+n <= end {
+				keep[at+n-1] = true
+			}
 		}
 	}
-	return kept
+	return keep
 }
 
 // Clean は決まりから外れたもの（無いタグ・空の記事・価値の低い記事・問題の証拠が記録に無い記事）を落とす。
