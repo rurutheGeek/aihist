@@ -46,7 +46,7 @@
     <div class="kmeta grp">
       <div class="row"><div class="rl">{{t "元の会話"}}</div><div class="rc">{{if .ConvID}}<a href="/c/{{.ConvID}}">{{or .Item.ConvTitle .Item.ExtID}}</a>{{else}}<span class="mute">{{or .Item.ConvTitle "—"}}</span>{{end}}</div></div>
       <div class="row"><div class="rl">{{t "マシン"}}</div><div class="rc mute">{{.Item.Host}} · {{toolLabel .Item.Tool}}</div></div>
-      {{if .Item.Struggle}}<div class="row"><div class="rl">{{t "苦労したこと"}}</div><div class="rc mute kst">{{.Item.Struggle}}</div></div>{{end}}
+      {{if .Item.Struggle}}<div class="row"><div class="rl">{{t "見つけにくい理由"}}</div><div class="rc mute kst">{{.Item.Struggle}}</div></div>{{end}}
       <div class="row"><div class="rl">{{t "作ったモデル"}}</div><div class="rc mute">{{or .Item.Model "—"}} · {{when .Item.CreatedAt}}</div></div>
     </div>
   </div></div>

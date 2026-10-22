@@ -77,7 +77,7 @@ var mcpTools = []mcpTool{
 	{"list_conversations", "会話の一覧を新しい順に返す（題名・AI・最終更新・タグ・要約）。offset から limit 件（最大 500）。total は全体の件数。全体の傾向を見るときは offset を進めて順に読む。", obj(map[string]any{"offset": num, "limit": num})},
 	{"save_tag", "タグを作る（同じ名前があれば説明を変える）。old を渡すと、そのタグの名前を name に変える（付いている会話もそのまま）。description は会話を分けるときの目安になる。", obj(map[string]any{"name": str, "description": str, "old": str}, "name")},
 	{"delete_tag", "タグを消す（会話から外れる）。", obj(map[string]any{"name": str}, "name")},
-	{"search_knowledge", "ナレッジ（苦労して解決した問題の記事）を探す。", obj(map[string]any{"query": str})},
+	{"search_knowledge", "ナレッジ（答えを見つけにくい問題の解決の記事）を探す。", obj(map[string]any{"query": str})},
 }
 
 func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
@@ -293,7 +293,7 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		dropped := len(a.Knowledge) - n
 		msg := fmt.Sprintf("保存した（タグ %d・ナレッジ %d）", len(res.Tags), n)
 		if dropped > 0 {
-			msg += fmt.Sprintf("。ナレッジ %d 件は決まり（score %d 以上・evidence と fixed が会話にそのままあること・failed・conclusion と solution）に合わず捨てた", dropped, ai.MinScore)
+			msg += fmt.Sprintf("。ナレッジ %d 件は決まり（score %d 以上・evidence と fixed が会話にそのままあること・conclusion と solution）に合わず捨てた", dropped, ai.MinScore)
 		}
 		return msg, nil
 	case "read_profile_source":

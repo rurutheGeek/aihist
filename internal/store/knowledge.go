@@ -139,7 +139,7 @@ func (s *Store) AIInfo(id int64) (model string, at time.Time) {
 	return model, fromUnix(a)
 }
 
-// Knowledge は苦労して解決した問題の記事。
+// Knowledge は答えを見つけにくい問題の解決の記事。
 type Knowledge struct {
 	ID                  int64
 	Title, Body, Status string // status: draft（AI が書いたまま。まとめ直すと置き換わる）/ registered（人が直した）

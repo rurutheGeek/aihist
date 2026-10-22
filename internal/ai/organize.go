@@ -15,7 +15,7 @@ type Tag struct {
 	Desc string `json:"description,omitempty"`
 }
 
-// Knowledge は苦労して解決した問題を、他の人にも役立つ形にまとめたもの。
+// Knowledge は答えを見つけにくい問題の解決を、他の人にも役立つ形にまとめたもの。
 type Knowledge struct {
 	Title       Text     `json:"title"`       // 検索しやすい「困ったこと」（答えは書かない）
 	Conclusion  Text     `json:"conclusion"`  // 何をしたら直ったか
@@ -24,8 +24,8 @@ type Knowledge struct {
 	Cause       Text     `json:"cause"`
 	Solution    Text     `json:"solution"`
 	Failed      Text     `json:"failed"`   // 試したが効かなかったこと
-	Struggle    Text     `json:"struggle"` // 何に苦労したか（選ぶときの手がかり。本文には出さない）
-	Evidence    []string `json:"evidence"` // つまずきを示す記録の文（そのまま）。記録に無ければ捨てる
+	Struggle    Text     `json:"struggle"` // なぜ答えを見つけにくいか（選ぶときの手がかり。本文には出さない）
+	Evidence    []string `json:"evidence"` // 問題が起きていたことを示す記録の文（そのまま）。記録に無ければ捨てる
 	Fixed       []string `json:"fixed"`    // 直ったことを示す記録の文（そのまま）。記録に無ければ捨てる
 	Score       int      `json:"score"`    // 残す価値（1〜5）
 }
@@ -107,9 +107,9 @@ func Instructions(tags []Tag, lang string) string {
 会話の要約。2〜3文。何について話し、どうなったか（結論や結果）。
 
 ## knowledge
-解決するのに苦労した問題を、あとで同じ問題に当たった人（自分や他の人）の役に立つ短い記事にしたもの。
+答えを見つけにくい問題の解決を、あとで同じ問題に当たった人（自分や他の人）の役に立つ短い記事にしたもの。
 入れるもの：
-- 解決までに試行錯誤があった問題（何度か失敗した、原因がなかなか分からなかった、思い込みが外れた など）で、最後に解決したもの
+- 何かが期待どおりに動かず、会話の中で原因と直し方が分かった問題で、答えを見つけにくいもの（エラーや症状から原因が想像しにくい、よくある直し方では直らない、説明書に書いていない など）。何回で直ったかは問わない
 - 多くの人が使うソフト・サービス・機器・言語・ライブラリのふるまいが原因で、それを使う別の人も同じように当たりうるもの
 入れないもの：
 - その人のプロジェクト固有の作り・データ・仕様・業務の決まりが原因のもの（自作アプリの判定の間違い、名簿や会員データの移し替え、自作の認証や権限の決まり、ゲームやクイズの中身など）。同じソフトを使う他の人には起きない
@@ -128,11 +128,11 @@ func Instructions(tags []Tag, lang string) string {
  "symptom": 何をしたら、何が起きたか。エラーの文や表示があれば短く引用（無ければ様子を具体的に書く）,
  "cause": 原因,
  "solution": 直し方の手順。会話の中で実際に使ったコマンド・設定・値・操作をそのまま書く（一般論や「〜を見直す」のような書き方はしない）。Markdown の箇条書きやコードブロックを使ってよい,
- "failed": 試したが効かなかったこと（空にしない。効かなかったことが無いなら、試行錯誤ではないので記事にしない）,
- "struggle": 何に苦労したか（何度失敗したか、何を思い違えていたか）を記録から1文で,
- "evidence": つまずきを示す記録の中の文を、記録からそのまま写した配列（2つ以上。各60字以内。エラーの文・失敗した結果・ユーザーの「まだ動かない」など）。言い換えない,
+ "failed": 試したが効かなかったこと。無ければ空,
+ "struggle": なぜ答えを見つけにくいか（原因が症状から想像しにくい、よくある直し方が効かない など）を1文で,
+ "evidence": 問題が起きていたことを示す記録の中の文を、記録からそのまま写した配列（1つ以上。各60字以内。エラーの文・失敗した結果・ユーザーの「まだ動かない」など）。言い換えない,
  "fixed": 直ったことを示す記録の中の文を、記録からそのまま写した配列（1つ以上。成功した結果の出力・ユーザーの「動いた」など）。言い換えない,
- "score": 残す価値。1〜5 の整数。5：何度も失敗し、同じソフトを使う多くの人がはまりやすい。4：何度か失敗し、同じソフトを使う人がときどき当たる。3：当たる人が限られる。2 以下：1回で直った・質問に答えただけ}
+ "score": 残す価値。1〜5 の整数。5：同じソフトを使う多くの人が当たり、答えを見つけにくい。4：同じソフトを使う人がときどき当たり、答えを見つけにくい。3：当たる人が限られる。2 以下：説明書やよくある直し方ですぐ分かる・質問に答えただけ}
 
 ## 守ること
 - 記録に無いことを書かない。推測で埋めない。solution には会話の中で実際に効いた方法だけを書き、会話に出ていない別の方法を足さない。cause は会話の中で確かめられた原因だけを書く（確かめていなければ「分かっていない」と書く）。
@@ -144,7 +144,7 @@ func Instructions(tags []Tag, lang string) string {
 const readNotes = `AI との会話の記録が長いので、区切りごとに読み進めている。
 これまでのメモと次の区切りを読み、メモを書き足して {"notes": "..."} の JSON だけを返す。
 メモには、話題の流れ、出てきた問題・試したこと（失敗も）・原因・解決、関係する機器・ソフト・サービスとその版を残す。
-あとで要約と、苦労して解決した問題の記事を書くのに要ることを落とさない。重複は省き、6000字以内にする。
+あとで要約と、答えを見つけにくい問題の記事を書くのに要ることを落とさない。重複は省き、6000字以内にする。
 エラーの文や失敗した結果、ユーザーの「まだ動かない」などの言葉は、あとで引用できるよう記録からそのまま「」で写しておく。
 記録に無いことを書かない。`
 
@@ -202,7 +202,7 @@ func (c Config) Organize(ctx context.Context, title string, pages []string, tags
 	return r.Clean(tags, strings.Join(pages, "\n")), nil
 }
 
-// Clean は決まりから外れたもの（無いタグ・空の記事・価値の低い記事・つまずきの証拠が記録に無い記事）を落とす。
+// Clean は決まりから外れたもの（無いタグ・空の記事・価値の低い記事・問題の証拠が記録に無い記事）を落とす。
 func (r Result) Clean(tags []Tag, text string) Result {
 	ok := map[string]bool{}
 	for _, t := range tags {
@@ -218,7 +218,7 @@ func (r Result) Clean(tags []Tag, text string) Result {
 	var ks []Knowledge
 	for _, k := range r.Knowledge {
 		k.Title = Text(strings.TrimSpace(string(k.Title)))
-		if k.Title == "" || strings.TrimSpace(string(k.Conclusion)) == "" || strings.TrimSpace(string(k.Solution)) == "" || k.Score < MinScore || strings.TrimSpace(string(k.Failed)) == "" || !proven(k.Evidence, text) || !anyQuoted(k.Fixed, text) {
+		if k.Title == "" || strings.TrimSpace(string(k.Conclusion)) == "" || strings.TrimSpace(string(k.Solution)) == "" || k.Score < MinScore || !proven(k.Evidence, text) || !anyQuoted(k.Fixed, text) {
 			continue
 		}
 		ks = append(ks, k)
@@ -228,7 +228,7 @@ func (r Result) Clean(tags []Tag, text string) Result {
 	return r
 }
 
-// proven は証拠の文が2つ以上、記録の中にそのまま（空白の違いは問わず）あるか。
+// proven は証拠の文が1つ以上、記録の中にそのまま（空白の違いは問わず）あるか。
 func proven(ev []string, text string) bool {
 	t := squash(text)
 	n := 0
@@ -237,7 +237,7 @@ func proven(ev []string, text string) bool {
 			n++
 		}
 	}
-	return n >= 2
+	return n >= 1
 }
 
 // anyQuoted は文のどれか1つが記録の中にそのままあるか。

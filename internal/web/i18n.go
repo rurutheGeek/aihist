@@ -203,7 +203,7 @@ var english = map[string]string{
 	"登録":               "Register",
 	"下書きに戻す":           "Back to drafts",
 	"元の会話":             "Source chat",
-	"苦労したこと":           "What was hard",
+	"見つけにくい理由":         "Why it was hard to find",
 	"作ったモデル":           "Model",
 	"取り込んだ会話を AI で整理":  "Organize imported chats with AI",
 	"AI で整理中":          "Organizing with AI",

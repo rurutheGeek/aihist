@@ -7,7 +7,7 @@ func TestProven(t *testing.T) {
 	if !proven([]string{"grep -iE 'out of memory|hung task|oom' 等で原因を探したがゼロ", "「bash: line 4: echo: write error: Invalid argument」"}, text) {
 		t.Error("引用のあとに言葉を足したものも数える")
 	}
-	if proven([]string{"ログに何も無かった", "bash: line 4: echo: write error: Invalid argument"}, text) {
+	if proven([]string{"ログに何も無かった", "echo が失敗した"}, text) {
 		t.Error("記録に無い言い換えは数えない")
 	}
 }
@@ -19,10 +19,6 @@ func TestCleanNeedsFix(t *testing.T) {
 		t.Error("直った証拠が無いものは捨てる")
 	}
 	k.Fixed = []string{"ok: deployed"}
-	if len(Result{Knowledge: []Knowledge{k}}.Clean(nil, text).Knowledge) != 0 {
-		t.Error("効かなかったことが無いものは捨てる")
-	}
-	k.Failed = "再起動"
 	if len(Result{Knowledge: []Knowledge{k}}.Clean(nil, text).Knowledge) != 1 {
 		t.Error("証拠がそろえば残す")
 	}
