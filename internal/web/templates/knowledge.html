@@ -40,7 +40,7 @@
       <div class="kbtns"><button class="btn" type="button" data-kcancel>{{t "キャンセル"}}</button><button class="btn pri">{{t "保存"}}</button></div>
     </form>
     <div class="kbtns kmain">
-      <form method="post" action="/knowledge/{{.Item.ID}}/delete" onsubmit="return confirm({{t "このナレッジを削除する？"}})"><button class="btn red">{{t "削除"}}</button></form>
+      <form method="post" action="/knowledge/{{.Item.ID}}/delete" data-ask="{{t "このナレッジを削除する？"}}" data-ask-ok="{{t "削除"}}"><button class="btn red">{{t "削除"}}</button></form>
       <button class="btn" type="button" data-kedit>{{t "編集"}}</button>
     </div>
     <div class="kmeta grp">

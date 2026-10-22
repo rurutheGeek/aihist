@@ -50,14 +50,14 @@ func TestText(t *testing.T) {
 // 消したあとも JSON として読め、base64 の中身は変わらない。
 func TestJSONSafe(t *testing.T) {
 	all := strings.Join(Kinds, ",")
-	line := `{"message":{"content":[{"type":"text","text":"pw: \"hunter2xyz\" token=abcdef123456 mail x@y.com ip 10.0.0.1 tel 03-1234-5678"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAKIAABCDEFGHIJKLMNOP1234567890abcd+/sk-x"}}],"usage":{"input_tokens":123456,"cache_read_input_tokens":987654}}}`
+	line := `{"message":{"content":[{"type":"text","text":"pw: \"hunter2xyz\" token=abcdef123456 mail x@y.com git Author: a \u003cz9@y.com\u003e\nq7@y.com raw \\nk@y.com ip 10.0.0.1 tel 03-1234-5678"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAKIAABCDEFGHIJKLMNOP1234567890abcd+/sk-x"}}],"usage":{"input_tokens":123456,"cache_read_input_tokens":987654}}}`
 	out := Line([]byte(line), all)
 	var v map[string]any
 	if err := json.Unmarshal(out, &v); err != nil {
 		t.Fatalf("壊れた: %v\n%s", err, out)
 	}
 	s := string(out)
-	for _, bad := range []string{"hunter2xyz", "abcdef123456", "x@y.com", "10.0.0.1", "03-1234-5678"} {
+	for _, bad := range []string{"hunter2xyz", "abcdef123456", "x@y.com", "z9@y.com", "q7@y.com", "10.0.0.1", "03-1234-5678"} {
 		if strings.Contains(s, bad) {
 			t.Errorf("残った %q\n%s", bad, s)
 		}

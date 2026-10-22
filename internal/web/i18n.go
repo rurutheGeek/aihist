@@ -129,7 +129,6 @@ var english = map[string]string{
 	"名前を変更":                     "Rename",
 	"アーカイブ":                     "Archive",
 	"アーカイブを外す":                  "Unarchive",
-	"新しい名前":                     "New name",
 	"キーボードショートカット":              "Keyboard shortcuts",
 	"サイドバーの表示/非表示":              "Toggle sidebar",
 	"会話の行のメニュー":                 "Conversation menu",

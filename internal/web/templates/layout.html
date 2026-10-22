@@ -240,6 +240,11 @@ body.resizing{cursor:col-resize;user-select:none}
 .app.collapsed .bar{padding-left:54px}
 .modal{display:none;position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.35);align-items:center;justify-content:center;padding:24px}
 .modal.open{display:flex}
+.abox{background:var(--bg);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(440px,100%);padding:20px 22px 18px;display:flex;flex-direction:column;gap:14px}
+.abox b{font-size:16px}
+.abox p{margin:0;color:var(--mute)}
+.abox p:empty,.abox .inp[hidden]{display:none}
+.abox .kbtns{display:flex;justify-content:flex-end;gap:8px}
 .mbox{background:var(--bg);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(920px,100%);height:min(680px,100%);overflow:hidden;display:flex}
 .mbox .sx{display:grid;grid-template-columns:200px 1fr;grid-template-rows:auto 1fr;width:100%;max-width:none;margin:0;padding:0;gap:0}
 .mtop{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px 20px}
@@ -587,6 +592,7 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
 {{end}}
 
 {{define "foot"}}
+<div class="modal" id="ask"><form class="abox" role="dialog" aria-modal="true"><b></b><p></p><input class="inp wide" autocomplete="off" spellcheck="false"><div class="kbtns"><button type="button" class="btn" data-no>{{t "キャンセル"}}</button><button class="btn pri"></button></div></form></div>
 <div class="modal" id="settings"><div class="mbox"></div></div>
 <div class="modal top" id="search"><div class="qbox" role="dialog" aria-label="{{t "検索"}}">
   <div class="qin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="text" placeholder="{{t "会話を検索"}}" autocomplete="off"><button class="icon-btn" type="button" data-close aria-label="{{t "閉じる"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
@@ -684,6 +690,27 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
   });
   document.querySelectorAll('[data-settings]').forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();openSettings()})});
 
+  // 確かめる・名前を入れる窓（ブラウザの confirm・prompt の代わり）。value を渡すと入力欄を出し、入れた文字を返す。やめたら null。
+  window.aihistAsk=function(o){
+    var m=document.getElementById('ask'), f=m.querySelector('form'), inp=f.querySelector('input'), ok=f.querySelector('.pri');
+    f.querySelector('b').textContent=o.title; f.querySelector('p').textContent=o.text||'';
+    var typing=o.value!==undefined; inp.hidden=!typing; inp.value=typing?o.value:'';
+    ok.textContent=o.ok||{{t "OK"}}; ok.classList.toggle('red',!!o.danger);
+    m.classList.add('open'); (typing?inp:ok).focus(); if(typing)inp.select();
+    return new Promise(function(done){
+      function end(v){m.classList.remove('open'); f.onsubmit=null; m.onclick=null; document.removeEventListener('keydown',esc,true); done(v)}
+      function esc(e){if(e.key==='Escape'){e.stopPropagation(); end(null)}}
+      f.onsubmit=function(e){e.preventDefault(); end(typing?inp.value.trim():true)};
+      m.onclick=function(e){if(e.target===m||e.target.closest('[data-no]'))end(null)};
+      document.addEventListener('keydown',esc,true);
+    });
+  };
+  // data-ask の付いたフォームは、送る前に確かめる
+  document.addEventListener('submit',function(e){
+    var f=e.target; if(!f.dataset.ask||f.dataset.asked)return;
+    e.preventDefault();
+    aihistAsk({title:f.dataset.ask,ok:f.dataset.askOk,danger:true}).then(function(v){if(v){f.dataset.asked='1'; f.requestSubmit()}});
+  },true);
   window.aihistClip=function(t){if(navigator.clipboard&&isSecureContext)navigator.clipboard.writeText(t);else{var x=document.createElement('textarea');x.value=t;document.body.appendChild(x);x.select();document.execCommand('copy');x.remove()}};
   window.aihistCopy=function(b){var t=b.previousElementSibling.textContent;navigator.clipboard.writeText(t).then(function(){var o=b.textContent;b.textContent={{t "コピーした"}};setTimeout(function(){b.textContent=o},1400)})};
   var toast, tt;
@@ -744,7 +771,7 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
         e.preventDefault();
         var pg=f.querySelector('.pg'), b=f.querySelector('button');
         if(!f.querySelector('input:checked')){pg.textContent={{t "伏せる情報を選んでください"}};return}
-        if(!confirm(f.dataset.confirm))return;
+        aihistAsk({title:f.dataset.confirm,danger:true}).then(function(v){if(!v)return;
         b.disabled=true; pg.textContent={{t "伏せています"}};
         fetch(f.action,{method:'POST',headers:{'X-Auto':'1'},body:new URLSearchParams(new FormData(f))}).then(function(r){return r.json()}).then(function(o){
           (function poll(){fetch('/upload/jobs/'+o.id).then(function(r){return r.json()}).then(function(j){
@@ -754,15 +781,17 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
             setTimeout(poll,800);
           })})();
         }).catch(function(){pg.textContent={{t "保存できなかった"}}; b.disabled=false});
+        });
       });
     });
     root.querySelectorAll('form:not([data-auto]):not([data-purge])').forEach(function(f){
       f.addEventListener('submit',function(e){
         e.preventDefault();
-        if(f.dataset.confirm&&!confirm(f.dataset.confirm))return;
+        (f.dataset.confirm?aihistAsk({title:f.dataset.confirm,danger:true}):Promise.resolve(true)).then(function(v){if(!v)return;
         var sub=root.querySelector('.sx').dataset.sub;
         fetch(f.action,{method:'POST',headers:{'X-Panel':'1'},body:new URLSearchParams(new FormData(f))}).then(function(r){return r.text()}).then(function(t){
           var ms=t.match(/data-sub="([^"]*)"/); load(ms?ms[1]:sub,t);
+        });
         });
       });
     });
@@ -815,19 +844,19 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
   });
   // 行のメニュー
   var rm=document.getElementById('rmenu');
-  var T={pin:{{t "ピン留め"}},unpin:{{t "ピン留めを外す"}},rename:{{t "名前を変更"}},cont:{{t "元の AI で続ける"}},md:{{t "別のAIへ渡す"}},arch:{{t "アーカイブ"}},unarch:{{t "アーカイブを外す"}},copied:{{t "コピーした"}},newname:{{t "新しい名前"}},sel:{{t "選択"}},del:{{t "削除"}},delq:{{t "この会話を削除する？"}},delsq:{{t "%d 件の会話を削除する？"}},seln:{{t "%d 件を選択中"}}};
+  var T={pin:{{t "ピン留め"}},unpin:{{t "ピン留めを外す"}},rename:{{t "名前を変更"}},cont:{{t "元の AI で続ける"}},md:{{t "別のAIへ渡す"}},arch:{{t "アーカイブ"}},unarch:{{t "アーカイブを外す"}},copied:{{t "コピーした"}},save:{{t "保存"}},sel:{{t "選択"}},del:{{t "削除"}},delq:{{t "この会話を削除する？"}},delsq:{{t "%d 件の会話を削除する？"}},seln:{{t "%d 件を選択中"}}};
   function post(id,body){return fetch('/c/'+id+'/meta',{method:'POST',body:new URLSearchParams(body)})}
   function refresh(){swap(location.search.replace(/^\?/,''))}
   function rowMenu(row,btn){
     var id=row.dataset.id, pinned=!!row.dataset.pinned, arch=!!row.dataset.archived;
     var items=[
       [pinned?T.unpin:T.pin,'P',function(){post(id,{pinned:pinned?'0':'1'}).then(refresh)}],
-      [T.rename,'R',function(){var cur=row.querySelector('.ct').textContent,n=prompt(T.newname,cur); if(n!==null&&n!==cur)post(id,{title:n}).then(refresh)}],
+      [T.rename,'R',function(){var cur=row.querySelector('.ct').textContent; aihistAsk({title:T.rename,value:cur,ok:T.save}).then(function(n){if(n&&n!==cur)post(id,{title:n}).then(refresh)})}],
       [T.cont,'',function(){aihistClip('aihist restore '+row.dataset.ext); say(true,T.copied)}],
       [T.md,'',function(){fetch('/c/'+id+'/export.md').then(function(r){return r.text()}).then(function(t){aihistClip(t); say(true,T.copied)})}],
       [arch?T.unarch:T.arch,'A',function(){post(id,{archived:arch?'0':'1'}).then(refresh)}],
       [T.sel,'S',function(){selOn(); pick(id,true)}],
-      [T.del,'D',function(){if(confirm(T.delq))del([id])},'red']
+      [T.del,'D',function(){aihistAsk({title:T.delq,ok:T.del,danger:true}).then(function(v){if(v)del([id])})},'red']
     ];
     rm.innerHTML='';
     items.forEach(function(it){var b=document.createElement('button');b.type='button';b.setAttribute('role','menuitem');b.innerHTML='<span></span><kbd></kbd>';b.firstChild.textContent=it[0];b.lastChild.textContent=it[1];if(it[3])b.className=it[3];b.onclick=function(){rm.hidden=true;it[2]()};b.dataset.key=it[1].toLowerCase();rm.appendChild(b)});
@@ -862,7 +891,7 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
       case 'all': list.querySelectorAll('.conv').forEach(function(c){chosen.add(c.dataset.id)}); markSel(); break;
       case 'ai': if(ids.length)window.aihistAI(ids); break;
       case 'arch': var p=new URLSearchParams({archived:'1'}); ids.forEach(function(i){p.append('id',i)}); fetch('/c/archive',{method:'POST',body:p}).then(function(){selOff();refresh()}); break;
-      case 'del': if(confirm(T.delsq.replace('%d',ids.length)))del(ids); break;
+      case 'del': aihistAsk({title:T.delsq.replace('%d',ids.length),ok:T.del,danger:true}).then(function(v){if(v)del(ids)}); break;
       case 'off': selOff();
     }
   });

@@ -123,11 +123,56 @@ func Text(s, list string) string {
 }
 
 // Line は1行（JSON の行）から list の種類を消す。
+// 文字列の中のエスケープ（\n・\u003c など）が消す語とつながって壊れないよう、前後で置き換える。
 func Line(b []byte, list string) []byte {
 	if !Any(list) {
 		return b
 	}
-	return []byte(Text(string(b), list))
+	return []byte(unhide(Text(hideEscapes(string(b)), list)))
+}
+
+// エスケープの代わりに置く文字。JSON の文字列にそのままは現れない制御文字を使う。
+var escHold = map[byte]byte{'n': 1, 't': 2, 'r': 3, 'b': 4, 'f': 5}
+
+// hideEscapes は \n などを1文字の印に、\u003c・\u003e・\u0026 を元の文字にする（どちらも JSON として同じ意味）。
+func hideEscapes(s string) string {
+	var o strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' || i+1 >= len(s) {
+			o.WriteByte(s[i])
+			continue
+		}
+		c := s[i+1]
+		if h, ok := escHold[c]; ok {
+			o.WriteByte(h)
+			i++
+			continue
+		}
+		if c == 'u' && i+6 <= len(s) {
+			switch strings.ToLower(s[i+2 : i+6]) {
+			case "003c":
+				o.WriteByte('<')
+				i += 5
+				continue
+			case "003e":
+				o.WriteByte('>')
+				i += 5
+				continue
+			case "0026":
+				o.WriteByte('&')
+				i += 5
+				continue
+			}
+		}
+		o.WriteString(s[i : i+2])
+		i++
+	}
+	return o.String()
+}
+
+// unhide は hideEscapes の印を \n などへ戻す。
+func unhide(s string) string {
+	return strings.NewReplacer("\x01", `\n`, "\x02", `\t`, "\x03", `\r`, "\x04", `\b`, "\x05", `\f`).Replace(s)
 }
 
 // replace3 は (前)(本体)(後) の形の re で、ok が通る本体だけを印に置き換える。前後の文字は残す。

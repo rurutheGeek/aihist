@@ -45,7 +45,7 @@
       <textarea name="body" rows="22" placeholder="SKILL.md" required>{{.Item.Body}}</textarea>
       <div class="kbtns">{{if .Item.ID}}<button class="btn red" type="submit" form="sdel">{{t "削除"}}</button>{{end}}<button class="btn pri">{{t "保存"}}</button></div>
     </form>
-    {{if .Item.ID}}<form id="sdel" method="post" action="/skills/{{.Item.ID}}/delete" onsubmit="return confirm({{t "この Skill を削除する？"}})"></form>
+    {{if .Item.ID}}<form id="sdel" method="post" action="/skills/{{.Item.ID}}/delete" data-ask="{{t "この Skill を削除する？"}}" data-ask-ok="{{t "削除"}}"></form>
     {{with .Item.Files}}<div class="gt">{{t "ファイル"}}</div>
     <div class="grp">{{range .}}<a class="row" href="/skills/{{$.Item.ID}}?file={{.Path}}" target="_blank" rel="noopener"><div class="rl"><code>{{.Path}}</code></div><div class="rc mute">{{bytes (i64 .Size)}}</div></a>{{end}}</div>{{end}}
     <div class="kmeta grp">
