@@ -19,6 +19,10 @@ func TestCleanNeedsFix(t *testing.T) {
 		t.Error("直った証拠が無いものは捨てる")
 	}
 	k.Fixed = []string{"ok: deployed"}
+	if len(Result{Knowledge: []Knowledge{k}}.Clean(nil, text).Knowledge) != 0 {
+		t.Error("効かなかったことが無いものは捨てる")
+	}
+	k.Failed = "再起動"
 	if len(Result{Knowledge: []Knowledge{k}}.Clean(nil, text).Knowledge) != 1 {
 		t.Error("証拠がそろえば残す")
 	}

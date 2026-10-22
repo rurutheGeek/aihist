@@ -293,7 +293,7 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		dropped := len(a.Knowledge) - n
 		msg := fmt.Sprintf("保存した（タグ %d・ナレッジ %d）", len(res.Tags), n)
 		if dropped > 0 {
-			msg += fmt.Sprintf("。ナレッジ %d 件は決まり（score %d 以上・evidence と fixed が会話にそのままあること・conclusion と solution）に合わず捨てた", dropped, ai.MinScore)
+			msg += fmt.Sprintf("。ナレッジ %d 件は決まり（score %d 以上・evidence と fixed が会話にそのままあること・failed・conclusion と solution）に合わず捨てた", dropped, ai.MinScore)
 		}
 		return msg, nil
 	case "read_profile_source":

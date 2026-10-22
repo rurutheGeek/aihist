@@ -114,6 +114,8 @@ func Instructions(tags []Tag, lang string) string {
 入れないもの：
 - その人のプロジェクト固有の作り・データ・仕様・業務の決まりが原因のもの（自作アプリの判定の間違い、名簿や会員データの移し替え、自作の認証や権限の決まり、ゲームやクイズの中身など）。同じソフトを使う他の人には起きない
 - 一度で済んだ作業、手順どおりの実行、質問に答えただけのもの、未解決のもの
+- 調べもの・相談・計算・文章作り・買い物・手続き・暮らしや考え方の質問（AI に聞いて答えをもらっただけで、何かが動かなくて困ったのではないもの）
+- 1つのゲームやアプリの特定の版だけ、その人の機器の組み合わせだけに当てはまる狭い手順。題名を読んで「自分も当たりそう」と思う人がほとんどいないもの
 - その場だけの打ち間違いや、一回きりの事情
 - 研究の成果・作ったものの説明・応募書類の内容（困って解決した話ではないもの）
 - 具体的に書けないもの。何が、どういう操作で、どうなったか、何をして直ったかが会話から分からないなら入れない
@@ -126,11 +128,11 @@ func Instructions(tags []Tag, lang string) string {
  "symptom": 何をしたら、何が起きたか。エラーの文や表示があれば短く引用（無ければ様子を具体的に書く）,
  "cause": 原因,
  "solution": 直し方の手順。会話の中で実際に使ったコマンド・設定・値・操作をそのまま書く（一般論や「〜を見直す」のような書き方はしない）。Markdown の箇条書きやコードブロックを使ってよい,
- "failed": 試したが効かなかったこと。無ければ空,
+ "failed": 試したが効かなかったこと（空にしない。効かなかったことが無いなら、試行錯誤ではないので記事にしない）,
  "struggle": 何に苦労したか（何度失敗したか、何を思い違えていたか）を記録から1文で,
  "evidence": つまずきを示す記録の中の文を、記録からそのまま写した配列（2つ以上。各60字以内。エラーの文・失敗した結果・ユーザーの「まだ動かない」など）。言い換えない,
  "fixed": 直ったことを示す記録の中の文を、記録からそのまま写した配列（1つ以上。成功した結果の出力・ユーザーの「動いた」など）。言い換えない,
- "score": 残す価値。1〜5 の整数。5 は試行錯誤が多く、他の人もはまりやすい問題。1回で直ったものは 2 以下}
+ "score": 残す価値。1〜5 の整数。5：何度も失敗し、同じソフトを使う多くの人がはまりやすい。4：何度か失敗し、同じソフトを使う人がときどき当たる。3：当たる人が限られる。2 以下：1回で直った・質問に答えただけ}
 
 ## 守ること
 - 記録に無いことを書かない。推測で埋めない。solution には会話の中で実際に効いた方法だけを書き、会話に出ていない別の方法を足さない。cause は会話の中で確かめられた原因だけを書く（確かめていなければ「分かっていない」と書く）。
@@ -216,7 +218,7 @@ func (r Result) Clean(tags []Tag, text string) Result {
 	var ks []Knowledge
 	for _, k := range r.Knowledge {
 		k.Title = Text(strings.TrimSpace(string(k.Title)))
-		if k.Title == "" || strings.TrimSpace(string(k.Conclusion)) == "" || strings.TrimSpace(string(k.Solution)) == "" || k.Score < MinScore || !proven(k.Evidence, text) || !anyQuoted(k.Fixed, text) {
+		if k.Title == "" || strings.TrimSpace(string(k.Conclusion)) == "" || strings.TrimSpace(string(k.Solution)) == "" || k.Score < MinScore || strings.TrimSpace(string(k.Failed)) == "" || !proven(k.Evidence, text) || !anyQuoted(k.Fixed, text) {
 			continue
 		}
 		ks = append(ks, k)
