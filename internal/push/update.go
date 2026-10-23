@@ -54,13 +54,18 @@ func (c *Client) Update() (string, error) {
 		return "", err
 	}
 	defer res.Body.Close()
+	return exe, replace(exe, res.Body, want)
+}
+
+// replace は body を exe に入れ替える。sha256 が want と合わなければ入れ替えない。
+func replace(exe string, body io.Reader, want string) error {
 	tmp := exe + ".new"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
 	if err != nil {
-		return "", err
+		return err
 	}
 	h := sha256.New()
-	_, err = io.Copy(io.MultiWriter(f, h), res.Body)
+	_, err = io.Copy(io.MultiWriter(f, h), body)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -69,19 +74,16 @@ func (c *Client) Update() (string, error) {
 	}
 	if err != nil {
 		os.Remove(tmp)
-		return "", err
+		return err
 	}
 	// Windows は動いている exe を上書きできないが、名前は変えられる
 	if runtime.GOOS == "windows" {
 		if err := os.Rename(exe, exe+".old"); err != nil {
 			os.Remove(tmp)
-			return "", err
+			return err
 		}
 	}
-	if err := os.Rename(tmp, exe); err != nil {
-		return "", err
-	}
-	return exe, nil
+	return os.Rename(tmp, exe)
 }
 
 func fileSum(path string) (string, error) {

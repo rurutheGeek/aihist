@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rurutheGeek/aihist/internal/export"
@@ -45,12 +46,19 @@ type Server struct {
 	mu    sync.Mutex                    // 取り込みは1つずつ
 	// Version は MCP で名乗る版。
 	Version string
+	login   *login // nil ならログインなし
+	latest  atomic.Pointer[release]
 }
 
 // New は画面と API を作る。token が空でなければ /api に要る。画面（/upload を含む）は
 // 前に置く認証（SSO など）に任せる。
 func New(st *store.Store, rs raw.Store, token string) *Server {
+	s := &Server{st: st, raw: rs, token: token}
 	funcs := template.FuncMap{
+		"update":     func() *release { return s.newer() },
+		"auth":       func() bool { return s.login != nil },
+		"version":    func() string { return s.Version },
+		"checkOn":    func() bool { return s.st.Setting("update_check", "on") == "on" },
 		"restorable": restorable,
 		"when": func(t time.Time) string {
 			if t.IsZero() {
@@ -101,7 +109,7 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 		funcs["rel"] = func(t time.Time) string { return relIn(l, t) }
 		tmpl[l] = template.Must(template.New("").Funcs(funcs).ParseFS(files, "templates/*.html"))
 	}
-	s := &Server{st: st, raw: rs, token: token, tmpl: tmpl}
+	s.tmpl = tmpl
 	go s.resumeOrganize()
 	return s
 }
@@ -137,6 +145,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /settings/hide", s.setHide)
 	mux.HandleFunc("POST /settings/purge", s.purge)
 	mux.HandleFunc("POST /settings/ai", s.setAI)
+	mux.HandleFunc("POST /settings/updates", s.setUpdates)
 	mux.HandleFunc("GET /ai/models", s.aiModels)
 	mux.HandleFunc("POST /ai/run", s.aiRun)
 	mux.HandleFunc("POST /settings/tags", s.addTag)
@@ -187,6 +196,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/client", s.auth(s.apiClient))
 	mux.HandleFunc("POST /api/machine", s.auth(s.apiMachine))
 	mux.HandleFunc("/api/mcp", s.auth(s.mcp))
+	if s.login != nil {
+		mux.HandleFunc("GET /auth/login", s.login.start)
+		mux.HandleFunc("GET /auth/callback", s.login.callback)
+		mux.HandleFunc("POST /auth/logout", s.login.logout)
+		return secure(s.login.guard(mux))
+	}
 	return secure(mux)
 }
 

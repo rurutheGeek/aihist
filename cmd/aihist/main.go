@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -69,6 +70,7 @@ func usage() {
   aihist [-db path] serve [-addr :8080] [-raw dir] [-token T] [-bin dir]
   aihist push -server URL [-token T] [-host name] [-every 10m]
   aihist detect                                list AI histories on this machine
+  aihist update                                replace this program with the latest release
   aihist restore -server URL [-token T] [-force] <chat ID prefix>   put a chat back into its AI
   aihist [-db path] search <words>
   aihist [-db path] export [-thinking] [-no-tools] [-max N] <chat ID prefix>
@@ -84,6 +86,7 @@ or from the config file the installer writes (~/.config/aihist/config on Linux).
   aihist [-db パス] serve [-addr :8080] [-raw フォルダ] [-token T] [-bin フォルダ]
   aihist push -server URL [-token T] [-host 名前] [-every 10m]
   aihist detect                                     このマシンにある AI の記録を出す
+  aihist update                                     最新のリリースに入れ替える
   aihist restore -server URL [-token T] [-force] <会話IDの先頭>   会話を元の AI へ戻す
   aihist [-db パス] search <語>
   aihist [-db パス] export [-thinking] [-no-tools] [-max N] <会話IDの先頭>
@@ -118,6 +121,11 @@ func main() {
 		for _, f := range push.Detect(home) {
 			fmt.Printf("%s\t%d\t%d\n", f.Tool, f.Files, f.Bytes)
 		}
+		return
+	}
+
+	if args[0] == "update" {
+		runUpdate()
 		return
 	}
 
@@ -187,6 +195,17 @@ func main() {
 		srv := web.New(st, raw.Store{Dir: *rawDir}, *token)
 		srv.Version = version
 		srv.SetBin(*bin)
+		if is := os.Getenv("AIHIST_OIDC_ISSUER"); is != "" {
+			list := func(k string) []string {
+				return strings.FieldsFunc(os.Getenv(k), func(r rune) bool { return r == ',' || r == ' ' })
+			}
+			if err := srv.EnableOIDC(context.Background(), web.OIDC{Issuer: is, ClientID: os.Getenv("AIHIST_OIDC_CLIENT_ID"),
+				Secret: os.Getenv("AIHIST_OIDC_CLIENT_SECRET"), Redirect: os.Getenv("AIHIST_OIDC_REDIRECT_URL"),
+				Allow: list("AIHIST_OIDC_ALLOW"), Groups: list("AIHIST_OIDC_GROUPS")}); err != nil {
+				log.Fatal(err)
+			}
+		}
+		go srv.CheckUpdates(context.Background())
 		err = http.ListenAndServe(*addr, srv.Handler())
 	case "search":
 		if len(args) < 2 {

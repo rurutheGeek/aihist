@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{.}}</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M9 11h14M9 16h10M9 21h7' stroke='%23fff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <style>
 :root{
   --bg:#ffffff;--side:#f7f7f8;--fg:#0d0d0d;--mute:#6b6b70;--faint:#9a9aa0;--line:#e7e7ea;
@@ -104,6 +104,11 @@ mark{background:var(--mark);color:inherit;border-radius:3px;padding:0 1px}
 .side-foot a:hover{background:var(--hover)}
 .side-foot a.on{background:var(--active)}
 .side-foot svg{width:17px;height:17px}
+.side-foot{flex-wrap:wrap}
+.side-foot a.upd{order:-1;flex-basis:100%;color:var(--accent,#2563eb)}
+.side-foot form{display:contents}
+.side-foot form button{display:flex;align-items:center;gap:8px;padding:8px 10px;border:0;border-radius:9px;background:none;color:var(--fg);font:inherit;font-size:13.5px;cursor:pointer;white-space:nowrap}
+.side-foot form button:hover{background:var(--hover)}
 .setup{margin:0 0 28px}
 .setup h2{font-size:16px;margin:0 0 10px}
 .cmdl{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:12px;padding:6px 6px 6px 12px;margin:0 0 8px;background:var(--code)}
@@ -558,6 +563,8 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
   <div class="convs" id="sidelist" data-cur="{{with .C}}{{.ID}}{{end}}">{{template "sidelist" .}}</div>
   <div class="side-foot">
     <a href="/settings" data-settings><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>{{t "設定"}}</a>
+    {{with update}}<a class="upd" href="{{.URL}}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>{{tf "%s に更新できます" .Version}}</a>{{end}}
+    {{if auth}}<form method="post" action="/auth/logout"><button type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>{{t "ログアウト"}}</button></form>{{end}}
   </div>
 </aside>
 <div class="scrim" onclick="document.querySelector('.app').classList.remove('open')"></div>

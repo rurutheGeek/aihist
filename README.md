@@ -1,173 +1,111 @@
+<div align="center">
+
+<img src="docs/images/icon.svg" width="96" alt="">
+
 # aihist
 
-AI ツールの会話履歴を1か所に集め、検索・閲覧し、別の AI へ渡せる Markdown に書き出す。
+**AI との会話を、ぜんぶ自分の手元に。**
 
-## 対応状況
+Claude Code・Codex・OpenCode・ChatGPT などの会話を1か所に集め、探して、読み返して、続きから話せるセルフホストのサーバー。
 
-| ツール | 読む場所 | 状態 |
-|---|---|---|
-| Claude Code | `~/.claude/projects/**/*.jsonl`（サブエージェント含む） | 済 |
-| OpenCode（1.19 で確認） | `~/.local/share/opencode/opencode.db` | 済 |
-| Antigravity | `%USERPROFILE%\.gemini\antigravity-ide\conversations\*.db` | 済 |
-| Codex | `~/.codex/sessions/**/rollout-*.jsonl`、題名は `session_index.jsonl` | 済 |
-| ChatGPT（Web） | 「データをエクスポート」の zip か `conversations.json` を画面から上げる | 済 |
-| claude.ai | 書き出しの zip か `conversations.json` を画面から上げる | 済 |
-| Gemini | Google Takeout の zip（マイ アクティビティの Gemini アプリ） | 済（画面から上げる） |
-| Open WebUI | REST API `/api/v1/chats` | 未 |
+[![最新版](https://img.shields.io/github/v/release/rurutheGeek/aihist?label=%E6%9C%80%E6%96%B0%E7%89%88)](https://github.com/rurutheGeek/aihist/releases/latest)
+[![テスト](https://github.com/rurutheGeek/aihist/actions/workflows/test.yml/badge.svg)](https://github.com/rurutheGeek/aihist/actions/workflows/test.yml)
+[![ライセンス](https://img.shields.io/github/license/rurutheGeek/aihist?label=%E3%83%A9%E3%82%A4%E3%82%BB%E3%83%B3%E3%82%B9)](LICENSE)
 
-## サーバーを立てる
+[**⬇ ダウンロード**](https://github.com/rurutheGeek/aihist/releases/latest) · [導入](#導入) · [使い方の詳細](docs/usage.md) · [English](README.en.md)
+
+<img src="docs/images/conversation.png" alt="会話の画面" width="860">
+
+</div>
+
+## できること
+
+- **集める** — 各マシンに小さなプログラムを入れると、AI の会話を自動で送る。ChatGPT・claude.ai・Gemini は書き出したファイルを画面から上げる。
+- **探す** — 全部の会話をまとめて全文検索。AI・マシン・プロジェクト・期間・タグで絞れる。
+- **続ける** — 会話を元の AI へ戻して続きから話す（`aihist restore`）。別の AI へ渡す Markdown にも書き出せる。
+- **まとめる** — 好きな AI の API か MCP で、タグ・要約と、他の人にも役立つ「ナレッジ」の記事を作る。
+- **守る** — トークンやパスワードは送る前にマシンで消す。手元の古い会話は、サーバーに届いたものから消せる。
+- **自分のもの** — データは自分のサーバーの SQLite と原本のファイルだけ。外のサービスへは送らない。
+
+| ツール | 集め方 |
+|---|---|
+| Claude Code | 自動（サブエージェントも） |
+| Codex | 自動 |
+| OpenCode | 自動 |
+| Antigravity | 自動 |
+| ChatGPT・claude.ai | 書き出しの zip を上げる |
+| Gemini | Google Takeout の zip を上げる |
+
+<table>
+<tr>
+<td><img src="docs/images/knowledge.png" alt="ナレッジの記事"></td>
+<td><img src="docs/images/graph.png" alt="ナレッジのグラフ"></td>
+</tr>
+<tr>
+<td><img src="docs/images/search.png" alt="検索"></td>
+<td><img src="docs/images/settings.png" alt="マシンの設定"></td>
+</tr>
+</table>
+
+## 導入
+
+### Docker（おすすめ）
 
 ```bash
-docker compose up -d        # http://localhost:8080
+curl -fsSLO https://raw.githubusercontent.com/rurutheGeek/aihist/main/compose.yaml
+docker compose up -d
 ```
 
-[English](README.en.md)
+http://localhost:8080 を開く。イメージは `ghcr.io/ruruthegeek/aihist`（linux/amd64・arm64）、データは `/data` に入る。
 
-イメージは `ghcr.io/ruruthegeek/aihist`（linux/amd64・arm64）。データは `/data`（`aihist.db` と送られた原本 `raw/`）。各マシンへ配る実行ファイルもイメージに入っている。
+### 実行ファイル
 
-画面には認証が無い。外へ出すときは前に SSO などを置き、`/api/*` だけを通す（`/api/*` はトークンが守る）。画面は外のサイトの画像やスクリプトを読まず、ほかのサイトに埋め込ませない。
-
-コンテナを使わないとき:
+[リリース](https://github.com/rurutheGeek/aihist/releases/latest)から自分の OS のものを落とす（Linux・macOS・Windows）。
 
 ```bash
+chmod +x aihist-linux-amd64
+./aihist-linux-amd64 serve -addr :8080
+```
+
+### ソースから
+
+```bash
+git clone https://github.com/rurutheGeek/aihist && cd aihist
 go build -o bin/aihist ./cmd/aihist
-bin/aihist serve -addr :8080 -bin <配る実行ファイルの置き場所>
 ```
 
-## 各マシンから送る
+### 会話を送るマシンをつなぐ
 
-「設定 → マシン」でマシン名を入れて「マシンを追加」を押すと、そのマシンに入れるコマンドが出る（このときしか表示されない。あとで要るときはマシンの画面で「作り直す」。前のコマンドは使えなくなる）。入れるとすぐ1回送り、そのあとは設定の送信タイミングで送る。メッセージは日本語の環境では日本語、それ以外は英語。
+画面の「設定 → マシン」でマシン名を入れると、そのマシンで打つ1行のコマンドが出る。あとは決めた時刻に自動で送る。詳しくは[使い方の詳細](docs/usage.md)。
 
-```bash
-curl -fsSL https://<サーバー>/api/install.sh | AIHIST_TOKEN=<トークン> AIHIST_HOST=<マシン名> sh   # Linux・macOS・WSL
-```
+## 更新
 
-```bat
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://<サーバー>/api/install.ps1 | iex; Install-Aihist -Token <トークン> -Name <マシン名>"
-```
+新しい版が出ると、画面の左下に知らせが出る（「設定 → 一般」で止められる）。
 
-Windows の行は、コマンド プロンプトでも PowerShell でも動く。Claude Code などの AI アプリは「設定 → 連携」でつなぐ。`serve` に `AIHIST_TOKEN` を渡すと、それも使える。
-
-常駐はしない。OS のタイマー（systemd のユーザータイマー、無ければ cron、macOS は launchd、Windows はタスク スケジューラ）が1分ごとに `aihist push -tick` を起こし、送る時刻でなければすぐ終わる。送る時刻・送る AI・添付ファイル・削除する情報・自動削除は、画面左下の「設定」で全体とマシンごとに決める（各マシンは数分のうちに受け取る）。2回目からは変わったファイルだけを送るので、1回は数秒・メモリ 10 MB ほどで終わる。
-
-送る前に、サーバーが配る実行ファイル（`/api/bin`）と自分の sha256 を比べ、違えば入れ替えてから送る。サーバーを新しくすれば、対応するツールが増えても各マシンでやり直すことは無い。
-
-「設定 → 送信 → 自動削除」（マシンごとにも変えられる）で日数を選ぶと、最終更新がそれより前で、サーバーに同じもの（大きさと更新時刻が一致）がある会話を、送ったあとに手元から消す（Claude Code・Codex・Antigravity はファイルを、OpenCode は OpenCode の `opencode session delete` で会話ごとに消す。索引は消さず、OpenCode の DB のファイル自体も残る）。消した会話は `aihist restore` で戻せる。
-
-「設定 → 送信 → 削除する情報」で選んだ種類（トークン・パスワード・秘密鍵、メールアドレス、電話番号、住所、クレジットカード番号、IP アドレス）は、マシンで送る前に `[トークン]` のような印に置き換える。最初はトークン類だけを消す。マシンの元の記録は変えない（サーバーから元の AI へ戻した会話は印のまま）。アップロードは「設定 → アップロード」で同じように選ぶ。すでに集めた履歴からは「設定 → 容量 → 保存済みの会話からも削除する」で削除できる（元には戻せない）。決まった形で見つけるので、住所などは取りこぼすことがある。Antigravity の DB は形を変えられないので、そのまま送る。
-
-| 変数 | 意味 |
+| 入れ方 | 更新のしかた |
 |---|---|
-| `AIHIST_EVERY` | `0` なら今1回送るだけで、タイマーを置かない |
-| `AIHIST_HOST` | このマシンの名前（既定はホスト名。WSL では `-wsl` を付ける） |
-| `AIHIST_TOOLS` | 送る AI の最初の値（`claude_code,codex,antigravity,opencode` をカンマ区切り）。無ければ、導入のときにこのマシンで見つかったものを並べて選ばせる |
-| `AIHIST_ATTACHMENTS` | 添付ファイル（画像・PDF・音声など）を送るかの最初の値。送らないときは、会話に埋め込まれたものを同じ種類のごく小さな中身に置き換える（元の AI へ戻しても読めるが、中身は無くなる。Antigravity の DB はそのまま）。無ければ導入のときに聞く |
-| `AIHIST_CLEANUP` | 送り終えた会話を手元から消す日数（サーバーの「設定 → 送信 → 自動削除」より優先。`0` で消さない） |
-| `AIHIST_AUTO_UPDATE` | `0` で自動更新を止める（設定ファイルに書いてもよい） |
-| `AIHIST_BIN_DIR` | 実行ファイルの置き場所（既定 `~/.local/bin`。Windows は `%LOCALAPPDATA%\aihist`） |
+| Docker | `docker compose pull && docker compose up -d` |
+| 実行ファイル | `aihist update` のあと起動し直す（SHA256SUMS で確かめてから入れ替える） |
+| 各マシンの送るプログラム | サーバーを新しくすれば、次に送るときに自分で入れ替わる |
 
-置くもの: 実行ファイル、設定 `~/.config/aihist/config`（macOS は `~/Library/Application Support/aihist`、Windows は `%APPDATA%\aihist`。トークンが入るので本人だけが読める）、タイマー。
+## ログイン（任意）
 
-消すときは次のどちらか。置いたものをすべて消す（送った会話はサーバーに残る）。
+何も設定しなければログインなしで動く（自分の PC だけで使うとき）。外から使うときは OIDC（Google・Microsoft Entra ID・Keycloak・Authentik など）でログインさせられる。
 
-```bash
-curl -fsSL https://<サーバー>/api/uninstall.sh | sh     # ~/.config/aihist/uninstall.sh でもよい
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://<サーバー>/api/uninstall.ps1 | iex"   # Windows
-```
-
-## そのほかの使い方
-
-```bash
-bin/aihist push                 # 設定ファイルのサーバーへ1回送る（-server・-token・-host で上書き）
-bin/aihist search 引き継ぎ
-bin/aihist export -thinking <会話IDの先頭>
-```
-
-| 入れ方 | やること |
+| 環境変数 | 意味 |
 |---|---|
-| `push` | Claude Code・Codex・Antigravity の既定の置き場所と OpenCode の DB から、サーバーに無いか変わったものだけを送る |
-| 画面の `↑` | ファイルを選んで上げる。中身から Claude Code・Codex・Antigravity・ChatGPT・claude.ai を見分ける |
-| `import <ツール> [場所]` | サーバーと同じマシンの記録を直接読む |
+| `AIHIST_OIDC_ISSUER` | 発行元の URL。入れるとログインが要るようになる |
+| `AIHIST_OIDC_CLIENT_ID`・`AIHIST_OIDC_CLIENT_SECRET` | IdP に登録したクライアント |
+| `AIHIST_OIDC_REDIRECT_URL` | 戻り先。`https://<サーバー>/auth/callback` を IdP にも登録する |
+| `AIHIST_OIDC_ALLOW` | ログインできるメールアドレスか `@ドメイン`（カンマ区切り）。空なら誰でも |
+| `AIHIST_OIDC_GROUPS` | ログインできるグループ（`groups` クレーム） |
 
-`push` は OpenCode の DB そのものは送らない（操作ログで数 GB あり、ログイン情報も入っている）。会話ごとに `session`・`message`・`part` と `project` の行を加工せずに書き出した `<session id>.json` を原本として送る。
+各マシンからの送信と MCP（`/api/*`）は、ログインではなくトークンで守る。画面は外のサイトの画像やスクリプトを読まず、ほかのサイトに埋め込ませない。
 
-送られたファイルは原本として `-raw`（既定 `~/.local/share/aihist/raw/<ホスト>/<ツール>/`）に残る。アダプタを直したら原本から取り込み直せる。
+## コントリビュート
 
-DB は既定で `~/.local/share/aihist/aihist.db`（`-db` で変更）。取り込みは会話ごとに中身を入れ替え（会話の番号は変わらない）、元データが変わっていない会話は飛ばす。
+Issue・プルリクエストを歓迎します。バグの報告、対応する AI ツールの追加、翻訳、ドキュメントの直しなど、どれでも助かります。始め方は [CONTRIBUTING.md](CONTRIBUTING.md) へ。
 
-検索は SQLite FTS5 の trigram。3文字未満の語は `LIKE` で探す。一覧は AI・タグ・モデル・マシン・プロジェクト（作業フォルダ）・期間で絞れる。マシンから消えた会話には雲の印が付く（送るときに、手元に残っている会話をサーバーへ知らせる）。巻き戻して捨てた発言は出さない。
+## ライセンス
 
-## AI で整理する（タグ・要約・ナレッジ）
-
-会話にタグと要約を付け、答えを見つけにくい問題の解決を「ナレッジ」（他の人にも役立つ短い記事）にする。自動では動かない。
-
-| 使い方 | やること |
-|---|---|
-| API | 「設定 → AI」に OpenAI と同じ形の API の接続先・キー・モデルを入れる。会話の画面の ✦、会話を選んだときの「AI で整理」、アップロードの「取り込んだ会話を AI で整理」を押したときだけ呼ぶ |
-| Skill | AI への手順書（SKILL.md と、付いている規則・資料・スクリプト）を1か所に集める。GitHub の URL から中の Skill を探して選んで取り込み（あとで「更新」で今の版にできる）、各マシンの `~/.claude/skills`・`~/.codex/skills`・`~/.agents/skills` も送るときに集める。Claude Code が履歴で読み込んだ Skill は「履歴で使った Skill」に並ぶ。本文だけの Skill はプロンプトとしても使える。MCP でつないだ AI は `list_skills` で探して `get_skill`・`read_skill_file` で読む（MCP のプロンプトとしても配る） |
-| MCP | 自分の AI（Claude Code など）から `<サーバー>/api/mcp` をトークン付きでつなぐ（「設定 → 連携」でアプリを選ぶと、トークン入りの設定が出る）。AI が会話を読み、結果を書き戻す。会話の削除・アーカイブ・ピン留め・名前の変更・タグの付け替え、会話の一覧を見てタグを作ることも頼める。人ではなくプログラムや AI が動かした会話（`opencode run`・`claude -p`・`codex exec` など）は「自動実行」に分け、整理の対象から外す |
-
-- タグは「設定 → タグ」で作る（テンプレートもある）。AI は作ったタグの中からだけ付ける。
-- 会話は1件ずつ別のリクエストで読む。長い会話は区切って順に読み、それまでのメモを次へ渡す。要約や記事は会話の言語で書く。裏で進めている整理は、サーバーが止まっても次に起きたときに続きから進める。「設定 → AI」の「同時に整理する数」（既定 3）だけ並べて進め、API の回数の上限（429）や混雑に当たったら待ってやり直す。
-- ナレッジは、同じソフトを使う人が当たりうる、答えを見つけにくい問題の解決だけ（何回で直ったかは問わない。答えを聞いただけの相談や、特定の版・機器だけの狭い手順は入れない）。AI が挙げた「問題の証拠」の文が会話にそのまま無いもの、価値の点が 4 未満のものは捨てる。整理の最後に、書いた記事をまとめて同じ AI に見せ、決まりに合わないものを外す（MCP では `review_knowledge` と `save_review`）。
-- 本文にマシン名・作業フォルダの名前・URL・IP などが混じっていたら、記事に警告を出す。利用者が直した記事は、まとめ直しても置き換えない。
-- ナレッジは一覧のほか、タグ・記事・会話のつながりをグラフで見られる。
-- 要約は、まとめた時点の最後の発言のあとに出す。そのあとに続いた発言があれば、まだ要約に入っていないと分かる。
-- 「プロフィール」で「AI で整理するときに書き足す」をオンにすると、ユーザーの発言から分かる「どんな人か」（経歴・趣味関心・暮らし・好みなど）を1文ずつ書き足していく。「あなたについて」と、答え方や進め方の好みを集めた「AI への希望」に分けて並べる。AI の返事・操作の結果・長い貼り付けを除いた本人の発言だけを別に読み、本人がふつうに話したことで続いていることだけを残す（下書き・たとえ話・ほかの人の話・一度きりの用件は入れない）。根拠として写させた発言が本人の発言にそのまま無い項目は捨てる。MCP では `read_profile_source` と `save_profile` を使う。取り出してほしくないことは「指示」に書く。項目は画面で直せ、Markdown でコピーして他の AI に渡せる。MCP の `get_profile` でも読める。
-- 同じモデルで、変わっていない会話はまとめ直さない（会話の画面の ✦ は、いつでもまとめ直す）。
-
-## 元の AI へ戻す
-
-```bash
-bin/aihist restore <会話IDの先頭>     # サーバーとトークンは設定ファイルから
-```
-
-原本をサーバーから取り出し、元のツールが読む場所へ戻して、続けるコマンドを表示する。手元に中身の違う同じ会話があるときは上書きしない（`-force` で上書き）。
-
-| ツール | 戻す先 | 続け方 |
-|---|---|---|
-| Claude Code | `~/.claude/projects/<作業フォルダ>/<会話>.jsonl`（サブエージェントも） | `claude --resume <会話>` |
-| Codex | `~/.codex/sessions/年/月/日/rollout-*.jsonl`、題名は `session_index.jsonl` | `codex resume <会話>` |
-| OpenCode | `opencode.db` へ行を書き戻す（同じ ID は上書き） | `opencode --session <会話>` |
-| Antigravity | `conversations\<会話>.db` | Antigravity の一覧から開く |
-
-Codex と OpenCode は、手元から消した会話を戻して続きを話せることを確かめた。Claude Code は戻したファイルが原本とバイト単位で同じことまで確かめた。Antigravity は未確認。ChatGPT と claude.ai は戻せない。
-
-## 構成
-
-```
-cmd/aihist/                 CLI（import / serve / search / export）
-internal/model/             ツールに依存しない内部モデル（会話・メッセージ・パート）
-internal/store/             SQLite・全文検索
-internal/adapter/<tool>/    ツールごとの読み取り
-internal/ingest/            変わった会話だけを取り込む
-internal/raw/               送られた原本の置き場所
-internal/push/              手元の元データを差分だけ送る
-internal/export/            Markdown 書き出し
-internal/web/               画面
-```
-
-## Codex の構造
-
-`response_item` がモデルとの入出力。user 役の `response_item` には注入された文脈が混ざるので、利用者の発言は `event_msg` の `UserMessage` から取る。思考は暗号化されていて、読めるのは要約だけ。長い会話は `rollout-..._<n>.jsonl` に分かれ、`session_meta.id` が同じものを1会話にまとめる。サブエージェントは `parent_thread_id` を持ち、`subagent_history_start_ordinal` より前は親の履歴の写し。
-
-## Antigravity の構造
-
-会話ごとに SQLite が1つ。`steps` の1行が1ステップで、`step_payload` は protobuf（`.proto` は非公開なので番号は実物から割り出した）。
-
-| step_type | 本体 | 中身 |
-|---|---|---|
-| 14 | `.19` | ユーザー発言（`.19.2` 本文） |
-| 15 | `.20` | モデル返答（`.20.1` 本文、`.20.3` 思考、`.20.7` ツール呼び出し：`.1` ID・`.2` 名前・`.3` 引数 JSON） |
-| 8 | `.14` | view_file（`.14.1` パス、`.14.4` 内容） |
-| 21 | `.28` | run_command（`.28.23` コマンド、`.28.21.1` 出力、`.28.2` 作業ディレクトリ） |
-| 7 / 9 / 5 / 17 | `.13` / `.15` / `.10` / `.24` | grep_search / list_dir / write_to_file / エラー |
-| 23 / 98 | `.30` / `.111` | 途中の要約 / 会話の要約 |
-
-共通の `.5` は時刻（`.5.1`）と会話 ID（`.5.20.4`）。`trajectory_metadata_blob` に作業フォルダ・リポジトリ・ブランチ。
-`conversations\*.pb`（対応する `.db` の無い古い会話）は暗号化されていて読めない。
-
-## まだ無いもの
-
-- 原本からの一括の取り込み直し（今は原本が変わったときだけ）
-- Open WebUI からの取り込み
+[MIT](LICENSE)

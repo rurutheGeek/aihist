@@ -22,6 +22,10 @@
           </div>
         </div></div>
       </div>
+      <form class="grp" method="post" action="/settings/updates" data-auto>
+        <div class="row"><div class="rl">{{t "バージョン"}}</div><div class="rc">{{with update}}<a href="{{.URL}}" target="_blank" rel="noopener">{{tf "%s に更新できます" .Version}}</a>{{else}}<span class="mute">{{version}}</span>{{end}}</div></div>
+        <label class="row"><div class="rl">{{t "新しいバージョンを確認"}}</div><div class="rc"><input class="sw" type="checkbox" name="check" value="on"{{if checkOn}} checked{{end}}></div></label>
+      </form>
 
     </section>
     <section data-sec="sending">

@@ -1,91 +1,111 @@
+<div align="center">
+
+<img src="docs/images/icon.svg" width="96" alt="">
+
 # aihist
 
-A self-hosted hub for the conversation history of AI coding tools. It collects conversations from Claude Code, Codex, OpenCode and Antigravity (plus ChatGPT and claude.ai exports), lets you search and browse them in a chat-style UI, exports a conversation as Markdown for another AI, and restores a conversation back into the original tool so you can keep going. Chats deleted from their machine get a cloud mark, and rewound turns are hidden.
+**Every conversation you've had with AI, in one place you own.**
 
-[日本語](README.md)
+A self-hosted server that collects chats from Claude Code, Codex, OpenCode, ChatGPT and more, so you can search them, read them again, and pick up where you left off.
 
-## Run the server
+[![Release](https://img.shields.io/github/v/release/rurutheGeek/aihist)](https://github.com/rurutheGeek/aihist/releases/latest)
+[![Test](https://github.com/rurutheGeek/aihist/actions/workflows/test.yml/badge.svg)](https://github.com/rurutheGeek/aihist/actions/workflows/test.yml)
+[![License](https://img.shields.io/github/license/rurutheGeek/aihist)](LICENSE)
+
+[**⬇ Download**](https://github.com/rurutheGeek/aihist/releases/latest) · [Install](#install) · [Usage details](docs/usage.en.md) · [日本語](README.md)
+
+<img src="docs/images/conversation.png" alt="Conversation view" width="860">
+
+</div>
+
+## Features
+
+- **Collect** — A small client on each machine sends your AI chats automatically. Upload ChatGPT, claude.ai and Gemini exports from the UI.
+- **Search** — Full-text search across everything, filtered by AI, machine, project, date or tag.
+- **Continue** — Put a chat back into the AI it came from and keep talking (`aihist restore`), or export it as Markdown for another AI.
+- **Organize** — With any OpenAI-compatible API or over MCP, add tags, summaries, and "Knowledge" articles that would help others too.
+- **Protect** — Tokens and passwords are removed on the machine before sending. Old local chats can be deleted once the server has them.
+- **Yours** — Data lives in SQLite and the original files on your own server. Nothing goes to a third party.
+
+| Tool | How |
+|---|---|
+| Claude Code | Automatic (including subagents) |
+| Codex | Automatic |
+| OpenCode | Automatic |
+| Antigravity | Automatic |
+| ChatGPT, claude.ai | Upload the export zip |
+| Gemini | Upload the Google Takeout zip |
+
+<table>
+<tr>
+<td><img src="docs/images/knowledge.png" alt="Knowledge article"></td>
+<td><img src="docs/images/graph.png" alt="Knowledge graph"></td>
+</tr>
+<tr>
+<td><img src="docs/images/search.png" alt="Search"></td>
+<td><img src="docs/images/settings.png" alt="Machine settings"></td>
+</tr>
+</table>
+
+## Install
+
+### Docker (recommended)
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/rurutheGeek/aihist/main/compose.yaml
-docker compose up -d        # http://localhost:8080
+docker compose up -d
 ```
 
-The image is `ghcr.io/ruruthegeek/aihist` (linux/amd64, arm64). Data lives in `/data`. The UI has no login of its own; put SSO or another auth proxy in front of it and let `/api/*` through (the API is protected by tokens). The UI never loads images or scripts from other sites and cannot be framed by them.
+Open http://localhost:8080. The image is `ghcr.io/ruruthegeek/aihist` (linux/amd64, arm64); data lives in `/data`.
 
-## Send from each machine
+### Binary
 
-In **Settings → Machines**, enter a machine name and press **Add machine** to get a one-line install command (shown once; use **Regenerate** on the machine's page if you need it again — the old command stops working). It sends once right away, then on the schedule from Settings. Messages are in Japanese on Japanese systems and English otherwise.
+Download the file for your OS from [Releases](https://github.com/rurutheGeek/aihist/releases/latest) (Linux, macOS, Windows).
 
 ```bash
-curl -fsSL https://<server>/api/install.sh | AIHIST_TOKEN=<token> AIHIST_HOST=<name> sh   # Linux, macOS, WSL
+chmod +x aihist-linux-amd64
+./aihist-linux-amd64 serve -addr :8080
 ```
 
-```bat
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://<server>/api/install.ps1 | iex; Install-Aihist -Token <token> -Name <name>"
+### From source
+
+```bash
+git clone https://github.com/rurutheGeek/aihist && cd aihist
+go build -o bin/aihist ./cmd/aihist
 ```
 
-The Windows line works in both Command Prompt and PowerShell. Connect AI apps such as Claude Code in **Settings → Connected apps**.
+### Connect the machines you chat on
 
-Nothing stays resident. The OS timer (systemd user timer or cron, launchd, Task Scheduler) wakes `aihist push -tick` every minute; it exits right away unless it is time to send. When to send, which AIs, attachments, what to remove before sending, and stored data cleanup are chosen in **Settings** (bottom left), globally and per machine; machines pick up changes within a few minutes. Only changed files are sent; a typical run takes a few seconds and ~10 MB of memory. Before sending, the client compares itself with the binary the server distributes and updates itself, so supporting a new tool only needs a server update.
+In **Settings → Machines**, enter a machine name to get a one-line command for that machine. It then sends on the schedule you choose. See [Usage details](docs/usage.en.md).
 
-**Settings → Sending → Auto-delete** (also per machine) deletes local conversations (files for Claude Code, Codex, and Antigravity; OpenCode chats through `opencode session delete`) that were last modified before the chosen number of days and whose identical copy (same size and mtime) is already on the server. Indexes and the OpenCode database are never touched. Use `aihist restore` to bring one back.
+## Updating
 
-**Settings → Sending → Hide** replaces the chosen kinds (tokens, passwords and private keys; email addresses; phone numbers; postal addresses; credit card numbers; IP addresses) with markers such as `[トークン]` on the machine before sending. Only tokens are removed by default. Local files are not changed (a conversation restored from the server keeps the markers). Uploads have the same choice under **Settings → Upload**, and **Settings → Storage → Hide in saved chats too** hides them in what is already saved (this can't be undone). Detection uses fixed patterns, so some addresses may be missed. The Antigravity database can't be rewritten and is sent as is.
+When a new version is out, a notice appears at the bottom left (turn it off in **Settings → General**).
+
+| Installed with | How to update |
+|---|---|
+| Docker | `docker compose pull && docker compose up -d` |
+| Binary | `aihist update`, then restart (verified against SHA256SUMS before replacing) |
+| Client on each machine | Update the server; clients replace themselves on their next send |
+
+## Login (optional)
+
+With nothing configured, there is no login (for use on your own PC). To use it from elsewhere, sign in with OIDC (Google, Microsoft Entra ID, Keycloak, Authentik, …).
 
 | Variable | Meaning |
 |---|---|
-| `AIHIST_EVERY` | `0` sends once and installs no timer |
-| `AIHIST_HOST` | Machine name (default: host name; `-wsl` is appended in WSL) |
-| `AIHIST_TOOLS` | Initial choice of AIs to send (comma-separated `claude_code,codex,antigravity,opencode`). If unset, the installer lists the ones found on the machine and asks |
-| `AIHIST_ATTACHMENTS` | Initial choice for attachments (images, PDFs, audio…). When off, embedded files are replaced with a tiny file of the same kind (restored conversations still load, without the content; Antigravity databases are sent as-is). If unset, the installer asks |
-| `AIHIST_CLEANUP` | Days after which conversations already on the server are deleted locally (overrides Settings → Sending → Auto-delete; `0` keeps everything) |
-| `AIHIST_AUTO_UPDATE` | `0` disables self-update |
-| `AIHIST_BIN_DIR` | Where to put the binary (default `~/.local/bin`) |
+| `AIHIST_OIDC_ISSUER` | Issuer URL. Setting it turns login on |
+| `AIHIST_OIDC_CLIENT_ID`, `AIHIST_OIDC_CLIENT_SECRET` | The client registered at your IdP |
+| `AIHIST_OIDC_REDIRECT_URL` | Callback; register `https://<server>/auth/callback` at the IdP too |
+| `AIHIST_OIDC_ALLOW` | Email addresses or `@domain`s allowed to sign in (comma-separated). Empty means anyone |
+| `AIHIST_OIDC_GROUPS` | Groups allowed to sign in (`groups` claim) |
 
-Uninstall removes the binary, the config and the timer (conversations stay on the server):
+Sending from machines and MCP (`/api/*`) are protected by tokens, not by login. The UI never loads images or scripts from other sites and can't be framed by them.
 
-```bash
-curl -fsSL https://<server>/api/uninstall.sh | sh
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://<server>/api/uninstall.ps1 | iex"   # Windows
-```
+## Contributing
 
-You can also drop files on the **Upload** page: Claude Code `.jsonl`, Codex `rollout-*.jsonl`, Antigravity `.db`, and the ChatGPT / claude.ai export `.zip`.
-
-## Organize with AI (tags, summaries, knowledge)
-
-Adds tags and a summary to chats, and writes "knowledge" — short write-ups of fixes that are hard to find. Nothing runs automatically.
-
-- **API**: enter an OpenAI-compatible endpoint, key, and model in **Settings → AI**. It's called only when you press ✦ on a chat, "Organize with AI" on selected chats, or the option on the upload page.
-- **Skills**: keep your agent skills (SKILL.md plus its rules, references, and scripts) in one place. Paste a GitHub URL to find the skills in it and import the ones you pick (update them to the latest version later), and machines send `~/.claude/skills`, `~/.codex/skills`, and `~/.agents/skills` along with your chats. Skills Claude Code loaded show up under "Used in history". A skill with only a body works as a prompt. AIs connected over MCP find skills with `list_skills` and read them with `get_skill` and `read_skill_file` (they are also served as MCP prompts).
-- **MCP**: connect your own AI (Claude Code and others) to `<server>/api/mcp` with a token (pick the app in **Settings → Connected apps** to get its setup with the token filled in). Your AI reads the chats and writes the results back. It can also delete, archive, pin, rename, and retag chats, or look through the chat list and create tags, when you ask. Chats started by programs or AIs (`opencode run`, `claude -p`, `codex exec`, and so on) are listed under "Automated" and skipped when organizing.
-- Tags are yours (**Settings → Tags**, with templates). Each chat is read in its own requests; long chats are read in pages with running notes. Summaries and articles are written in the chat's language, and a run that was cut off by a server restart picks up where it left off. Up to "Chats organized at once" (Settings → AI, default 3) run in parallel, and rate limits (429) or busy servers are waited out and retried.
-- Knowledge is kept only for problems others using the same software could hit and whose answer is hard to find (however many tries it took; not plain Q&A or steps for one specific version or setup), and only when the AI's quoted evidence of the problem appears verbatim in the chat and its score is 4 or more. At the end of a run, the same AI reviews all new articles together and drops the ones that do not fit (over MCP: `review_knowledge` and `save_review`). Articles warn about machine names, folder names, URLs, and IPs, and ones you edited are never replaced when re-organizing. Knowledge can also be viewed as a graph of tags, articles, and chats.
-- The summary appears after the last message it covers, so later messages are visibly not yet summarized.
-- **Profile**: turn on "Add to it when organizing with AI" to keep adding one-line notes about who you are, taken from what you plainly say about yourself (not drafts, hypotheticals, other people, or one-off requests). Only your own messages are read for this, without AI replies, tool output, or long pastes, and a line is dropped unless the quote it cites appears verbatim in them. Over MCP, use `read_profile_source` and `save_profile`. Notes are split into "About you" and "How you want AI to respond". Write what not to extract in "Instructions". Edit any line, copy it as Markdown for other AIs, or read it over MCP with `get_profile`.
-
-## Continue in the original AI
-
-```bash
-aihist restore <conversation id prefix>
-```
-
-| Tool | Restored to | Continue with |
-|---|---|---|
-| Claude Code | `~/.claude/projects/<dir>/<id>.jsonl` | `claude --resume <id>` |
-| Codex | `~/.codex/sessions/Y/M/D/rollout-*.jsonl` | `codex resume <id>` |
-| OpenCode | rows written back into `opencode.db` | `opencode --session <id>` |
-| Antigravity | `conversations/<id>.db` | open it from Antigravity |
-
-Codex and OpenCode were checked by deleting a chat locally, restoring it, and continuing. Claude Code was checked byte-for-byte against the original. Antigravity is not checked yet. ChatGPT and claude.ai chats cannot be restored.
-
-## Build
-
-```bash
-go build -o bin/aihist ./cmd/aihist
-bin/aihist serve -addr :8080
-```
+Issues and pull requests are welcome — bug reports, support for another AI tool, translations, docs fixes, anything. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
 ## License
 
-MIT
+[MIT](LICENSE)
