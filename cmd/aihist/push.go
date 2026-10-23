@@ -158,6 +158,11 @@ func runPush(home, host string, args []string) {
 				log.Printf(m("opencode: sent %d chats (%s)", "opencode: %d 会話送信（%s）"), n, imported(res))
 				sentAny = true
 			}
+			if n, err := c.CleanupOpenCode(push.OpenCodeDB(home), days); err != nil {
+				log.Printf(m("opencode: cleanup failed: %v", "opencode: クリーンアップに失敗: %v"), err)
+			} else if n > 0 {
+				log.Printf(m("opencode: deleted %d local chats older than %d days", "opencode: %[2]d 日より前の %[1]d 会話を削除"), n, days)
+			}
 			c.PresentOpenCode(push.OpenCodeDB(home))
 		}
 		if !*tick && !sentAny {

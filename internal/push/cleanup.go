@@ -2,10 +2,12 @@ package push
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io/fs"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -105,6 +107,64 @@ func (c *Client) Present(src Source) error {
 		return nil
 	})
 	return c.present(src.Tool, rels)
+}
+
+// CleanupOpenCode は OpenCode の会話のうち、最終更新から days 日より前で、サーバーに同じ版があるものを手元から消す。
+// OpenCode の DB は会話ごとのファイルではないので、DB を直接いじらず OpenCode 自身の
+// 「opencode session delete」で消す（OpenCode が無ければ何もしない）。消した数を返す。
+func (c *Client) CleanupOpenCode(path string, days int) (int, error) {
+	if days <= 0 {
+		return 0, nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		return 0, nil
+	}
+	bin := opencodeBin()
+	if bin == "" {
+		return 0, nil
+	}
+	var have map[string]raw.Info
+	if err := c.getJSON("/api/files", url.Values{"host": {c.Host}, "tool": {opencode.Tool}}, &have); err != nil {
+		return 0, err
+	}
+	db, err := opencode.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	sessions, err := db.Sessions()
+	db.Close()
+	if err != nil {
+		return 0, err
+	}
+	before := time.Now().AddDate(0, 0, -days).UnixMilli()
+	n := 0
+	for _, s := range sessions {
+		h, ok := have[s.ID+".json"]
+		if s.Updated >= before || !ok || h.MTime != time.UnixMilli(s.Updated).UnixNano() {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		err := exec.CommandContext(ctx, bin, "session", "delete", s.ID).Run()
+		cancel()
+		if err == nil {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// opencodeBin は opencode の実行ファイル（PATH か、既定の入れ場所）。無ければ空。
+func opencodeBin() string {
+	if p, err := exec.LookPath("opencode"); err == nil {
+		return p
+	}
+	home, _ := os.UserHomeDir()
+	for _, p := range []string{filepath.Join(home, ".opencode", "bin", "opencode"), filepath.Join(home, ".opencode", "bin", "opencode.exe")} {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
+	}
+	return ""
 }
 
 // PresentOpenCode は OpenCode の DB にある会話を知らせる。
