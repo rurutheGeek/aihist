@@ -177,6 +177,10 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	d["Usage"], d["Page"], d["Deleted"] = s.usage(), "settings", s.st.Deleted()
 	days, _ := strconv.Atoi(s.st.Setting("cleanup_days", "0"))
 	d["Cleanup"], d["CleanupOpts"] = days, []int{0, 7, 14, 30, 90}
+	d["CleanupDefault"] = tr(lang(r), "しない")
+	if days > 0 {
+		d["CleanupDefault"] = trf(lang(r), "%d 日後", days)
+	}
 	d["Machines"] = s.machineViews(lang(r))
 	var ut []toolOpt
 	for _, t := range uploadTools {

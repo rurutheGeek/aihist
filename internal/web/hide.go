@@ -8,7 +8,7 @@ import (
 	"github.com/rurutheGeek/aihist/internal/scrub"
 )
 
-// 伏せる情報（設定の画面に並べる名前）。
+// 削除する情報（設定の画面に並べる名前）。
 var hideLabels = map[string]string{
 	scrub.Secret: "トークン・パスワード・秘密鍵", scrub.Email: "メールアドレス", scrub.Phone: "電話番号",
 	scrub.Address: "住所", scrub.Card: "クレジットカード番号", scrub.IP: "IP アドレス",
