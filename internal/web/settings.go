@@ -185,7 +185,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, newName,
 	d["UploadTools"], d["UploadAttach"], d["UploadHide"] = ut, attachOpts(s.uploadAttach()), hideOpts(s.uploadHide())
 	d["Hide"] = hideOpts(s.hideDefault())
 	ac := s.aiConfig()
-	d["AIBase"], d["AIModelSet"], d["AIHasKey"] = ac.BaseURL, ac.Model, ac.Key != ""
+	d["AIBase"], d["AIModelSet"], d["AIHasKey"], d["AIParallel"] = ac.BaseURL, ac.Model, ac.Key != "", s.aiParallel()
 	d["TagList"], _ = s.st.Tags()
 	d["Schedule"] = s.st.Setting("schedule", DefaultSchedule)
 	d["Next"] = s.nextRuns(lang(r), d["Schedule"].(string), 3)

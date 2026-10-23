@@ -187,7 +187,23 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/client", s.auth(s.apiClient))
 	mux.HandleFunc("POST /api/machine", s.auth(s.apiMachine))
 	mux.HandleFunc("/api/mcp", s.auth(s.mcp))
-	return mux
+	return secure(mux)
+}
+
+// csp は画面が読み込んでよいもの。外のサイトの画像やスクリプトは読まない（会話の中の画像で外へ知らせない）。
+const csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+	"connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+
+// secure は全部の返事に、ほかのサイトに埋め込ませない・型を推し量らせない・行き先へ URL を渡さないヘッダーを付ける。
+func secure(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hd := w.Header()
+		hd.Set("Content-Security-Policy", csp)
+		hd.Set("X-Content-Type-Options", "nosniff")
+		hd.Set("X-Frame-Options", "DENY")
+		hd.Set("Referrer-Policy", "same-origin")
+		h.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {

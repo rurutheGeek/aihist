@@ -290,7 +290,9 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		if a.Model != "" {
 			model = "mcp: " + a.Model
 		}
+		saveMu.Lock()
 		made, err := s.saveResult(c, pages, res, model, ai.LangOf(a.Summary))
+		saveMu.Unlock()
 		n := len(made)
 		if err != nil {
 			return "", err

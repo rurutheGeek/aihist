@@ -31,3 +31,28 @@ func TestReview(t *testing.T) {
 		}
 	}
 }
+
+// 429 は Retry-After だけ待ってやり直し、通れば結果を返す。400 はやり直さない。
+func TestRetry(t *testing.T) {
+	n := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n++
+		if n < 3 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(429)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": "ok"}}}})
+	}))
+	defer srv.Close()
+	out, err := Config{BaseURL: srv.URL, Model: "m"}.Chat(context.Background(), "s", "u", false)
+	if err != nil || out != "ok" || n != 3 {
+		t.Fatalf("%q %v %d", out, err, n)
+	}
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { n++; w.WriteHeader(400) }))
+	defer bad.Close()
+	n = 0
+	if _, err := (Config{BaseURL: bad.URL, Model: "m"}).Chat(context.Background(), "s", "u", false); err == nil || n != 1 {
+		t.Fatalf("400 をやり直した: %d %v", n, err)
+	}
+}

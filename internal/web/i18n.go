@@ -229,6 +229,7 @@ var english = map[string]string{
 	"要約":                "Summary",
 	"GitHub の URL ではない": "Not a GitHub URL",
 	"リポジトリが見つからない（公開されていない・URL が違う）": "Repository not found (not public, or wrong URL)",
+	"同時に整理する数":        "Chats organized at once",
 	"見つけにくい理由":        "Why it was hard to find",
 	"作ったモデル":          "Model",
 	"取り込んだ会話を AI で整理": "Organize imported chats with AI",

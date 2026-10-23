@@ -123,6 +123,7 @@
         <div class="row"><div class="rl">{{t "接続先"}}</div><div class="rc"><input class="inp wide" name="base_url" value="{{.AIBase}}" placeholder="https://api.openai.com/v1" spellcheck="false"></div></div>
         <div class="row"><div class="rl">{{t "API キー"}}</div><div class="rc"><input class="inp wide" type="password" name="key" placeholder="{{if .AIHasKey}}{{t "保存済み"}}{{end}}" autocomplete="new-password"></div></div>
         <div class="row"><div class="rl">{{t "モデル"}}</div><div class="rc"><input class="inp wide" name="model" value="{{.AIModelSet}}" list="aimodels" spellcheck="false"><datalist id="aimodels"></datalist></div></div>
+        <div class="row"><div class="rl">{{t "同時に整理する数"}}</div><div class="rc"><select class="inp" name="parallel">{{range (list 1 2 3 4 5 6 7 8)}}<option value="{{.}}"{{if eq . $.AIParallel}} selected{{end}}>{{.}}</option>{{end}}</select></div></div>
         <div class="row"><div class="rl"><span class="aitest mute"></span></div><div class="rc"><button class="btn" type="button" data-aitest>{{t "接続を確かめる"}}</button></div></div>
       </form>
     </section>

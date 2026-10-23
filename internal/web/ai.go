@@ -30,6 +30,9 @@ func (s *Server) setAI(w http.ResponseWriter, r *http.Request) {
 	if k := strings.TrimSpace(r.FormValue("key")); k != "" {
 		s.st.SetSetting("ai_key", k)
 	}
+	if n, err := strconv.Atoi(r.FormValue("parallel")); err == nil && n >= 1 && n <= parallelMax {
+		s.st.SetSetting("ai_parallel", strconv.Itoa(n))
+	}
 	if r.FormValue("clear_key") == "1" {
 		s.st.SetSetting("ai_key", "")
 	}
@@ -189,6 +192,24 @@ func (s *Server) startOrganize(ids []int64, c ai.Config, l string, force bool) s
 	return s.runOrganize(&aiQueue{IDs: ids, Model: c.Model, Lang: l, Force: force}, c)
 }
 
+// 同時に整理する会話の数の既定と上限。API の回数の上限に当たったら、待ってやり直す。
+const (
+	parallelDefault = 3
+	parallelMax     = 8
+)
+
+// aiParallel は設定の「同時に整理する数」（1〜parallelMax）。
+func (s *Server) aiParallel() int {
+	n, err := strconv.Atoi(s.st.Setting("ai_parallel", ""))
+	if err != nil {
+		return parallelDefault
+	}
+	return min(max(n, 1), parallelMax)
+}
+
+// saveMu は整理の結果を書き込むところを1つずつにする（AI を待つあいだは並べて進める）。
+var saveMu sync.Mutex
+
 func (s *Server) runOrganize(q *aiQueue, c ai.Config) string {
 	ids, l, force := q.IDs, q.Lang, q.Force
 	s.saveQueue(q)
@@ -202,23 +223,54 @@ func (s *Server) runOrganize(q *aiQueue, c ai.Config) string {
 		aiMu.Lock()
 		defer aiMu.Unlock()
 		set(func() { j.State = "running" })
+		var mu sync.Mutex // fresh と finished を守る
 		fresh := q.Fresh
-		for i, cid := range ids {
-			if !force && s.st.Organized(cid, c.Model) {
-				set(func() { j.Skipped++; j.Done = i + 1 })
-				continue
-			}
-			made, err := s.organize(cid, c, l)
-			fresh = append(fresh, made...)
-			s.saveQueue(&aiQueue{IDs: ids[i+1:], Fresh: fresh, Model: q.Model, Lang: l, Force: force})
-			set(func() {
-				j.Imported += len(made)
-				j.Done = i + 1
-				if err != nil {
-					j.Error = err.Error()
+		finished := map[int64]bool{}
+		// 残り（まだ終わっていない会話）を順番どおりに保存する
+		keep := func() {
+			var rest []int64
+			for _, cid := range ids {
+				if !finished[cid] {
+					rest = append(rest, cid)
 				}
-			})
+			}
+			s.saveQueue(&aiQueue{IDs: rest, Fresh: fresh, Model: q.Model, Lang: l, Force: force})
 		}
+		next := make(chan int64)
+		var wg sync.WaitGroup
+		for range min(s.aiParallel(), max(len(ids), 1)) {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for cid := range next {
+					if !force && s.st.Organized(cid, c.Model) {
+						mu.Lock()
+						finished[cid] = true
+						mu.Unlock()
+						set(func() { j.Skipped++; j.Done++ })
+						continue
+					}
+					made, err := s.organize(cid, c, l)
+					mu.Lock()
+					fresh = append(fresh, made...)
+					finished[cid] = true
+					keep()
+					mu.Unlock()
+					set(func() {
+						j.Imported += len(made)
+						j.Done++
+						if err != nil {
+							j.Error = err.Error()
+						}
+					})
+				}
+			}()
+		}
+		for _, cid := range ids {
+			next <- cid
+		}
+		close(next)
+		wg.Wait()
 		// 最後に、書いた記事をまとめて見直し、決まりに合わないものを外す
 		if n := s.reviewKnowledge(c, fresh); n > 0 {
 			set(func() { j.Imported -= n })
@@ -282,13 +334,15 @@ func (s *Server) organize(id int64, c ai.Config, l string) ([]int64, error) {
 		return nil, err
 	}
 	// プロフィールは本人の発言だけを別に読む
+	var ts []ai.Trait
 	if p := s.profileReq(); p != nil {
-		ts, err := c.Profile(ctx, title, ai.UserSays(pages), l, p)
-		if err != nil {
+		if ts, err = c.Profile(ctx, title, ai.UserSays(pages), l, p); err != nil {
 			log.Printf("ai %d profile: %v", id, err)
 		}
-		s.saveTraits(conv, ts)
 	}
+	saveMu.Lock()
+	defer saveMu.Unlock()
+	s.saveTraits(conv, ts)
 	return s.saveResult(conv, pages, res, c.Model, l)
 }
 

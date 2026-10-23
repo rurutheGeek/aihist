@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -31,11 +33,53 @@ type msg struct {
 	Content string `json:"content"`
 }
 
+// 混んでいる・回数の上限に当たった（429・5xx）ときは、待ってやり直す。
+const (
+	retries  = 6
+	waitMax  = 2 * time.Minute
+	waitBase = 2 * time.Second
+)
+
+// retryable は待てば通るかもしれない失敗か。
+func retryable(st int) bool {
+	return st == 429 || st == 500 || st == 502 || st == 503 || st == 504 || st == 529
+}
+
+// retryWait は n 回目のやり直しまでの待ち時間。Retry-After があればそれに従う（上限 waitMax）。
+func retryWait(n int, h http.Header) time.Duration {
+	if v := strings.TrimSpace(h.Get("Retry-After")); v != "" {
+		if sec, err := strconv.Atoi(v); err == nil && sec >= 0 {
+			return min(time.Duration(sec)*time.Second, waitMax)
+		}
+		if t, err := http.ParseTime(v); err == nil {
+			return min(max(time.Until(t), 0), waitMax)
+		}
+	}
+	d := waitBase << n
+	d += time.Duration(rand.Int64N(int64(d) / 2)) // 同時に動く整理が同じ時刻にやり直さないようずらす
+	return min(d, waitMax)
+}
+
 func (c Config) post(ctx context.Context, path string, body any, out any) error {
 	b, _ := json.Marshal(body)
+	for n := 0; ; n++ {
+		h, err := c.postOnce(ctx, path, b, out)
+		var ae *APIError
+		if err == nil || !errors.As(err, &ae) || !retryable(ae.Status) || n == retries {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(retryWait(n, h)):
+		}
+	}
+}
+
+func (c Config) postOnce(ctx context.Context, path string, b []byte, out any) (http.Header, error) {
 	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.BaseURL, "/")+path, bytes.NewReader(b))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if c.Key != "" {
@@ -43,14 +87,14 @@ func (c Config) post(ctx context.Context, path string, body any, out any) error 
 	}
 	res, err := httpc.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer res.Body.Close()
 	rb, _ := io.ReadAll(io.LimitReader(res.Body, 32<<20))
 	if res.StatusCode/100 != 2 {
-		return &APIError{Status: res.StatusCode, Body: strings.TrimSpace(string(rb))}
+		return res.Header, &APIError{Status: res.StatusCode, Body: strings.TrimSpace(string(rb))}
 	}
-	return json.Unmarshal(rb, out)
+	return nil, json.Unmarshal(rb, out)
 }
 
 // APIError は API が返した失敗。
