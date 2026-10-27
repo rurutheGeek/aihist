@@ -73,12 +73,27 @@
     {{with .ImportErr}}<div class="kwarn">{{.}}</div>{{else}}
     <form method="post" action="/skills/import/do">
       <input type="hidden" name="pick" value="{{.Pick}}">
-      <div class="grp">
-        {{range .Rows}}<label class="row"><div class="rl"><b>{{.Name}}</b><small>{{.Description}}</small><small>{{tf "ファイル %d 件" (len .Files)}}{{if .Exists}} · <span class="warn">{{t "同じ名前の Skill を置き換える"}}</span>{{end}}</small></div><div class="rc"><input class="sw" type="checkbox" name="name" value="{{.Name}}"{{if not .Exists}} checked{{end}}></div></label>
+      {{if gt (len .Rows) 1}}<div class="pickbar"><input class="inp" type="search" placeholder="{{t "Skill を検索"}}" data-pq autocomplete="off" spellcheck="false"><button type="button" class="btn" data-pall>{{t "すべて選択"}}</button><button type="button" class="btn" data-pnone>{{t "選択を解除"}}</button><span class="mute" data-pn></span></div>{{end}}
+      <div class="grp" data-plist>
+        {{range .Rows}}<label class="row" data-q="{{.Name}} {{.Description}}"><div class="rl"><b>{{.Name}}</b><small>{{.Description}}</small><small>{{tf "ファイル %d 件" (len .Files)}}{{if .Exists}} · <span class="warn">{{t "同じ名前の Skill を置き換える"}}</span>{{end}}</small></div><div class="rc"><input class="sw" type="checkbox" name="name" value="{{.Name}}"{{if not .Exists}} checked{{end}}></div></label>
         {{else}}<div class="row"><div class="rl mute">{{t "SKILL.md が見つからない"}}</div></div>{{end}}
       </div>
       {{if .Rows}}<div class="kbtns"><a class="btn" href="/skills">{{t "キャンセル"}}</a><button class="btn pri">{{t "取り込む"}}</button></div>{{end}}
     </form>{{end}}
+    <script>
+    (function(){
+      var q=document.querySelector('[data-pq]'),list=document.querySelector('[data-plist]'),n=document.querySelector('[data-pn]');
+      if(!q)return;
+      var rows=[].slice.call(list.querySelectorAll('[data-q]')),fmt={{t "%d / %d 件を選択"}};
+      function shown(){return rows.filter(function(r){return !r.hidden})}
+      function count(){var c=rows.filter(function(r){return r.querySelector('input').checked}).length;n.textContent=fmt.replace('%d',c).replace('%d',rows.length)}
+      q.addEventListener('input',function(){var w=q.value.toLowerCase().split(/\s+/).filter(Boolean);rows.forEach(function(r){var t=r.dataset.q.toLowerCase();r.hidden=!w.every(function(x){return t.indexOf(x)>=0})})});
+      function set(v){shown().forEach(function(r){r.querySelector('input').checked=v});count()}
+      document.querySelector('[data-pall]').onclick=function(){set(true)};
+      document.querySelector('[data-pnone]').onclick=function(){set(false)};
+      list.addEventListener('change',count);count();
+    })();
+    </script>
   </div></div>
 </main>
 </div>

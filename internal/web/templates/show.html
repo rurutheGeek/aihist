@@ -63,8 +63,7 @@
   <div class="dock">
     <form class="box" id="exp" action="/c/{{.C.ID}}/export.md">
       {{if restorable .C.Tool}}
-      <div class="cmd" id="cmd" title="{{t "元の AI で続ける"}}">aihist restore -server {{.Server}} {{.C.ExternalID}}</div>
-      <button type="button" class="btn pri" data-copy="cmd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg><span>{{tf "%sで続ける" (toolLabel .C.Tool)}}</span></button>
+      <button type="button" class="btn pri" data-cont><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg><span>{{tf "%sで続ける" (toolLabel .C.Tool)}}</span></button>
       {{end}}
       <button type="button" class="btn" id="copymd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>{{t "別のAIへ渡す"}}</span></button>
       <div class="opts">
@@ -75,6 +74,14 @@
   </div>
 </main>
 </div>
+{{if restorable .C.Tool}}<div class="modal" id="cont"><div class="askbox cbox" role="dialog" aria-modal="true" aria-labelledby="cont-t">
+  <div class="mtop"><b id="cont-t">{{tf "%sで続ける" (toolLabel .C.Tool)}}</b><button class="icon-btn" type="button" data-close aria-label="{{t "閉じる"}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <ol class="csteps">
+    <li><span>{{t "aihist を入れたマシンのターミナルで、会話を戻す"}}</span><div class="cline"><code>aihist restore {{.C.ExternalID}}</code><button type="button" class="btn" data-cc><span>{{t "コピー"}}</span></button></div></li>
+    {{with resume .C.Tool .C.ExternalID .C.Cwd}}<li><span>{{t "続きから話す"}}</span><div class="cline"><code>{{.}}</code><button type="button" class="btn" data-cc><span>{{t "コピー"}}</span></button></div></li>
+    {{else}}<li><span>{{tf "%s の一覧から開く" (toolLabel $.C.Tool)}}</span></li>{{end}}
+  </ol>
+</div></div>{{end}}
 <script src="/static/marked.min.js"></script>
 <script src="/static/purify.min.js"></script>
 <script>
@@ -98,8 +105,17 @@
     try { await navigator.clipboard.writeText(text); }
     catch(e){ var t=document.createElement('textarea'); t.value=text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
   }
-  var dc = document.querySelector('[data-copy]');
-  if (dc) dc.onclick = async function(){ await copy(document.getElementById('cmd').textContent.trim()); flash(this); };
+  var cm = document.getElementById('cont'), dc = document.querySelector('[data-cont]');
+  if (dc) {
+    dc.onclick = function(){ cm.classList.add('open'); };
+    if (location.hash==='#continue') cm.classList.add('open');
+    cm.addEventListener('click', async function(e){
+      if (e.target===cm || e.target.closest('[data-close]')) { cm.classList.remove('open'); return; }
+      var b = e.target.closest('[data-cc]');
+      if (b) { await copy(b.previousElementSibling.textContent); flash(b); }
+    });
+    document.addEventListener('keydown', function(e){ if (e.key==='Escape') cm.classList.remove('open'); });
+  }
   document.getElementById('copymd').onclick = async function(){
     var f = document.getElementById('exp'); var q = new URLSearchParams(new FormData(f));
     var res = await fetch(f.action + '?' + q); await copy(await res.text()); flash(this);

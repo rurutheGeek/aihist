@@ -157,6 +157,29 @@ var tools = map[string]struct{ Label, Color, Mark string }{
 // restorable は元の AI へ戻せるツールか（Web のチャットの書き出しは戻せない）。
 func restorable(t string) bool { return t != "chatgpt" && t != "claude_ai" && t != "gemini" }
 
+// resume は、戻した会話を続けるコマンド。コマンドで続けられないツールは空。
+// 作業フォルダが分かれば、そこへ移ってから（Claude Code は作業フォルダごとに会話を探す）。
+func resume(tool, id, cwd string) string {
+	var c string
+	switch tool {
+	case "claude_code":
+		c = "claude --resume " + id
+	case "codex":
+		c = "codex resume " + id
+	case "opencode":
+		c = "opencode --session " + id
+	default:
+		return ""
+	}
+	if cwd != "" {
+		if strings.ContainsAny(cwd, " '\"$`") {
+			cwd = "'" + strings.ReplaceAll(cwd, "'", `'\''`) + "'"
+		}
+		c = "cd " + cwd + " && " + c
+	}
+	return c
+}
+
 func toolLabel(t string) string {
 	if v, ok := tools[t]; ok {
 		return v.Label

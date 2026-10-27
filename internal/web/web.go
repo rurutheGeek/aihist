@@ -60,6 +60,7 @@ func New(st *store.Store, rs raw.Store, token string) *Server {
 		"version":    func() string { return s.Version },
 		"checkOn":    func() bool { return s.st.Setting("update_check", "on") == "on" },
 		"restorable": restorable,
+		"resume":     resume,
 		"when": func(t time.Time) string {
 			if t.IsZero() {
 				return ""
