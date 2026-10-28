@@ -163,6 +163,13 @@ func runPush(home, host string, args []string) {
 			} else if n > 0 {
 				log.Printf(m("opencode: deleted %d local chats older than %d days", "opencode: %[2]d 日より前の %[1]d 会話を削除"), n, days)
 			}
+			if days > 0 {
+				if b, err := push.CompactOpenCode(push.OpenCodeDB(home)); err != nil {
+					log.Printf(m("opencode: compacting the database failed: %v", "opencode: DB を詰められなかった: %v"), err)
+				} else if b > 0 {
+					log.Printf(m("opencode: database shrunk by %.1f MB", "opencode: DB を %.1f MB 小さくした"), float64(b)/(1<<20))
+				}
+			}
 			c.PresentOpenCode(push.OpenCodeDB(home))
 		}
 		if !*tick && !sentAny {

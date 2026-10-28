@@ -3,6 +3,7 @@ package push
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io/fs"
 	"net/url"
@@ -195,4 +196,41 @@ func (c *Client) present(tool string, rels []string) error {
 		return err
 	}
 	return res.Body.Close()
+}
+
+// CompactOpenCode は、消した会話の跡で空いた OpenCode の DB を詰める（SQLite は消しても小さくならない）。
+// 空きが 64MB 以上かつ全体の 4 分の 1 以上のときだけ。OpenCode が書いている最中なら飛ばし、次の回にやる。
+// 詰めた大きさを返す。
+func CompactOpenCode(path string) (int64, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return 0, nil
+	}
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(10000)")
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	var free, size int64
+	if err := db.QueryRow("PRAGMA freelist_count").Scan(&free); err != nil {
+		return 0, err
+	}
+	if err := db.QueryRow("PRAGMA page_size").Scan(&size); err != nil {
+		return 0, err
+	}
+	if free*size < 64<<20 || free*size*4 < st.Size() {
+		return 0, nil
+	}
+	// 作業用の写しは /tmp（メモリのことがある）ではなく DB の隣に置く
+	db.Exec("PRAGMA temp_store_directory = '" + strings.ReplaceAll(filepath.Dir(path), "'", "''") + "'")
+	if _, err := db.Exec("VACUUM"); err != nil {
+		return 0, err
+	}
+	db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	after, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	return st.Size() - after.Size(), nil
 }
