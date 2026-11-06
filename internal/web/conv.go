@@ -65,7 +65,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	if q == "" {
 		f.Limit = 12
 	}
-	rows, _, err := s.st.Browse(f)
+	rows, _, err := s.st.Browse(r.Context(), f)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

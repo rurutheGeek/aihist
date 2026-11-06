@@ -987,17 +987,18 @@ details.steps>summary .arg{color:var(--faint);white-space:nowrap;overflow:hidden
   function side0(a){return !!a.closest('.conv')}
 
   // ── 検索の窓（Ctrl+K・Ctrl+Shift+K）
-  var sm=document.getElementById('search'), si=sm.querySelector('input'), sr=sm.querySelector('.qres'), stool='', sel=0, st;
+  var sm=document.getElementById('search'), si=sm.querySelector('input'), sr=sm.querySelector('.qres'), stool='', sel=0, st, sab;
   function esc(t){var d=document.createElement('div');d.textContent=t;return d.innerHTML}
   function mark(t){return esc(t).replace(/\x02/g,'<b>').replace(/\x03/g,'</b>')}
   function find(){
     clearTimeout(st); st=setTimeout(function(){
-      fetch('/search?q='+encodeURIComponent(si.value)+'&tool='+encodeURIComponent(stool)).then(function(r){return r.json()}).then(function(a){
+      if(sab)sab.abort(); sab=new AbortController();
+      fetch('/search?q='+encodeURIComponent(si.value)+'&tool='+encodeURIComponent(stool),{signal:sab.signal}).then(function(r){return r.json()}).then(function(a){
         sel=0; sr.innerHTML=a.length?'':'<div class="empty">'+esc({{t "見つからない"}})+'</div>';
         a.forEach(function(h,i){var x=document.createElement('a');x.href='/c/'+h.id;x.className='qr'+(i===0?' on':'');
           x.innerHTML='<i style="background:'+esc(h.color)+'"></i><span class="qt">'+esc(h.title)+(h.snippet?'<small>'+mark(h.snippet)+'</small>':'')+'</span><span class="qw">'+esc(h.when)+'</span>';
           sr.appendChild(x)});
-      });
+      }).catch(function(){});
     },120);
   }
   window.openSearch=function(){sm.classList.add('open'); si.value=''; find(); setTimeout(function(){si.focus()},0)};

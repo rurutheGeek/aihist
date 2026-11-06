@@ -244,13 +244,13 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		if a.Tool != "" {
 			f.Tools = []string{a.Tool}
 		}
-		rows, _, err := s.st.Browse(f)
+		rows, _, err := s.st.Browse(r.Context(), f)
 		if err != nil {
 			return "", err
 		}
 		return jsonText(brief(rows)), nil
 	case "list_unorganized":
-		rows, _, err := s.st.Browse(store.Filter{Status: "all", Limit: 100000})
+		rows, _, err := s.st.Browse(r.Context(), store.Filter{Status: "all", Limit: 100000})
 		if err != nil {
 			return "", err
 		}
@@ -478,7 +478,7 @@ func (s *Server) mcpCall(r *http.Request, name string, args json.RawMessage) (st
 		}
 		return jsonText(ts), nil
 	case "list_conversations":
-		rows, _, err := s.st.Browse(store.Filter{Status: "all", Limit: 100000})
+		rows, _, err := s.st.Browse(r.Context(), store.Filter{Status: "all", Limit: 100000})
 		if err != nil {
 			return "", err
 		}

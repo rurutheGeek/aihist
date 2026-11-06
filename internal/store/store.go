@@ -2,6 +2,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"slices"
@@ -127,26 +128,24 @@ CREATE TABLE IF NOT EXISTS parts (
 CREATE INDEX IF NOT EXISTS parts_msg ON parts (message_id, seq);
 CREATE INDEX IF NOT EXISTS parts_conv ON parts (conversation_id);
 
-CREATE VIRTUAL TABLE IF NOT EXISTS parts_fts USING fts5(
-  text, content='parts', content_rowid='id', tokenize='trigram'
-);
-CREATE TRIGGER IF NOT EXISTS parts_ai AFTER INSERT ON parts BEGIN
-  INSERT INTO parts_fts(rowid, text) VALUES (new.id, new.text);
-END;
-CREATE TRIGGER IF NOT EXISTS parts_ad AFTER DELETE ON parts BEGIN
-  INSERT INTO parts_fts(parts_fts, rowid, text) VALUES ('delete', old.id, old.text);
-END;
 `
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db   *sql.DB
+	path string
+}
+
+func dsn(path string) string {
+	return "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=journal_size_limit(67108864)"
+}
 
 func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", dsn(path))
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema + ";\n" + profileSchema + ";\n" + skillSchema); err != nil {
+	if _, err := db.Exec(schema + ";\n" + searchSchema + ";\n" + profileSchema + ";\n" + skillSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("schema: %w", err)
 	}
@@ -154,7 +153,17 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	return &Store{db: db}, nil
+	st := &Store{db: db, path: path}
+	// 新しい DB は本文が無いので、索引はトリガーが入れる分だけで出来上がっている
+	var n int
+	db.QueryRow(`SELECT count(*) FROM parts`).Scan(&n)
+	if n == 0 && !st.searchReady() {
+		if err := st.SetSetting("search_index", searchVersion); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
+	return st, nil
 }
 
 // migrate は前の版で作った DB に足りない列を足す。
@@ -518,6 +527,7 @@ type ConvRow struct {
 	Auto          bool   // 人ではなくプログラムや AI が動かした会話
 	Gone          bool   // マシンからは消えている（サーバーの原本から戻せる）
 	orphan        bool   // 親の会話が取り込まれていないサブエージェント
+	hit           int64  // 本文に検索語があった会話（まとめた中のどれか）
 }
 
 type Filter struct {
@@ -613,23 +623,28 @@ func (f Filter) match(r ConvRow, skip string) bool {
 // 一番新しいものを出す。Query があれば本文の全文検索で絞る。
 // trigram は3文字未満を引けないので、短い語は LIKE で探す。
 func (s *Store) List(f Filter) ([]ConvRow, error) {
-	out, _, err := s.Browse(f)
+	out, _, err := s.Browse(context.Background(), f)
 	return out, err
 }
 
 // Browse は List と、軸ごとの候補と件数。件数はその軸以外の条件で絞った中で、まとめた会話を1つと数える。
-func (s *Store) Browse(f Filter) ([]ConvRow, map[string][]Facet, error) {
+func (s *Store) Browse(ctx context.Context, f Filter) ([]ConvRow, map[string][]Facet, error) {
 	if f.Limit <= 0 {
 		f.Limit = 100
 	}
-	all, err := s.rowsWhere("", "")
+	all, err := s.rowsWhereContext(ctx, "", "")
 	if err != nil {
 		return nil, nil, err
 	}
 	var hits map[int64]string
+	var body map[int64]int64 // 本文に語がある会話と、その部分
 	if q := strings.TrimSpace(f.Query); q != "" {
-		if hits, err = s.hits(q); err != nil {
+		if body, err = s.hits(ctx, q); err != nil {
 			return nil, nil, err
+		}
+		hits = make(map[int64]string, len(body))
+		for id := range body {
+			hits[id] = ""
 		}
 		for _, r := range all {
 			if _, ok := hits[r.ID]; !ok && strings.Contains(strings.ToLower(r.Title), strings.ToLower(q)) {
@@ -705,6 +720,9 @@ func (s *Store) Browse(f Filter) ([]ConvRow, map[string][]Facet, error) {
 		for _, r := range rows {
 			if sn, ok := hits[r.ID]; hits == nil || ok {
 				r.Snippet, r.Branches = sn, 1
+				if _, ok := body[r.ID]; ok {
+					r.hit = r.ID
+				}
 				out = append(out, r)
 			}
 		}
@@ -714,6 +732,9 @@ func (s *Store) Browse(f Filter) ([]ConvRow, map[string][]Facet, error) {
 			for _, i := range g.members {
 				if sn, ok := hits[rows[i].ID]; ok && rep.Snippet == "" {
 					rep.Snippet = sn
+				}
+				if _, ok := body[rows[i].ID]; ok && rep.hit == 0 {
+					rep.hit = rows[i].ID
 				}
 				rep.Pinned = rep.Pinned || rows[i].Pinned
 				rep.Archived = rep.Archived || rows[i].Archived
@@ -730,7 +751,15 @@ func (s *Store) Browse(f Filter) ([]ConvRow, map[string][]Facet, error) {
 	if len(out) > f.Limit {
 		out = out[:f.Limit]
 	}
-	return out, facets, nil
+	// 抜粋は出す分だけ作る
+	if q := strings.TrimSpace(f.Query); q != "" {
+		for i := range out {
+			if out[i].Snippet == "" && out[i].hit != 0 {
+				out[i].Snippet = s.snippet(ctx, out[i].hit, body[out[i].hit], q)
+			}
+		}
+	}
+	return out, facets, ctx.Err()
 }
 
 func splitModels(s string) []string {
@@ -743,6 +772,10 @@ func splitModels(s string) []string {
 const rowCols = `id, tool, host, external_id, parent_external_id, title, cwd, git_branch, model, started_at, updated_at, message_count, root_id, continues_from, models, auto, gone`
 
 func (s *Store) rowsWhere(tool, host string) ([]ConvRow, error) {
+	return s.rowsWhereContext(context.Background(), tool, host)
+}
+
+func (s *Store) rowsWhereContext(ctx context.Context, tool, host string) ([]ConvRow, error) {
 	q := `SELECT ` + rowCols + ` FROM conversations WHERE 1=1`
 	var args []any
 	if tool != "" {
@@ -753,11 +786,15 @@ func (s *Store) rowsWhere(tool, host string) ([]ConvRow, error) {
 		q += ` AND host=?`
 		args = append(args, host)
 	}
-	return s.query(q+` ORDER BY updated_at DESC`, args...)
+	return s.queryContext(ctx, q+` ORDER BY updated_at DESC`, args...)
 }
 
 func (s *Store) query(q string, args ...any) ([]ConvRow, error) {
-	rows, err := s.db.Query(q, args...)
+	return s.queryContext(context.Background(), q, args...)
+}
+
+func (s *Store) queryContext(ctx context.Context, q string, args ...any) ([]ConvRow, error) {
+	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -778,46 +815,7 @@ func (s *Store) query(q string, args ...any) ([]ConvRow, error) {
 		return nil, err
 	}
 	rows.Close()
-	return out, s.applyMeta(out)
-}
-
-// hits は本文に q を含む会話と、その抜粋（一致を \x02 \x03 で囲む）。
-func (s *Store) hits(q string) (map[int64]string, error) {
-	out := map[int64]string{}
-	if len([]rune(q)) < 3 {
-		rows, err := s.db.Query(`SELECT DISTINCT conversation_id FROM parts WHERE text LIKE ? ESCAPE '\'`, "%"+escapeLike(q)+"%")
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var id int64
-			if err := rows.Scan(&id); err != nil {
-				return nil, err
-			}
-			out[id] = ""
-		}
-		return out, rows.Err()
-	}
-	// snippet() は集計の中で使えないので、会話ごとの最初の一致を Go 側で拾う。
-	rows, err := s.db.Query(`SELECT p.conversation_id, snippet(parts_fts, 0, char(2), char(3), '…', 24)
-	  FROM parts_fts JOIN parts p ON p.id = parts_fts.rowid
-	  WHERE parts_fts MATCH ?`, ftsPhrase(q))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id int64
-		var sn string
-		if err := rows.Scan(&id, &sn); err != nil {
-			return nil, err
-		}
-		if _, ok := out[id]; !ok {
-			out[id] = sn
-		}
-	}
-	return out, rows.Err()
+	return out, s.applyMeta(ctx, out)
 }
 
 // group は同じ会話とみなす行の集まり（rows の添字）。
@@ -943,8 +941,6 @@ func (s *Store) Related(c *ConvRow) (versions, children []ConvRow, err error) {
 	return versions, children, nil
 }
 
-func ftsPhrase(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
-
 func escapeLike(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
@@ -983,7 +979,7 @@ func (s *Store) Get(id int64) (*ConvRow, []model.Message, error) {
 	}
 	r.StartedAt, r.UpdatedAt, r.Models = fromUnix(st), fromUnix(up), splitModels(ms)
 	one := []ConvRow{r}
-	s.applyMeta(one)
+	s.applyMeta(context.Background(), one)
 	r = one[0]
 	rows, err := s.db.Query(`SELECT m.id, m.external_id, m.parent_external_id, m.role, m.created_at, m.model, m.sidechain,
 	    p.kind, p.text, p.tool_name, p.tool_call_id, p.is_error

@@ -66,7 +66,7 @@ func (s *Server) side(r *http.Request, q url.Values) (map[string]any, error) {
 	} else {
 		period = ""
 	}
-	rows, facets, err := s.st.Browse(f)
+	rows, facets, err := s.st.Browse(r.Context(), f)
 	if err != nil {
 		return nil, err
 	}

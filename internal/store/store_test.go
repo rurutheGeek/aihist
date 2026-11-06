@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -39,7 +40,7 @@ func TestBrowse(t *testing.T) {
 		}
 		return
 	}
-	rows, facets, err := st.Browse(Filter{Models: []string{"sonnet"}})
+	rows, facets, err := st.Browse(context.Background(), Filter{Models: []string{"sonnet"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,11 +57,11 @@ func TestBrowse(t *testing.T) {
 	if fs := facets[DimTool]; len(fs) != 1 || fs[0] != (Facet{"claude_code", 2}) {
 		t.Fatalf("tool facets: %v", fs)
 	}
-	rows, _, _ = st.Browse(Filter{Projects: []string{"/w/a"}, Tools: []string{"codex", "claude_code"}, Since: now.Add(-30 * time.Hour)})
+	rows, _, _ = st.Browse(context.Background(), Filter{Projects: []string{"/w/a"}, Tools: []string{"codex", "claude_code"}, Since: now.Add(-30 * time.Hour)})
 	if got := ids(rows); len(got) != 2 {
 		t.Fatalf("project+since: %v", got)
 	}
-	rows, _, _ = st.Browse(Filter{Query: "hello 3", Hosts: []string{"dev"}})
+	rows, _, _ = st.Browse(context.Background(), Filter{Query: "hello 3", Hosts: []string{"dev"}})
 	if got := ids(rows); len(got) != 1 || got[0] != "3" {
 		t.Fatalf("query: %v", got)
 	}
@@ -179,7 +180,7 @@ func TestPutKeepsID(t *testing.T) {
 		t.Fatalf("中身: %d %v", len(msgs), err)
 	}
 	for q, want := range map[string]int{"続きの返事": 1, "最初の発言": 1} {
-		rows, _, _ := st.Browse(Filter{Query: q, Status: "all", Limit: 10})
+		rows, _, _ := st.Browse(context.Background(), Filter{Query: q, Status: "all", Limit: 10})
 		if len(rows) != want {
 			t.Errorf("%s: %d 件", q, len(rows))
 		}

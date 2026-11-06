@@ -1,5 +1,7 @@
 package store
 
+import "context"
+
 // 会話ごとに画面で付けたもの（名前・ピン留め・アーカイブ）。取り込み直しで消えないよう、会話とは別に持つ。
 
 type meta struct {
@@ -11,8 +13,8 @@ type meta struct {
 
 func metaKey(tool, host, ext string) string { return tool + "\x00" + host + "\x00" + ext }
 
-func (s *Store) applyMeta(rows []ConvRow) error {
-	q, err := s.db.Query(`SELECT tool, host, external_id, title, pinned, archived, summary FROM conv_meta`)
+func (s *Store) applyMeta(ctx context.Context, rows []ConvRow) error {
+	q, err := s.db.QueryContext(ctx, `SELECT tool, host, external_id, title, pinned, archived, summary FROM conv_meta`)
 	if err != nil {
 		return err
 	}
@@ -27,7 +29,7 @@ func (s *Store) applyMeta(rows []ConvRow) error {
 		m[metaKey(t, h, e)] = v
 	}
 	q.Close()
-	tq, err := s.db.Query(`SELECT c.tool, c.host, c.external_id, c.tag FROM conv_tags c LEFT JOIN tags t ON t.name=c.tag ORDER BY t.sort, c.tag`)
+	tq, err := s.db.QueryContext(ctx, `SELECT c.tool, c.host, c.external_id, c.tag FROM conv_tags c LEFT JOIN tags t ON t.name=c.tag ORDER BY t.sort, c.tag`)
 	if err != nil {
 		return err
 	}

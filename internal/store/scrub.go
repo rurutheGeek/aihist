@@ -1,7 +1,7 @@
 package store
 
 // Rewrite は会話の本文と題名を fn で書き換える（集めた履歴から情報を消すとき）。
-// 全文検索の索引も書き換えた分だけ入れ直す。変えた本文の数を返す。
+// 検索の索引はトリガーが入れ直す。変えた本文の数を返す。
 func (s *Store) Rewrite(fn func(string) string, progress func(done, total int)) (int, error) {
 	var total int
 	s.db.QueryRow(`SELECT count(*) FROM parts`).Scan(&total)
@@ -13,8 +13,8 @@ func (s *Store) Rewrite(fn func(string) string, progress func(done, total int)) 
 			return changed, err
 		}
 		type upd struct {
-			id       int64
-			old, new string
+			id  int64
+			new string
 		}
 		var ups []upd
 		n := 0
@@ -28,7 +28,7 @@ func (s *Store) Rewrite(fn func(string) string, progress func(done, total int)) 
 			n++
 			last = id
 			if nt := fn(t); nt != t {
-				ups = append(ups, upd{id, t, nt})
+				ups = append(ups, upd{id, nt})
 			}
 		}
 		rows.Close()
@@ -41,15 +41,7 @@ func (s *Store) Rewrite(fn func(string) string, progress func(done, total int)) 
 				return changed, err
 			}
 			for _, u := range ups {
-				if _, err := tx.Exec(`INSERT INTO parts_fts(parts_fts, rowid, text) VALUES ('delete', ?, ?)`, u.id, u.old); err != nil {
-					tx.Rollback()
-					return changed, err
-				}
 				if _, err := tx.Exec(`UPDATE parts SET text=? WHERE id=?`, u.new, u.id); err != nil {
-					tx.Rollback()
-					return changed, err
-				}
-				if _, err := tx.Exec(`INSERT INTO parts_fts(rowid, text) VALUES (?, ?)`, u.id, u.new); err != nil {
 					tx.Rollback()
 					return changed, err
 				}

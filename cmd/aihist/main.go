@@ -206,6 +206,11 @@ func main() {
 			}
 		}
 		go srv.CheckUpdates(context.Background())
+		go func() {
+			if err := st.BuildSearch(context.Background(), log.Printf); err != nil {
+				log.Printf("検索の索引: %v", err)
+			}
+		}()
 		err = http.ListenAndServe(*addr, srv.Handler())
 	case "search":
 		if len(args) < 2 {
